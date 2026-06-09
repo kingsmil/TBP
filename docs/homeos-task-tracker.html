@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HomeOS Agent Task Tracker</title>
+    <style>
+      :root {
+        --background: #eaecea;
+        --foreground: #2b3038;
+        --card: #ffffff;
+        --muted: #dfe3e0;
+        --muted-foreground: #889688;
+        --primary: #6f86aa;
+        --secondary: #b3c3d2;
+        --accent: #cdcea1;
+        --border: #cbd6df;
+        --green: #7f9f86;
+        --amber: #b99b50;
+        --red: #ad625b;
+        --shadow: 0 10px 28px rgba(43, 48, 56, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(234, 236, 234, 0.2)),
+          var(--background);
+        color: var(--foreground);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        line-height: 1.45;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      aside {
+        border-right: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.72);
+        padding: 24px;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+      }
+
+      main {
+        padding: 28px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+
+      .mark {
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: var(--primary);
+        color: white;
+        font-weight: 800;
+        box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 20px;
+        line-height: 1.1;
+      }
+
+      .subtitle {
+        color: var(--muted-foreground);
+        font-size: 13px;
+        margin-top: 4px;
+      }
+
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+      }
+
+      .sidebar-panel {
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+
+      .sidebar-panel h2 {
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted-foreground);
+        margin-bottom: 12px;
+      }
+
+      .metric {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 9px 0;
+        border-top: 1px solid var(--muted);
+      }
+
+      .metric:first-of-type {
+        border-top: 0;
+      }
+
+      .metric strong {
+        font-size: 22px;
+      }
+
+      .metric span {
+        color: var(--muted-foreground);
+        font-size: 13px;
+      }
+
+      .legend {
+        display: grid;
+        gap: 8px;
+      }
+
+      .legend-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--foreground);
+        font-size: 13px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+      }
+
+      .hero {
+        padding: 24px;
+        margin-bottom: 18px;
+      }
+
+      .hero-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .hero h2 {
+        font-size: 28px;
+        letter-spacing: 0;
+      }
+
+      .hero p {
+        max-width: 820px;
+        color: var(--muted-foreground);
+        margin-top: 8px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .button {
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--foreground);
+        border-radius: 8px;
+        padding: 9px 12px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .button.primary {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+      }
+
+      .button:hover {
+        filter: brightness(0.98);
+      }
+
+      .progress-wrap {
+        margin-top: 22px;
+      }
+
+      .progress-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--muted-foreground);
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+
+      .progress {
+        height: 10px;
+        border-radius: 999px;
+        background: var(--muted);
+        overflow: hidden;
+      }
+
+      .progress > div {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary), var(--green));
+        transition: width 160ms ease;
+      }
+
+      .board {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        align-items: start;
+      }
+
+      .column {
+        min-height: 260px;
+      }
+
+      .column-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 14px 0;
+      }
+
+      .column h3 {
+        font-size: 14px;
+      }
+
+      .count {
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 2px 8px;
+        color: var(--muted-foreground);
+        font-size: 12px;
+      }
+
+      .cards {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+      }
+
+      .task {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.84);
+        padding: 12px;
+      }
+
+      .task label {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr);
+        gap: 8px;
+        cursor: pointer;
+      }
+
+      .task input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--primary);
+        margin-top: 2px;
+      }
+
+      .task-title {
+        font-weight: 700;
+        font-size: 14px;
+      }
+
+      .task-desc {
+        color: var(--muted-foreground);
+        font-size: 12px;
+        margin-top: 4px;
+      }
+
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      .tag {
+        border-radius: 999px;
+        padding: 3px 7px;
+        font-size: 11px;
+        background: var(--muted);
+        color: var(--foreground);
+      }
+
+      .tag.backend {
+        background: #d9e2ea;
+      }
+
+      .tag.frontend {
+        background: #e4e2c0;
+      }
+
+      .tag.demo {
+        background: #d9e4d8;
+      }
+
+      .task.done {
+        opacity: 0.64;
+      }
+
+      .task.done .task-title {
+        text-decoration: line-through;
+      }
+
+      .notes {
+        margin-top: 18px;
+        padding: 18px;
+      }
+
+      .notes textarea {
+        display: block;
+        width: 100%;
+        min-height: 110px;
+        resize: vertical;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--foreground);
+        padding: 12px;
+        margin-top: 12px;
+      }
+
+      @media (max-width: 980px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        aside {
+          position: static;
+          height: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .board {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-top {
+          display: grid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside>
+        <div class="brand">
+          <div class="mark">H</div>
+          <div>
+            <h1>HomeOS Agent</h1>
+            <p class="subtitle">Build tracker for HDB Match</p>
+          </div>
+        </div>
+
+        <section class="panel sidebar-panel">
+          <h2>Progress</h2>
+          <div class="metric">
+            <span>Completed</span>
+            <strong id="done-count">0</strong>
+          </div>
+          <div class="metric">
+            <span>Remaining</span>
+            <strong id="remaining-count">9</strong>
+          </div>
+          <div class="metric">
+            <span>Total</span>
+            <strong id="total-count">9</strong>
+          </div>
+        </section>
+
+        <section class="panel sidebar-panel">
+          <h2>Legend</h2>
+          <div class="legend">
+            <div class="legend-row"><span class="dot" style="background: var(--primary)"></span> Core workflow</div>
+            <div class="legend-row"><span class="dot" style="background: var(--accent)"></span> Frontend surface</div>
+            <div class="legend-row"><span class="dot" style="background: var(--green)"></span> Demo polish</div>
+          </div>
+        </section>
+      </aside>
+
+      <main>
+        <section class="panel hero">
+          <div class="hero-top">
+            <div>
+              <h2>From household goals to scheduled viewings</h2>
+              <p>
+                Track the HomeOS Agent build: profile parsing, market and location
+                agents, case files, map highlighting, scheduling outbox, and demo polish.
+              </p>
+            </div>
+            <div class="actions">
+              <button class="button" id="clear-done" type="button">Clear Done</button>
+              <button class="button primary" id="mark-core" type="button">Mark Core Done</button>
+            </div>
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-label">
+              <span>Overall completion</span>
+              <span id="percent">0%</span>
+            </div>
+            <div class="progress"><div id="progress-bar"></div></div>
+          </div>
+        </section>
+
+        <section class="board" aria-label="HomeOS implementation board">
+          <div class="panel column">
+            <div class="column-header">
+              <h3>Backend Agents</h3>
+              <span class="count" data-count-for="backend">0</span>
+            </div>
+            <div class="cards">
+              <article class="task" data-group="backend">
+                <label>
+                  <input type="checkbox" data-task="backend-scaffold" />
+                  <span>
+                    <span class="task-title">HomeOS agent scaffold</span>
+                    <span class="task-desc">Stable agent seams in <code>homeos_agents.py</code> with scaffold tests.</span>
+                    <span class="tags"><span class="tag backend">backend</span><span class="tag">done seam</span></span>
+                  </span>
+                </label>
+              </article>
+
+              <article class="task" data-group="backend">
+                <label>
+                  <input type="checkbox" data-task="profile-parser" />
+                  <span>
+                    <span class="task-title">Profile parser</span>
+                    <span class="task-desc">Natural-language household profile to structured budget, flat type, risk, commute, and schools.</span>
+                    <span class="tags"><span class="tag backend">backend</span><span class="tag">parser</span></span>
+                  </span>
+                </label>
+              </article>
+
+              <article class="task" data-group="backend">
+                <label>
+                  <input type="checkbox" data-task="market-location" />
+                  <span>
+                    <span class="task-title">Market + location agents</span>
+                    <span class="task-desc">Recent comparable sales, MRT access, and primary-school connection evidence.</span>
+                    <span class="tags"><span class="tag backend">backend</span><span class="tag">evidence</span></span>
+                  </span>
+                </label>
+              </article>
+
+              <article class="task" data-group="backend">
+                <label>
+                  <input type="checkbox" data-task="risk-questions" />
+                  <span>
+                    <span class="task-title">Risk + questions agents</span>
+                    <span class="task-desc">Future supply, appreciation, accessibility watchouts, and questions to ask the real-estate agent.</span>
+                    <span class="tags"><span class="tag backend">backend</span><span class="tag">case file</span></span>
+                  </span>
+                </label>
+              </article>
+
+              <article class="task" data-group="backend">
+                <label>
+                  <input type="checkbox" data-task="homeos-api" />
+                  <span>
+                    <span class="task-title">HomeOS API</span>
+                    <span class="task-desc"><code>/homeos/investigate</code>, <code>/case-file</code>, and <code>/schedule-viewing</code>.</span>
+                    <span class="tags"><span class="tag backend">backend</span><span class="tag">api</span></span>
+                  </span>
+                </label>
+              </article>
+            </div>
+          </div>
+
+          <div class="panel column">
+            <div class="column-header">
+              <h3>Frontend Flow</h3>
+              <span class="count" data-count-for="frontend">0</span>
+            </div>
+            <div class="cards">
+              <article class="task" data-group="frontend">
+                <label>
+                  <input type="checkbox" data-task="sidebar-mode" />
+                  <span>
+                    <span class="task-title">HomeOS sidebar mode</span>
+                    <span class="task-desc">Agent-first sidebar with household profile input and investigation button.</span>
+                    <span class="tags"><span class="tag frontend">frontend</span><span class="tag">ui</span></span>
+                  </span>
+                </label>
+              </article>
+
+              <article class="task" data-group="frontend">
+                <label>
+                  <input type="checkbox" data-task="shortlist-case-file" />
+                  <span>
+                    <span class="task-title">Shortlist + case file UI</span>
+                    <span class="task-desc">Worth-viewing cards, evidence sections, watchouts, and agent questions.</span>
+                    <span class="tags"><span class="tag frontend">frontend</span><span class="tag">case file</span></span>
+                  </span>
+                </label>
+              </article>
+
+              <article class="task" data-group="frontend">
+                <label>
+                  <input type="checkbox" data-task="map-highlighting" />
+                  <span>
+                    <span class="task-title">Map highlighting</span>
+                    <span class="task-desc">Highlight HomeOS shortlist and selected case-file block on the existing map.</span>
+                    <span class="tags"><span class="tag frontend">frontend</span><span class="tag">map</span></span>
+                  </span>
+                </label>
+              </article>
+            </div>
+          </div>
+
+          <div class="panel column">
+            <div class="column-header">
+              <h3>Action + Demo</h3>
+              <span class="count" data-count-for="demo">0</span>
+            </div>
+            <div class="cards">
+              <article class="task" data-group="demo">
+                <label>
+                  <input type="checkbox" data-task="scheduling-outbox" />
+                  <span>
+                    <span class="task-title">Scheduling outbox</span>
+                    <span class="task-desc">Availability capture and generated message to the real-estate agent.</span>
+                    <span class="tags"><span class="tag demo">demo</span><span class="tag">agent action</span></span>
+                  </span>
+                </label>
+              </article>
+
+              <article class="task" data-group="demo">
+                <label>
+                  <input type="checkbox" data-task="demo-polish" />
+                  <span>
+                    <span class="task-title">Hackathon demo polish</span>
+                    <span class="task-desc">Sample profile, loading states, concise copy, README rows, and demo script.</span>
+                    <span class="tags"><span class="tag demo">demo</span><span class="tag">polish</span></span>
+                  </span>
+                </label>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel notes">
+          <h3>Notes</h3>
+          <textarea id="notes" placeholder="Add demo notes, blockers, or PR links here."></textarea>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const storageKey = "homeos-agent-task-tracker:v1";
+      const noteKey = "homeos-agent-task-tracker:notes:v1";
+      const checks = Array.from(document.querySelectorAll("input[type='checkbox'][data-task]"));
+      const notes = document.getElementById("notes");
+      const totalCount = document.getElementById("total-count");
+      const doneCount = document.getElementById("done-count");
+      const remainingCount = document.getElementById("remaining-count");
+      const percent = document.getElementById("percent");
+      const progressBar = document.getElementById("progress-bar");
+
+      function loadState() {
+        const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        checks.forEach((check) => {
+          check.checked = Boolean(saved[check.dataset.task]);
+        });
+        notes.value = localStorage.getItem(noteKey) || "";
+      }
+
+      function saveState() {
+        const next = {};
+        checks.forEach((check) => {
+          next[check.dataset.task] = check.checked;
+        });
+        localStorage.setItem(storageKey, JSON.stringify(next));
+        localStorage.setItem(noteKey, notes.value);
+      }
+
+      function render() {
+        const total = checks.length;
+        const done = checks.filter((check) => check.checked).length;
+        const ratio = total === 0 ? 0 : Math.round((done / total) * 100);
+        totalCount.textContent = String(total);
+        doneCount.textContent = String(done);
+        remainingCount.textContent = String(total - done);
+        percent.textContent = `${ratio}%`;
+        progressBar.style.width = `${ratio}%`;
+
+        checks.forEach((check) => {
+          check.closest(".task").classList.toggle("done", check.checked);
+        });
+
+        ["backend", "frontend", "demo"].forEach((group) => {
+          const groupChecks = checks.filter((check) => check.closest(".task").dataset.group === group);
+          const groupDone = groupChecks.filter((check) => check.checked).length;
+          const badge = document.querySelector(`[data-count-for='${group}']`);
+          badge.textContent = `${groupDone}/${groupChecks.length}`;
+        });
+      }
+
+      checks.forEach((check) => {
+        check.addEventListener("change", () => {
+          saveState();
+          render();
+        });
+      });
+
+      notes.addEventListener("input", saveState);
+
+      document.getElementById("clear-done").addEventListener("click", () => {
+        checks.forEach((check) => {
+          check.checked = false;
+        });
+        saveState();
+        render();
+      });
+
+      document.getElementById("mark-core").addEventListener("click", () => {
+        ["backend-scaffold", "profile-parser", "market-location", "risk-questions", "homeos-api"].forEach((id) => {
+          const check = checks.find((item) => item.dataset.task === id);
+          if (check) check.checked = true;
+        });
+        saveState();
+        render();
+      });
+
+      loadState();
+      render();
+    </script>
+  </body>
+</html>

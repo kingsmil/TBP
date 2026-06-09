@@ -1,0 +1,104 @@
+"""In-memory repository: pure-Python implementation of the Repository interface.
+
+Backs tests and restricted environments. Stores entities in dicts/lists and
+exposes the same reads the PostGIS repository will. Spatial work (proximity,
+point-in-polygon) is done by the ingestion pipeline using app.core.geo, so the
+results match the PostGIS semantics.
+"""
+from __future__ import annotations
+
+from collections import defaultdict
+from typing import Iterable, Sequence
+
+from app.core.models import (
+    Block,
+    BlockProximity,
+    BtoProject,
+    BusStop,
+    MrtStation,
+    PlanningArea,
+    School,
+    Transaction,
+)
+from app.repositories.base import Repository
+
+
+class InMemoryRepository(Repository):
+    def __init__(self) -> None:
+        self._planning_areas: dict[int, PlanningArea] = {}
+        self._mrt: dict[int, MrtStation] = {}
+        self._bus: dict[str, BusStop] = {}
+        self._schools: dict[int, School] = {}
+        self._bto: dict[int, BtoProject] = {}
+        self._blocks: dict[int, Block] = {}
+        self._txns: list[Transaction] = []
+        self._txns_by_block: dict[int, list[Transaction]] = defaultdict(list)
+        self._proximity: dict[int, BlockProximity] = {}
+
+    # --- bulk loading ---
+    def add_planning_areas(self, items: Iterable[PlanningArea]) -> None:
+        for it in items:
+            self._planning_areas[it.planning_area_id] = it
+
+    def add_mrt_stations(self, items: Iterable[MrtStation]) -> None:
+        for it in items:
+            self._mrt[it.station_id] = it
+
+    def add_bus_stops(self, items: Iterable[BusStop]) -> None:
+        for it in items:
+            self._bus[it.bus_stop_code] = it
+
+    def add_schools(self, items: Iterable[School]) -> None:
+        for it in items:
+            self._schools[it.school_id] = it
+
+    def add_bto_projects(self, items: Iterable[BtoProject]) -> None:
+        for it in items:
+            self._bto[it.project_id] = it
+
+    def add_blocks(self, items: Iterable[Block]) -> None:
+        for it in items:
+            self._blocks[it.block_id] = it
+
+    def add_transactions(self, items: Iterable[Transaction]) -> None:
+        for it in items:
+            self._txns.append(it)
+            self._txns_by_block[it.block_id].append(it)
+
+    def set_proximity(self, items: Iterable[BlockProximity]) -> None:
+        for it in items:
+            self._proximity[it.block_id] = it
+
+    # --- reads ---
+    def planning_areas(self) -> Sequence[PlanningArea]:
+        return list(self._planning_areas.values())
+
+    def mrt_stations(self, status: str | None = None) -> Sequence[MrtStation]:
+        vals = list(self._mrt.values())
+        if status is not None:
+            vals = [m for m in vals if m.status == status]
+        return vals
+
+    def bus_stops(self) -> Sequence[BusStop]:
+        return list(self._bus.values())
+
+    def schools(self) -> Sequence[School]:
+        return list(self._schools.values())
+
+    def bto_projects(self) -> Sequence[BtoProject]:
+        return list(self._bto.values())
+
+    def blocks(self) -> Sequence[Block]:
+        return list(self._blocks.values())
+
+    def block(self, block_id: int) -> Block | None:
+        return self._blocks.get(block_id)
+
+    def transactions(self) -> Sequence[Transaction]:
+        return list(self._txns)
+
+    def transactions_for_block(self, block_id: int) -> Sequence[Transaction]:
+        return list(self._txns_by_block.get(block_id, []))
+
+    def proximity(self, block_id: int) -> BlockProximity | None:
+        return self._proximity.get(block_id)

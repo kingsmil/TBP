@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; margin: 0; }
+
+/* OneMap returns empty tiles outside Singapore — match their water colour
+   so the container background blends instead of showing as grey. */
+.leaflet-container { background: #aacbdf; }
+
+@layer base {
+  :root {
+    /* Frieren watercolor palette */
+    --background: 156 4% 92%;       /* #eaecea off-white */
+    --foreground: 220 15% 20%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 20%;
+
+    --primary: 216 26% 55%;         /* #6f86aa steel blue */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 209 26% 76%;       /* #b3c3d2 light steel */
+    --secondary-foreground: 220 15% 20%;
+
+    --muted: 156 4% 88%;
+    --muted-foreground: 120 6% 45%; /* #889688 muted sage */
+
+    --accent: 61 29% 72%;           /* #cdcea1 sage yellow */
+    --accent-foreground: 220 15% 20%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 209 26% 82%;
+    --input: 209 26% 82%;
+    --ring: 216 26% 55%;
+
+    --radius: 0.5rem;
+  }
+}

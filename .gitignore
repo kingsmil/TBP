@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.pytest_cache/
+.coverage
+# Node
+node_modules/
+dist/
+.vite/
+# Data artifacts
+backend/app/data/generated/
+*.log
+
+# Local feature worktrees
+.worktrees/

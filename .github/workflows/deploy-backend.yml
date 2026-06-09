@@ -1,0 +1,126 @@
+name: Deploy Backend → AWS App Runner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REPOSITORY: hdb-match-backend
+  APP_RUNNER_SERVICE: hdb-match-backend
+
+jobs:
+  test:
+    name: Run backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run tests
+        working-directory: backend
+        env:
+          LLM_PROVIDER: test
+        run: pytest app/tests/ -q --tb=short
+
+  build-and-deploy:
+    name: Build → ECR → App Runner
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to ECR
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: backend
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag  $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                      $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy to App Runner
+        env:
+          IMAGE_URI: ${{ steps.build.outputs.image }}
+        run: |
+          # Check if service exists
+          SERVICE_ARN=$(aws apprunner list-services \
+            --query "ServiceSummaryList[?ServiceName=='$APP_RUNNER_SERVICE'].ServiceArn" \
+            --output text)
+
+          if [ -z "$SERVICE_ARN" ]; then
+            echo "Creating App Runner service..."
+            aws apprunner create-service \
+              --service-name $APP_RUNNER_SERVICE \
+              --source-configuration "{
+                \"ImageRepository\": {
+                  \"ImageIdentifier\": \"$IMAGE_URI\",
+                  \"ImageRepositoryType\": \"ECR\",
+                  \"ImageConfiguration\": {
+                    \"Port\": \"8000\",
+                    \"RuntimeEnvironmentVariables\": {
+                      \"AWS_REGION\": \"$AWS_REGION\",
+                      \"AWS_S3_BUCKET\": \"hdb-match-data\",
+                      \"AWS_BEDROCK_AGENT_ID\": \"${{ secrets.AWS_BEDROCK_AGENT_ID }}\",
+                      \"AWS_BEDROCK_AGENT_ALIAS_ID\": \"${{ secrets.AWS_BEDROCK_AGENT_ALIAS_ID }}\",
+                      \"AWS_SAGEMAKER_ENDPOINT\": \"hdb-psf-forecast\",
+                      \"AI_GATEWAY_API_KEY\": \"${{ secrets.AI_GATEWAY_API_KEY }}\",
+                      \"LLM_MODEL\": \"google/gemini-2.0-flash\",
+                      \"LLM_PROVIDER\": \"vercel\",
+                      \"ONEMAP_TOKEN\": \"${{ secrets.ONEMAP_TOKEN }}\",
+                      \"DATAGOV_API_KEY\": \"${{ secrets.DATAGOV_API_KEY }}\",
+                      \"LTA_DATAMALL_API_KEY\": \"${{ secrets.LTA_DATAMALL_API_KEY }}\"
+                    }
+                  }
+                },
+                \"AutoDeploymentsEnabled\": false,
+                \"AuthenticationConfiguration\": {
+                  \"AccessRoleArn\": \"${{ secrets.APP_RUNNER_ECR_ROLE_ARN }}\"
+                }
+              }" \
+              --instance-configuration "Cpu=1 vCPU,Memory=2 GB"
+          else
+            echo "Updating App Runner service $SERVICE_ARN..."
+            aws apprunner update-service \
+              --service-arn $SERVICE_ARN \
+              --source-configuration "{
+                \"ImageRepository\": {
+                  \"ImageIdentifier\": \"$IMAGE_URI\",
+                  \"ImageRepositoryType\": \"ECR\",
+                  \"ImageConfiguration\": {\"Port\": \"8000\"}
+                }
+              }"
+          fi

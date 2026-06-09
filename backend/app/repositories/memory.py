@@ -11,6 +11,7 @@ from collections import defaultdict
 from typing import Iterable, Sequence
 
 from app.core.models import (
+    ActiveListing,
     Block,
     BlockProximity,
     BtoProject,
@@ -34,6 +35,7 @@ class InMemoryRepository(Repository):
         self._txns: list[Transaction] = []
         self._txns_by_block: dict[int, list[Transaction]] = defaultdict(list)
         self._proximity: dict[int, BlockProximity] = {}
+        self._active: dict[int, ActiveListing] = {}
 
     # --- bulk loading ---
     def add_planning_areas(self, items: Iterable[PlanningArea]) -> None:
@@ -102,3 +104,14 @@ class InMemoryRepository(Repository):
 
     def proximity(self, block_id: int) -> BlockProximity | None:
         return self._proximity.get(block_id)
+
+    # --- active listings (HDB Flat Portal) ---
+    def add_active_listings(self, items: Iterable[ActiveListing]) -> None:
+        for it in items:
+            self._active[it.listing_id] = it
+
+    def active_listings_for_block(self, block_id: int) -> Sequence[ActiveListing]:
+        return [a for a in self._active.values() if a.block_id == block_id]
+
+    def active_listing(self, listing_id: int) -> ActiveListing | None:
+        return self._active.get(listing_id)

@@ -30,5 +30,29 @@ class ActiveListingModelTest(unittest.TestCase):
         self.assertFalse(listing.managed_by_agent)
 
 
+class ActiveListingRepoTest(unittest.TestCase):
+    def test_add_and_read_listings_by_block(self):
+        from app.repositories.memory import InMemoryRepository
+        repo = InMemoryRepository()
+        repo.add_active_listings([
+            make_listing(listing_id=1, block_id=10),
+            make_listing(listing_id=2, block_id=10, price=900000.0),
+            make_listing(listing_id=3, block_id=11),
+        ])
+        ten = repo.active_listings_for_block(10)
+        self.assertEqual({l.listing_id for l in ten}, {1, 2})
+        self.assertEqual(list(repo.active_listings_for_block(99)), [])
+        self.assertEqual(repo.active_listing(3).block_id, 11)
+        self.assertIsNone(repo.active_listing(99))
+
+    def test_upsert_replaces_same_listing_id(self):
+        from app.repositories.memory import InMemoryRepository
+        repo = InMemoryRepository()
+        repo.add_active_listings([make_listing(listing_id=1, block_id=10, price=1.0)])
+        repo.add_active_listings([make_listing(listing_id=1, block_id=10, price=2.0)])
+        self.assertEqual(len(repo.active_listings_for_block(10)), 1)
+        self.assertEqual(repo.active_listing(1).price, 2.0)
+
+
 if __name__ == "__main__":
     unittest.main()

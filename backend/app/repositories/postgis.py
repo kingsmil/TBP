@@ -22,6 +22,7 @@ from sqlalchemy import text
 
 from app.core.geo import Point
 from app.core.models import (
+    ActiveListing,
     Block,
     BlockProximity,
     BtoProject,
@@ -200,6 +201,45 @@ class PostgisRepository(Repository):
     def transactions_for_block(self, block_id: int) -> Sequence[Transaction]:
         rows = self._all(self._TXN_SELECT + " WHERE block_id = :id", {"id": block_id})
         return [self._txn_row(r) for r in rows]
+
+    # --- active listings (HDB Flat Portal) ---
+    def add_active_listings(self, items: Iterable[ActiveListing]) -> None:
+        sql = text(
+            "INSERT INTO hdb_active_listings (listing_id, block_id, block_number, "
+            "street_name, postal_code, town, price, flat_type, floor_area_sqm, "
+            "storey_range, remaining_lease, bedroom, bathroom, description, "
+            "photo_path, agent_name, agent_phone, agent_email, agency_name, "
+            "managed_by_agent, last_updated) "
+            "VALUES (:id, :block, :blk_no, :street, :postal, :town, :price, :ft, "
+            ":area, :storey, :lease, :bed, :bath, :descr, :photo, :a_name, "
+            ":a_phone, :a_email, :agency, :managed, :updated) "
+            "ON CONFLICT (listing_id) DO UPDATE SET "
+            "price = EXCLUDED.price, description = EXCLUDED.description, "
+            "photo_path = EXCLUDED.photo_path, agent_name = EXCLUDED.agent_name, "
+            "agent_phone = EXCLUDED.agent_phone, agent_email = EXCLUDED.agent_email, "
+            "agency_name = EXCLUDED.agency_name, "
+            "managed_by_agent = EXCLUDED.managed_by_agent, "
+            "last_updated = EXCLUDED.last_updated"
+        )
+        self._exec_many(sql, [{
+            "id": a.listing_id, "block": a.block_id, "blk_no": a.block_number,
+            "street": a.street_name, "postal": a.postal_code, "town": a.town,
+            "price": a.price, "ft": a.flat_type, "area": a.floor_area_sqm,
+            "storey": a.storey_range, "lease": a.remaining_lease,
+            "bed": a.bedroom, "bath": a.bathroom, "descr": a.description,
+            "photo": a.photo_path, "a_name": a.agent_name,
+            "a_phone": a.agent_phone, "a_email": a.agent_email,
+            "agency": a.agency_name, "managed": a.managed_by_agent,
+            "updated": a.last_updated,
+        } for a in items])
+
+    def active_listings_for_block(self, block_id: int) -> Sequence[ActiveListing]:
+        rows = self._all(self._ACTIVE_SELECT + " WHERE block_id = :id", {"id": block_id})
+        return [self._active_row(r) for r in rows]
+
+    def active_listing(self, listing_id: int) -> ActiveListing | None:
+        rows = self._all(self._ACTIVE_SELECT + " WHERE listing_id = :id", {"id": listing_id})
+        return self._active_row(rows[0]) if rows else None
 
     def proximity(self, block_id: int) -> BlockProximity | None:
         rows = self._all("SELECT * FROM block_proximity WHERE block_id = :id",
@@ -549,9 +589,30 @@ class PostgisRepository(Repository):
         "SELECT block_id, block_number, street_name, postal_code, town, "
         "planning_area_id, lease_commencement_year, ST_X(geom) lon, ST_Y(geom) lat "
         "FROM hdb_blocks")
+    _ACTIVE_SELECT = (
+        "SELECT listing_id, block_id, block_number, street_name, postal_code, "
+        "town, price, flat_type, floor_area_sqm, storey_range, remaining_lease, "
+        "bedroom, bathroom, description, photo_path, agent_name, agent_phone, "
+        "agent_email, agency_name, managed_by_agent, last_updated "
+        "FROM hdb_active_listings")
+
     _TXN_SELECT = (
         "SELECT transaction_id, block_id, to_char(transaction_month,'YYYY-MM-DD') tmonth, "
         "resale_price, floor_area_sqm, flat_type, storey_range FROM hdb_transactions")
+
+    @staticmethod
+    def _active_row(r) -> ActiveListing:
+        return ActiveListing(
+            listing_id=r.listing_id, block_id=r.block_id,
+            block_number=r.block_number, street_name=r.street_name,
+            postal_code=r.postal_code, town=r.town, price=float(r.price),
+            flat_type=r.flat_type, floor_area_sqm=float(r.floor_area_sqm),
+            storey_range=r.storey_range, remaining_lease=r.remaining_lease,
+            bedroom=r.bedroom, bathroom=r.bathroom, description=r.description,
+            photo_path=r.photo_path, agent_name=r.agent_name,
+            agent_phone=r.agent_phone, agent_email=r.agent_email,
+            agency_name=r.agency_name, managed_by_agent=bool(r.managed_by_agent),
+            last_updated=r.last_updated)
 
     @staticmethod
     def _block_row(r) -> Block:

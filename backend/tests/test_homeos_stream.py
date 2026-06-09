@@ -2,13 +2,15 @@ import asyncio
 import unittest
 
 from app.data.seed import build_seeded_repo
-from app.services.homeos import chat_in_case, investigate_stream
-from app.services import homeos_case_store
+from app.homeos.pipeline import chat_in_case, investigate_stream
+from app.homeos import case_store as homeos_case_store
 
 
 class TestHomeOSStream(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from app.homeos.wiring import setup as homeos_setup
+        homeos_setup()
         cls.repo, _ = build_seeded_repo(seed=42, blocks_per_area=4, months=6)
 
     def setUp(self):

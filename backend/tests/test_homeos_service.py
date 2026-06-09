@@ -1,6 +1,6 @@
 import unittest
 
-from app.services.homeos import parse_homeos_profile
+from app.homeos.pipeline import parse_homeos_profile
 
 
 class TestHomeOSService(unittest.TestCase):

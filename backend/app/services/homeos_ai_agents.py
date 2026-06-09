@@ -21,9 +21,9 @@ import os
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
-from app.services.homeos_ai_models import (
+from app.homeos.models.avatar import HomeOSAvatar
+from app.homeos.models.evidence import (
     AgentQuestions,
-    HomeOSAvatar,
     LocationEvidence,
     MarketEvidence,
     RiskEvidence,

@@ -4,14 +4,16 @@ import unittest
 from unittest.mock import patch
 
 from app.data.seed import build_seeded_repo
-from app.services import homeos_case_store
-from app.services.homeos import chat_in_case, investigate_homeos_profile, investigate_stream
-from app.services.homeos_mock_agents import mock_delay_seconds
+from app.homeos import case_store as homeos_case_store
+from app.homeos.pipeline import chat_in_case, investigate_homeos_profile, investigate_stream
+from app.homeos.mock.tools import mock_delay_seconds
 
 
 class TestHomeOSMockAgents(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from app.homeos.wiring import setup as homeos_setup
+        homeos_setup()
         cls.repo, _ = build_seeded_repo(seed=42, blocks_per_area=4, months=6)
 
     def setUp(self):

@@ -1,10 +1,9 @@
 import asyncio
 import unittest
 
-from app.services.homeos_ai_models import (
+from app.homeos.models.avatar import HomeOSAvatar, HomeOSPreferences
+from app.homeos.models.evidence import (
     AgentQuestions,
-    HomeOSAvatar,
-    HomeOSPreferences,
     LocationEvidence,
     MarketEvidence,
     RiskEvidence,
@@ -89,7 +88,7 @@ class TestHomeOSAIModels(unittest.TestCase):
 class TestHomeOSAIAgents(unittest.TestCase):
     def test_get_model_returns_test_model_by_default(self):
         from pydantic_ai.models.test import TestModel
-        from app.services.homeos_ai_agents import get_model
+        from app.homeos.framework.registry import get_model
         m = get_model()
         self.assertIsInstance(m, TestModel)
 

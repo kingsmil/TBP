@@ -162,5 +162,55 @@ class IngestTest(unittest.TestCase):
         self.assertEqual(report.matched_tier1, 1)
 
 
+class BlockListingsApiTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from app.api import deps
+        from app.api.main import app
+        from app.repositories.memory import InMemoryRepository
+
+        repo = InMemoryRepository()
+        repo.add_blocks([make_block()])
+        repo.add_active_listings([
+            make_listing(listing_id=2, block_id=1, price=1330000.0),
+            make_listing(listing_id=1, block_id=1, price=900000.0),
+        ])
+        cls._override = repo
+        app.dependency_overrides[deps.get_repository] = lambda: repo
+        cls.client = TestClient(app)
+
+    @classmethod
+    def tearDownClass(cls):
+        from app.api import deps
+        from app.api.main import app
+        app.dependency_overrides.pop(deps.get_repository, None)
+
+    def test_listings_sorted_by_price_with_sqft(self):
+        res = self.client.get("/blocks/1/listings")
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body["count"], 2)
+        prices = [l["price"] for l in body["listings"]]
+        self.assertEqual(prices, sorted(prices))
+        self.assertAlmostEqual(
+            body["listings"][0]["floor_area_sqft"], round(93.0 * 10.7639, 1))
+
+    def test_null_agent_fields_omitted(self):
+        res = self.client.get("/blocks/1/listings")
+        first = res.json()["listings"][0]
+        self.assertNotIn("agent_name", first)
+        self.assertNotIn("agent_phone", first)
+
+    def test_unknown_block_404(self):
+        self.assertEqual(self.client.get("/blocks/999/listings").status_code, 404)
+
+    def test_block_without_listings_empty_list(self):
+        self._override.add_blocks([make_block(block_id=2, postal="161127")])
+        res = self.client.get("/blocks/2/listings")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["listings"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -174,7 +174,7 @@ export default function CasesPanel({
 
   // Auto-scroll to bottom
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    endRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
   }, [chatHistory.length, chatChunks]);
 
   function handleSubmit(e: React.FormEvent) {

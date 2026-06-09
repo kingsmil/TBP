@@ -91,7 +91,8 @@ profile_agent: Agent[None, HomeOSAvatar] = Agent(
         "max_price (numeric, e.g. 800000 for $800k), "
         "town (Singapore HDB town name in CAPS, e.g. QUEENSTOWN, TAMPINES, BISHAN), "
         "min_schools_within_1km (integer, e.g. 2 if user says '2 primary schools'), "
-        "commute_priority (high if near MRT is important), "
+        "commute_priority: set 'high' if buyer says near MRT/commute is important (600m), "
+        "'medium' if they say moderate/1.2km, 'low' if not mentioned (default 'low'), "
         "school_priority (high if schools are important). "
         "Return a complete HomeOSAvatar with label, buyer_type, summary, and preferences."
     ),

@@ -77,7 +77,12 @@ def _extract_budget(text: str) -> float | None:
 
 def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
     buyer_type = "family" if _has_any(profile_text, ("family", "kids", "children", "child", "primary school", "schools")) else "single"
-    commute_priority = "high" if _has_any(profile_text, ("must be close to mrt", "near mrt", "close to mrt", "commute")) else "medium"
+    if _has_any(profile_text, ("must be close to mrt", "near mrt", "close to mrt", "commute", "mrt access", "within 600")):
+        commute_priority = "high"
+    elif _has_any(profile_text, ("medium commute", "1.2km", "1200", "moderate commute", "within 1.2", "within 1km of mrt")):
+        commute_priority = "medium"
+    else:
+        commute_priority = "low"
     school_priority = "high" if _has_any(profile_text, ("primary school", "schools", "kids", "children", "family")) else "low"
     risk_tolerance = "medium" if _has_any(profile_text, ("some risk", "appreciation risk", "growth", "invest")) else "low"
     appreciation_priority = "high" if _has_any(profile_text, ("growth", "appreciation", "investment", "undervalued")) else "medium"
@@ -287,11 +292,15 @@ def _prefs_to_search_query(prefs: dict, candidate_limit: int = 100):
             min_schools = 2
         elif school == "medium":
             min_schools = 1
-    # Only hard-filter by MRT distance when commute is explicitly HIGH.
-    # "medium" is the HomeOSPreferences default — applying 1200 m there silently
-    # penalises buyers who never stated a commute preference.
+    # Only hard-filter by MRT when the buyer explicitly stated a preference.
+    # "low" is the implicit default — zero filter applied when commute was never mentioned.
     commute = prefs.get("commute_priority", "low")
-    max_mrt_distance_m = 600.0 if commute == "high" else None
+    if commute == "high":
+        max_mrt_distance_m = 600.0
+    elif commute == "medium":
+        max_mrt_distance_m = 1200.0
+    else:
+        max_mrt_distance_m = None
     return SearchQuery(
         flat_type=prefs.get("flat_type"),
         max_price=prefs.get("max_price"),
@@ -303,7 +312,7 @@ def _prefs_to_search_query(prefs: dict, candidate_limit: int = 100):
 
 
 def _lightweight_rank(candidates: list[dict], prefs: dict, top_n: int) -> list[dict]:
-    commute = prefs.get("commute_priority", "medium")
+    commute = prefs.get("commute_priority", "low")
     school = prefs.get("school_priority", "low")
     max_price = prefs.get("max_price")
 
@@ -362,7 +371,7 @@ def _clarifying_question(
             "What's your maximum budget? (e.g. $600k, $700k, $800k, $1M)",
             "max_price",
         )
-    if prefs.get("commute_priority", "medium") != "high" and "commute_priority" not in already_asked:
+    if prefs.get("commute_priority", "low") not in ("medium", "high") and "commute_priority" not in already_asked:
         return (
             f"Still {count} options. How important is being close to an MRT? "
             "High = within 600 m, Medium = within 1.2 km.",

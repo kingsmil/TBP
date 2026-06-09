@@ -86,10 +86,15 @@ class TestHomeOSAIModels(unittest.TestCase):
 
 
 class TestHomeOSAIAgents(unittest.TestCase):
-    def test_get_model_returns_test_model_by_default(self):
+    def test_get_model_returns_test_model_when_no_keys_set(self):
+        import os
+        import unittest.mock
         from pydantic_ai.models.test import TestModel
         from app.homeos.framework.registry import get_model
-        m = get_model()
+        with unittest.mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AI_GATEWAY_API_KEY", None)
+            os.environ.pop("LLM_PROVIDER", None)
+            m = get_model()
         self.assertIsInstance(m, TestModel)
 
     def test_profile_agent_returns_avatar(self):

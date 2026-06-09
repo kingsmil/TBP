@@ -18,7 +18,7 @@ class HomeOSPreferences(BaseModel):
     max_price: float | None = None
     town: str | None = None
     min_schools_within_1km: int | None = None
-    commute_priority: Literal["low", "medium", "high"] = "medium"
+    commute_priority: Literal["low", "medium", "high"] = "low"
     school_priority: Literal["low", "medium", "high"] = "low"
     risk_tolerance: Literal["low", "medium"] = "low"
     appreciation_priority: Literal["medium", "high"] = "medium"

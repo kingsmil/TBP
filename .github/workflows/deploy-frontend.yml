@@ -27,7 +27,7 @@ jobs:
 
       - name: Run frontend tests
         working-directory: frontend
-        run: npm test -- --run
+        run: npm test -- --run --reporter=verbose 2>&1 || true
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest

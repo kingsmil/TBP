@@ -1,6 +1,7 @@
 """HomeOS Agent: profile parsing, HDB investigation, and viewing handoff."""
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 from typing import Any
@@ -493,7 +494,7 @@ async def _search_phase(
     from app.services.search import search_blocks
 
     search_q = _prefs_to_search_query(prefs, candidate_limit=500)
-    query_dict = {k: v for k, v in search_q.model_dump().items() if v is not None and k != "limit"}
+    query_dict = {k: v for k, v in dataclasses.asdict(search_q).items() if v is not None and k != "limit"}
     candidates = await asyncio.to_thread(search_blocks, repo, search_q)
     logger.info(
         "[case:%s] search returned %d candidates  query=%s",
@@ -571,7 +572,7 @@ async def investigate_stream(
         yield {"event": "agent_done", "agent": "search", "block_id": None}
         homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "search", "block_id": None})
 
-        if len(all_candidates) > _ANALYSIS_THRESHOLD:
+        if len(all_candidates) > _ANALYSIS_THRESHOLD and not is_mock_mode():
             # Too many — ask the user to narrow down
             question, field = _clarifying_question(prefs, len(all_candidates))
             logger.info(
@@ -674,7 +675,7 @@ async def refine_stream(
         yield {"event": "agent_done", "agent": "search", "block_id": None}
         homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "search", "block_id": None})
 
-        if len(all_candidates) > _ANALYSIS_THRESHOLD:
+        if len(all_candidates) > _ANALYSIS_THRESHOLD and not is_mock_mode():
             question, field = _clarifying_question(prefs, len(all_candidates))
             logger.info("[case:%s] STILL REFINING  count=%d  field=%s", case_id[:8], len(all_candidates), field)
             homeos_case_store.set_status(case_id, "refining")

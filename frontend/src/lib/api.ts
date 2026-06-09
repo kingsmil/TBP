@@ -3,6 +3,7 @@
 
 import type {
   AccessibilityScores,
+  BlockListingsResponse,
   AppreciationResult,
   CommuteHeatmapResponse,
   CommuteOptimizeResponse,
@@ -232,6 +233,10 @@ export function scheduleHomeOSViewing(
   body: HomeOSScheduleViewingBody,
 ): Promise<HomeOSScheduleViewingResponse> {
   return postJSON<HomeOSScheduleViewingResponse>("/homeos/schedule-viewing", body);
+}
+
+export function getBlockListings(blockId: number): Promise<BlockListingsResponse> {
+  return getJSON<BlockListingsResponse>(`/blocks/${blockId}/listings`);
 }
 
 export function getCases(): Promise<HomeOSCaseSummary[]> {

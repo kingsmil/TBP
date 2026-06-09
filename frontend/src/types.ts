@@ -367,3 +367,34 @@ export interface HomeOSCase {
   status: "running" | "refining" | "done" | "error";
 }
 
+
+// --- Active listings (HDB Flat Portal) ---
+export interface ActiveListing {
+  listing_id: number;
+  block_id: number;
+  block_number: string;
+  street_name: string;
+  postal_code: string;
+  town: string;
+  price: number;
+  flat_type: string;
+  floor_area_sqm: number;
+  floor_area_sqft: number;
+  storey_range: string;
+  remaining_lease: string;
+  bedroom?: number;
+  bathroom?: number;
+  description?: string;
+  photo_path?: string;
+  agent_name?: string;
+  agent_phone?: string;
+  agent_email?: string;
+  agency_name?: string;
+  managed_by_agent: boolean;
+  last_updated: string;
+}
+
+export interface BlockListingsResponse {
+  count: number;
+  listings: ActiveListing[];
+}

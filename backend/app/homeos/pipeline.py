@@ -12,7 +12,13 @@ logger = logging.getLogger("homeos.pipeline")
 
 from app.repositories.base import Repository
 from app.homeos import case_store as homeos_case_store
-from app.homeos.mock.agents import mock_chat_answer, mock_profile_avatar
+from app.homeos.mock.agents import (
+    mock_chat_answer,
+    mock_location_narrative,
+    mock_market_narrative,
+    mock_profile_avatar,
+    mock_risk_narrative,
+)
 from app.homeos.mock.tools import is_mock_mode, mock_delay_seconds
 from app.homeos.scoring import worth_viewing_score, _verdict, _confidence
 
@@ -134,24 +140,32 @@ async def _deep_analysis_stream(
         risk_evidence: dict = {}
 
         try:
+            mock = is_mock_mode()
+
             # ── Market ────────────────────────────────────────────────────────
             start_evt = {"event": "agent_start", "agent": "market", "block_id": block_id}
             yield start_evt
             homeos_case_store.append_event(case_id, start_evt)
-            if is_mock_mode():
+            if mock:
                 await asyncio.sleep(mock_delay_seconds())
 
-            output, prefetched = await _run_block_agent(
-                "market", repo, block_id, prefs,
-                "Summarise the market evidence for this block.",
-            )
-            # Structured data comes from pre-fetch; AI contributes the narrative.
-            market_evidence = {**prefetched.get("transactions", {}), "narrative": output.narrative}
+            from app.homeos.wiring import agent_registry
+            _, prefetched_market = agent_registry.build("market", repo=repo, block_id=block_id, prefs=prefs)
+            txn_data = prefetched_market.get("transactions", {})
+            if mock:
+                market_narrative = mock_market_narrative(txn_data, prefs)
+            else:
+                output, _ = await _run_block_agent(
+                    "market", repo, block_id, prefs,
+                    "Summarise the market evidence for this block.",
+                )
+                market_narrative = output.narrative
+            market_evidence = {**txn_data, "narrative": market_narrative}
 
             yield {"event": "agent_data", "agent": "market", "block_id": block_id, "data": market_evidence}
             homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "market", "block_id": block_id, "data": market_evidence})
-            yield {"event": "agent_summary", "agent": "market", "block_id": block_id, "narrative": output.narrative}
-            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "market", "block_id": block_id, "narrative": output.narrative})
+            yield {"event": "agent_summary", "agent": "market", "block_id": block_id, "narrative": market_narrative}
+            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "market", "block_id": block_id, "narrative": market_narrative})
             yield {"event": "agent_done", "agent": "market", "block_id": block_id}
             homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "market", "block_id": block_id})
 
@@ -159,19 +173,26 @@ async def _deep_analysis_stream(
             start_evt = {"event": "agent_start", "agent": "location", "block_id": block_id}
             yield start_evt
             homeos_case_store.append_event(case_id, start_evt)
-            if is_mock_mode():
+            if mock:
                 await asyncio.sleep(mock_delay_seconds())
 
-            output, prefetched = await _run_block_agent(
-                "location", repo, block_id, prefs,
-                "Summarise the location evidence for this block.",
-            )
-            location_evidence = {**prefetched.get("proximity", {}), "narrative": output.narrative}
+            _, prefetched_loc = agent_registry.build("location", repo=repo, block_id=block_id, prefs=prefs)
+            prox_data = prefetched_loc.get("proximity", {})
+            connections = prox_data.get("connections", [])
+            if mock:
+                location_narrative = mock_location_narrative(connections)
+            else:
+                output, _ = await _run_block_agent(
+                    "location", repo, block_id, prefs,
+                    "Summarise the location evidence for this block.",
+                )
+                location_narrative = output.narrative
+            location_evidence = {**prox_data, "narrative": location_narrative}
 
             yield {"event": "agent_data", "agent": "location", "block_id": block_id, "data": location_evidence}
             homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "location", "block_id": block_id, "data": location_evidence})
-            yield {"event": "agent_summary", "agent": "location", "block_id": block_id, "narrative": output.narrative}
-            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "location", "block_id": block_id, "narrative": output.narrative})
+            yield {"event": "agent_summary", "agent": "location", "block_id": block_id, "narrative": location_narrative}
+            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "location", "block_id": block_id, "narrative": location_narrative})
             yield {"event": "agent_done", "agent": "location", "block_id": block_id}
             homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "location", "block_id": block_id})
 
@@ -179,16 +200,12 @@ async def _deep_analysis_stream(
             start_evt = {"event": "agent_start", "agent": "risk", "block_id": block_id}
             yield start_evt
             homeos_case_store.append_event(case_id, start_evt)
-            if is_mock_mode():
+            if mock:
                 await asyncio.sleep(mock_delay_seconds())
 
-            output, prefetched = await _run_block_agent(
-                "risk", repo, block_id, prefs,
-                "Identify risks and compute score adjustment for this block.",
-            )
-            # Deterministic risk logic — AI narrative only
-            app_data = prefetched.get("appreciation", {})
-            future_dev_data = prefetched.get("future_dev", {})
+            _, prefetched_risk = agent_registry.build("risk", repo=repo, block_id=block_id, prefs=prefs)
+            app_data = prefetched_risk.get("appreciation", {})
+            future_dev_data = prefetched_risk.get("future_dev", {})
             future_supply_data = future_dev_data.get("future_supply", {})
             watchouts: list[str] = []
             score_adjustment = 0.0
@@ -200,19 +217,30 @@ async def _deep_analysis_stream(
             if future_supply_data.get("supply_risk_level") == "high":
                 watchouts.append("Nearby future supply may weigh on appreciation.")
                 score_adjustment -= 4.0
+            if mock:
+                risk_narrative = mock_risk_narrative({
+                    "watchouts": watchouts,
+                    "score_adjustment": score_adjustment,
+                })
+            else:
+                output, _ = await _run_block_agent(
+                    "risk", repo, block_id, prefs,
+                    "Identify risks and compute score adjustment for this block.",
+                )
+                risk_narrative = output.narrative
             risk_evidence = {
                 "appreciation": app_data,
                 "future_mrt": future_dev_data.get("future_mrt"),
                 "future_supply": future_supply_data,
                 "watchouts": watchouts,
                 "score_adjustment": score_adjustment,
-                "narrative": output.narrative,
+                "narrative": risk_narrative,
             }
 
             yield {"event": "agent_data", "agent": "risk", "block_id": block_id, "data": risk_evidence}
             homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "risk", "block_id": block_id, "data": risk_evidence})
-            yield {"event": "agent_summary", "agent": "risk", "block_id": block_id, "narrative": output.narrative}
-            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "risk", "block_id": block_id, "narrative": output.narrative})
+            yield {"event": "agent_summary", "agent": "risk", "block_id": block_id, "narrative": risk_narrative}
+            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "risk", "block_id": block_id, "narrative": risk_narrative})
             yield {"event": "agent_done", "agent": "risk", "block_id": block_id}
             homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "risk", "block_id": block_id})
 

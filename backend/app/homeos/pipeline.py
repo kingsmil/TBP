@@ -287,11 +287,16 @@ def _prefs_to_search_query(prefs: dict, candidate_limit: int = 100):
             min_schools = 2
         elif school == "medium":
             min_schools = 1
+    # Only hard-filter by MRT distance when commute is explicitly HIGH.
+    # "medium" is the HomeOSPreferences default — applying 1200 m there silently
+    # penalises buyers who never stated a commute preference.
+    commute = prefs.get("commute_priority", "low")
+    max_mrt_distance_m = 600.0 if commute == "high" else None
     return SearchQuery(
         flat_type=prefs.get("flat_type"),
         max_price=prefs.get("max_price"),
         town=prefs.get("town"),
-        max_mrt_distance_m=None,
+        max_mrt_distance_m=max_mrt_distance_m,
         min_schools_within_1km=min_schools,
         limit=candidate_limit,
     )

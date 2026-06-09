@@ -91,3 +91,25 @@ def mock_chat_answer(case: dict[str, Any], message: str) -> str:
         f"{block_text} First pipeline signal: {first_summary} "
         f"Your question was: {message}"
     )
+
+
+def mock_outreach_message(
+    listing: Any,
+    avatar_summary: str | None,
+    contact_name: str | None,
+    availability: list[str],
+) -> str:
+    """Deterministic outreach copy for demo/mock mode and CI."""
+    who = f"My name is {contact_name}. " if contact_name else ""
+    profile = f" A bit about us: {avatar_summary}" if avatar_summary else ""
+    avail = (
+        f" We could view on {'; '.join(availability)}." if availability else ""
+    )
+    return (
+        f"Hi! {who}I saw your {listing.flat_type} listing at "
+        f"Blk {listing.block_number} {listing.street_name} and I'm very interested. "
+        f"Could I ask: how is the {listing.remaining_lease} remaining lease reflected "
+        f"in the asking price, and has the unit been renovated recently? "
+        f"Is the {listing.storey_range} storey unit still available for viewing?"
+        f"{avail}{profile}"
+    )

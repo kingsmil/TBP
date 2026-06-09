@@ -1,0 +1,77 @@
+# Local development stack for HDB Match.
+# PostGIS is a first-class component from day one (see architecture doc).
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: hdbmatch_postgis
+    environment:
+      POSTGRES_USER: hdbmatch
+      POSTGRES_PASSWORD: hdbmatch
+      POSTGRES_DB: hdbmatch
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hdbmatch -d hdbmatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: hdbmatch_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: hdbmatch_backend
+    environment:
+      DATABASE_URL: postgresql://hdbmatch:hdbmatch@db:5432/hdbmatch
+      REDIS_URL: redis://redis:6379/0
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      ONEMAP_TOKEN: ${ONEMAP_TOKEN:-}
+    ports:
+      - "8000:8000"
+    command: ["sh", "-c", "python -m app.db.migrate && uvicorn app.api.main:app --host 0.0.0.0 --port 8000"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: hdbmatch_frontend
+    environment:
+      VITE_API_BASE: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  live-loader:
+    build:
+      context: ./backend
+    profiles: ["load"]
+    environment:
+      DATABASE_URL: postgresql://hdbmatch:hdbmatch@db:5432/hdbmatch
+      DATA_GOV_LIMIT: ${DATA_GOV_LIMIT:-5000}
+      DATA_GOV_PAGE_SIZE: ${DATA_GOV_PAGE_SIZE:-1000}
+      ONEMAP_GEOCODE_PAUSE_S: ${ONEMAP_GEOCODE_PAUSE_S:-0.05}
+    command: ["sh", "-c", "python -m app.db.migrate && python -m app.data.data_gov_sg"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

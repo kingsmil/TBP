@@ -1,0 +1,224 @@
+import { useEffect, useState } from "react";
+import { getHomeOSCaseFile, scheduleHomeOSViewing } from "../lib/api";
+import { formatDistance, formatPsf, formatSGD } from "../lib/format";
+import type { BlockSummary, HomeOSCaseFile, HomeOSScheduleViewingResponse } from "../types";
+
+interface Props {
+  block: BlockSummary | null;
+  profileText?: string;
+  onClose: () => void;
+  onBack?: () => void;
+}
+
+export default function HomeOSDetailPanel({ block, profileText, onClose, onBack }: Props) {
+  const [caseFile, setCaseFile] = useState<HomeOSCaseFile | null>(null);
+  const [caseFileLoading, setCaseFileLoading] = useState(false);
+  const [contactName, setContactName] = useState("");
+  const [availability, setAvailability] = useState("");
+  const [outbox, setOutbox] = useState<HomeOSScheduleViewingResponse | null>(null);
+  const [scheduling, setScheduling] = useState(false);
+
+  useEffect(() => {
+    if (!block || !profileText) {
+      setCaseFile(null);
+      setOutbox(null);
+      return;
+    }
+    setCaseFile(null);
+    setOutbox(null);
+    setCaseFileLoading(true);
+    getHomeOSCaseFile(block.block_id, profileText)
+      .then(setCaseFile)
+      .catch(() => setCaseFile(null))
+      .finally(() => setCaseFileLoading(false));
+  }, [block?.block_id, profileText]);
+
+  async function handleSchedule() {
+    if (!block || !profileText) return;
+    const slots = availability.split(/\n|,/).map((s) => s.trim()).filter(Boolean);
+    setScheduling(true);
+    try {
+      const res = await scheduleHomeOSViewing({
+        profile_text: profileText,
+        block_id: block.block_id,
+        availability: slots,
+        contact_name: contactName,
+      });
+      setOutbox(res);
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  if (!block) return null;
+
+  const verdictColor =
+    caseFile?.verdict === "Worth viewing"
+      ? "bg-emerald-100 text-emerald-700"
+      : caseFile?.verdict === "Maybe view"
+        ? "bg-amber-100 text-amber-700"
+        : "bg-muted text-muted-foreground";
+
+  return (
+    <div className="absolute top-0 right-0 z-[1000] h-full w-80 overflow-y-auto border-l border-border bg-card shadow-xl flex flex-col">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2 p-4 border-b border-border">
+        <div>
+          <p className="text-sm font-bold text-foreground leading-tight">
+            Blk {block.block_number} {block.street_name}
+          </p>
+          <p className="text-xs text-muted-foreground">{block.town}</p>
+          {caseFile && (
+            <span className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-semibold ${verdictColor}`}>
+              {caseFile.verdict} · {caseFile.worth_viewing_score}
+            </span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+            >
+              Pipeline
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Close panel"
+          >
+            x
+          </button>
+        </div>
+      </div>
+
+      {/* Key numbers */}
+      <div className="p-4 border-b border-border space-y-1.5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          Key numbers
+        </p>
+        <Row label="Median price" value={formatSGD(block.median_price)} />
+        <Row label="Median PSF" value={formatPsf(block.median_psf)} />
+        <Row label="MRT distance" value={formatDistance(block.nearest_mrt_distance_m)} />
+        <Row label="Schools (1km)" value={String(block.schools_within_1km ?? "—")} />
+        <Row label="Transactions" value={String(block.txn_count)} />
+      </div>
+
+      {/* HomeOS evidence */}
+      {profileText && (
+        <div className="p-4 border-b border-border">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            HomeOS evidence
+          </p>
+          {caseFileLoading && (
+            <p className="text-xs text-muted-foreground">Loading case file…</p>
+          )}
+          {caseFile && !caseFileLoading && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground">{caseFile.evidence.recent_sales.summary}</p>
+              </div>
+
+              {caseFile.top_reasons.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-emerald-700">Why it fits</p>
+                  {caseFile.top_reasons.map((r) => (
+                    <p key={r} className="text-xs text-muted-foreground">✓ {r}</p>
+                  ))}
+                </div>
+              )}
+
+              {caseFile.top_watchouts.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-amber-600">Watchouts</p>
+                  {caseFile.top_watchouts.map((w) => (
+                    <p key={w} className="text-xs text-muted-foreground">⚠ {w}</p>
+                  ))}
+                </div>
+              )}
+
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">
+                  Questions for agent
+                </p>
+                <ul className="space-y-1">
+                  {caseFile.evidence.agent_questions.map((q) => (
+                    <li key={q} className="text-xs text-muted-foreground">• {q}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+          {!profileText && (
+            <p className="text-xs text-muted-foreground">
+              Switch to AI Mode to see HomeOS evidence for this block.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Schedule viewing */}
+      {profileText && caseFile && !outbox && (
+        <div className="p-4 border-b border-border space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Schedule a viewing
+          </p>
+          <div>
+            <label htmlFor="detail-contact" className="block text-xs text-muted-foreground mb-1">
+              Your name
+            </label>
+            <input
+              id="detail-contact"
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="detail-avail" className="block text-xs text-muted-foreground mb-1">
+              Availability (one slot per line)
+            </label>
+            <textarea
+              id="detail-avail"
+              className="w-full min-h-16 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder="e.g. Sat 10–12am"
+              value={availability}
+              onChange={(e) => setAvailability(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            className="w-full rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            disabled={scheduling || !contactName.trim() || !availability.trim()}
+            onClick={handleSchedule}
+          >
+            {scheduling ? "Scheduling…" : "Schedule viewing"}
+          </button>
+        </div>
+      )}
+
+      {/* Outbox */}
+      {outbox && (
+        <div className="p-4 space-y-2">
+          <p className="text-sm font-semibold text-emerald-800">Scheduling outbox</p>
+          <p className="text-xs text-emerald-700">{outbox.confirmation}</p>
+          <p className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-100 rounded p-2 leading-relaxed">
+            {outbox.outbox.message}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-xs font-medium text-foreground">{value}</span>
+    </div>
+  );
+}

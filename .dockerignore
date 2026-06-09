@@ -1,0 +1,8 @@
+.git
+backend/.venv
+backend/.pytest_cache
+backend/tests/__pycache__
+frontend/node_modules
+frontend/dist
+**/__pycache__
+**/.DS_Store

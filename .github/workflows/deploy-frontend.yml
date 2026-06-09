@@ -38,6 +38,8 @@ jobs:
 
       - name: Build for production
         working-directory: frontend
+        env:
+          VITE_API_BASE: http://54.203.13.36:8000
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy to Vercel

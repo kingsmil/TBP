@@ -1,4 +1,4 @@
-name: Deploy Backend → AWS App Runner
+name: Deploy Backend → AWS EC2
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 env:
   AWS_REGION: us-west-2
   ECR_REPOSITORY: hdb-match-backend
-  APP_RUNNER_SERVICE: hdb-match-backend
+  EC2_INSTANCE_ID: i-0445fc9bb19097618
 
 jobs:
   test:
@@ -36,7 +36,7 @@ jobs:
         run: pytest tests/ -q --tb=short --ignore=tests/test_fetch_live.py --ignore=tests/test_db_session.py --ignore=tests/test_migrations_sql.py
 
   build-and-deploy:
-    name: Build → ECR → App Runner
+    name: Build → ECR → EC2
     runs-on: ubuntu-latest
     needs: test
     permissions:
@@ -59,7 +59,6 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push image to ECR
-        id: build
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -70,57 +69,38 @@ jobs:
                       $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Deploy to App Runner
-        env:
-          IMAGE_URI: ${{ steps.build.outputs.image }}
+      - name: Deploy to EC2 via SSM
         run: |
-          # Check if service exists
-          SERVICE_ARN=$(aws apprunner list-services \
-            --query "ServiceSummaryList[?ServiceName=='$APP_RUNNER_SERVICE'].ServiceArn" \
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids $EC2_INSTANCE_ID \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 274946909740.dkr.ecr.us-west-2.amazonaws.com","docker pull 274946909740.dkr.ecr.us-west-2.amazonaws.com/hdb-match-backend:latest","docker stop hdb-backend || true","docker rm hdb-backend || true","docker run -d --name hdb-backend --restart always -p 8000:8000 -e AWS_REGION=us-west-2 -e AWS_S3_BUCKET=hdb-match-data -e AWS_BEDROCK_AGENT_ID=RX4UR3WWJH -e AWS_BEDROCK_AGENT_ALIAS_ID=TSTALIASID -e AI_GATEWAY_API_KEY=${{ secrets.AI_GATEWAY_API_KEY }} -e LLM_MODEL=google/gemini-2.0-flash -e LLM_PROVIDER=vercel -e ONEMAP_TOKEN=${{ secrets.ONEMAP_TOKEN }} -e DATAGOV_API_KEY=${{ secrets.DATAGOV_API_KEY }} -e LTA_DATAMALL_API_KEY=${{ secrets.LTA_DATAMALL_API_KEY }} 274946909740.dkr.ecr.us-west-2.amazonaws.com/hdb-match-backend:latest"]}' \
+            --region $AWS_REGION \
+            --query 'Command.CommandId' \
             --output text)
+          echo "SSM Command ID: $COMMAND_ID"
+          for i in $(seq 1 24); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id $COMMAND_ID \
+              --instance-id $EC2_INSTANCE_ID \
+              --query 'StatusDetails' --output text 2>/dev/null || echo "Pending")
+            echo "[$i/24] Status: $STATUS"
+            if [ "$STATUS" = "Success" ]; then
+              echo "Deploy succeeded!"
+              break
+            elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "TimedOut" ] || [ "$STATUS" = "Cancelled" ]; then
+              aws ssm get-command-invocation \
+                --command-id $COMMAND_ID \
+                --instance-id $EC2_INSTANCE_ID \
+                --query 'StandardErrorContent' --output text
+              exit 1
+            fi
+            sleep 10
+          done
 
-          if [ -z "$SERVICE_ARN" ]; then
-            echo "Creating App Runner service..."
-            aws apprunner create-service \
-              --service-name $APP_RUNNER_SERVICE \
-              --source-configuration "{
-                \"ImageRepository\": {
-                  \"ImageIdentifier\": \"$IMAGE_URI\",
-                  \"ImageRepositoryType\": \"ECR\",
-                  \"ImageConfiguration\": {
-                    \"Port\": \"8000\",
-                    \"RuntimeEnvironmentVariables\": {
-                      \"AWS_REGION\": \"$AWS_REGION\",
-                      \"AWS_S3_BUCKET\": \"hdb-match-data\",
-                      \"AWS_BEDROCK_AGENT_ID\": \"${{ secrets.AWS_BEDROCK_AGENT_ID }}\",
-                      \"AWS_BEDROCK_AGENT_ALIAS_ID\": \"${{ secrets.AWS_BEDROCK_AGENT_ALIAS_ID }}\",
-                      \"AWS_SAGEMAKER_ENDPOINT\": \"hdb-psf-forecast\",
-                      \"AI_GATEWAY_API_KEY\": \"${{ secrets.AI_GATEWAY_API_KEY }}\",
-                      \"LLM_MODEL\": \"google/gemini-2.0-flash\",
-                      \"LLM_PROVIDER\": \"vercel\",
-                      \"ONEMAP_TOKEN\": \"${{ secrets.ONEMAP_TOKEN }}\",
-                      \"DATAGOV_API_KEY\": \"${{ secrets.DATAGOV_API_KEY }}\",
-                      \"LTA_DATAMALL_API_KEY\": \"${{ secrets.LTA_DATAMALL_API_KEY }}\"
-                    }
-                  }
-                },
-                \"AutoDeploymentsEnabled\": false,
-                \"AuthenticationConfiguration\": {
-                  \"AccessRoleArn\": \"${{ secrets.APP_RUNNER_ECR_ROLE_ARN }}\"
-                }
-              }" \
-              --instance-configuration "Cpu=1 vCPU,Memory=2 GB"
-          else
-            echo "Updating App Runner service $SERVICE_ARN..."
-            aws apprunner update-service \
-              --service-arn $SERVICE_ARN \
-              --source-configuration "{
-                \"ImageRepository\": {
-                  \"ImageIdentifier\": \"$IMAGE_URI\",
-                  \"ImageRepositoryType\": \"ECR\",
-                  \"ImageConfiguration\": {\"Port\": \"8000\"}
-                }
-              }"
-          fi
+      - name: Health check
+        run: |
+          echo "Waiting 15s for container to start..."
+          sleep 15
+          curl -f --retry 5 --retry-delay 5 http://54.203.13.36:8000/health

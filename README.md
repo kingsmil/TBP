@@ -60,6 +60,12 @@ Built in five phases. Every backend feature is covered by tests.
 - Dream Home Finder: hard requirements + a match score across commute,
   lifestyle, appreciation, and budget fit.
 
+**Active listings (HDB Flat Portal)**
+- Live resale listings ingested from the official HDB Flat Portal public API,
+  matched to blocks (postal-code exact, then normalized block+street) — one
+  block holds 0..N listings. `make listings-load`, `GET /blocks/{id}/listings`,
+  and an "On the market now" section in the block detail panel.
+
 **Phase 5 — Recommendations & forecasting**
 - Recommendation engine: composite ranking with human-readable reasons.
 - Undervalued estate detector: peer model (PSF vs accessibility) flags estates

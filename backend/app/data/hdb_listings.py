@@ -135,19 +135,19 @@ def _make_client():
         "Origin": _PORTAL,
     }
     client = httpx.Client(headers=headers, timeout=30.0, follow_redirects=True)
-    if not (xsrf and cookie):
-        # Bootstrap a session: the landing page sets XSRF-TOKEN + HDB_HOMES.
+    if xsrf and cookie:
+        client.cookies.set("XSRF-TOKEN", xsrf, domain="api.homes.hdb.gov.sg")
+        client.cookies.set("HDB_HOMES", cookie, domain="api.homes.hdb.gov.sg")
+    else:
+        # Bootstrap a session: a GET to the public user-details endpoint mints
+        # fresh XSRF-TOKEN + HDB_HOMES cookies on the api.homes domain.
         try:
-            client.get(f"{_PORTAL}/home/landing")
+            client.get(f"{_BASE}/user/user-details")
+            xsrf = client.cookies.get("XSRF-TOKEN") or xsrf
         except Exception as exc:  # pragma: no cover - network only
-            log.warning("portal bootstrap failed: %s", exc)
-        xsrf = xsrf or client.cookies.get("XSRF-TOKEN", domain=".hdb.gov.sg") or \
-            client.cookies.get("XSRF-TOKEN") or ""
+            log.warning("portal session bootstrap failed: %s", exc)
     if xsrf:
         client.headers["X-XSRF-TOKEN"] = xsrf
-        client.cookies.set("XSRF-TOKEN", xsrf, domain="api.homes.hdb.gov.sg")
-    if cookie:
-        client.cookies.set("HDB_HOMES", cookie, domain="api.homes.hdb.gov.sg")
     return client
 
 

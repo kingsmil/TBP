@@ -2,7 +2,7 @@ name: Deploy Backend → AWS EC2
 
 on:
   push:
-    branches: [main]
+    branches: [main, deployment]
     paths:
       - "backend/**"
       - ".github/workflows/deploy-backend.yml"

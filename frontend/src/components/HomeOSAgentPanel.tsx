@@ -9,7 +9,7 @@ import type {
 } from "../types";
 
 const DEFAULT_PROFILE =
-  "Family looking for 4 room under 800k near primary schools and MRT.";
+  "Looking for a flat anywhere in Singapore, no specific requirements yet.";
 
 interface Props {
   onShortlist?: (blockIds: number[]) => void;
@@ -96,9 +96,6 @@ export default function HomeOSAgentPanel({
       <div>
         <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">
           HomeOS Agent
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Describe your household — HomeOS investigates and shortlists HDB blocks for you.
         </p>
       </div>
 

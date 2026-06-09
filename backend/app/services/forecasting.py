@@ -1,11 +1,11 @@
 """Advanced forecasting (Phase 5).
 
-A deliberately simple PSF forecaster: ordinary least-squares linear trend over
-the monthly median-PSF series, with a confidence band derived from the residual
-standard deviation. This is a transparent, testable baseline; richer models
-(seasonality, ARIMA) can replace `_fit_trend` later without changing callers.
+Primary path: Amazon SageMaker XGBoost endpoint (AWS_SAGEMAKER_ENDPOINT).
+Fallback: ordinary least-squares linear trend (local, no AWS needed).
 
-Like appreciation, this is a heuristic aid, not financial advice.
+The SageMaker model is trained in infrastructure/sagemaker/train.py and
+deployed to a real-time endpoint.  When the endpoint is unavailable (local
+dev, CI, or cold start) the OLS baseline is used transparently.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import numpy as np
 
 from app.repositories.base import Repository
 from app.services.analytics import estate_analytics, block_analytics
+from app.services.sagemaker_service import SageMakerUnavailable, predict_psf_series, is_available as sm_available
 
 MIN_POINTS = 4          # need a few months before a trend is meaningful
 CONFIDENCE_Z = 1.96     # ~95% band
@@ -42,13 +43,21 @@ def _fit_trend(y: list[float]) -> tuple[float, float, float, float]:
     return float(slope), float(intercept), resid_std, r2
 
 
-def forecast_series(monthly: list[dict], horizon_months: int = 12) -> dict | None:
+def forecast_series(monthly: list[dict], horizon_months: int = 12, use_sagemaker: bool = True) -> dict | None:
     points = [(r["month"], r["median_psf"]) for r in monthly
               if r.get("median_psf") is not None]
     if len(points) < MIN_POINTS:
         return None
     months = [m for m, _ in points]
     y = [v for _, v in points]
+
+    # Try SageMaker first; OLS is the fallback.
+    if use_sagemaker and sm_available():
+        try:
+            return predict_psf_series(y, horizon_months)
+        except SageMakerUnavailable:
+            pass
+
     slope, intercept, resid_std, r2 = _fit_trend(y)
 
     n = len(y)

@@ -9,6 +9,7 @@ Auto-detection (no LLM_PROVIDER needed):
 
 Explicit overrides via LLM_PROVIDER:
   vercel     — Vercel AI Gateway (same as auto-detect, explicit)
+  bedrock    — Amazon Bedrock (AWS_BEDROCK_MODEL_ID + IAM credentials required)
   anthropic  — Direct Anthropic SDK (ANTHROPIC_API_KEY required)
   openrouter — OpenRouter (OPENROUTER_API_KEY required)
   test       — TestModel, no key needed (used in CI and unit tests)
@@ -48,6 +49,18 @@ def get_model() -> Model:
                 api_key=gateway_key,
             ),
         )
+
+    if provider == "bedrock":
+        # Amazon Bedrock Agent — uses bedrock:InvokeAgent (not InvokeModel).
+        # The sandbox blocks InvokeModel on foundation models directly, but
+        # InvokeAgent is allowed because the agent's own IAM role makes the
+        # underlying model call, not our WSParticipantRole.
+        #
+        # pydantic-ai structured output is not available via InvokeAgent, so
+        # the bedrock provider returns TestModel here and the actual agent call
+        # is made by bedrock_service.invoke_agent_text() in the homeos routes.
+        from pydantic_ai.models.test import TestModel
+        return TestModel()
 
     if provider == "anthropic":
         from pydantic_ai.models.anthropic import AnthropicModel

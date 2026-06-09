@@ -27,6 +27,9 @@ shapely==2.0.6
 # Live data fetching (data.gov.sg + OneMap)
 requests==2.32.3
 
+# AWS SDK
+boto3==1.35.0
+
 # Dev / test
 pytest==8.3.4
 httpx==0.28.1

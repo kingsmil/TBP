@@ -293,11 +293,12 @@ export function getCase(caseId: string): Promise<HomeOSCase> {
 export async function* investigateStream(
   profileText: string,
   limit = 5,
+  model?: string,
 ): AsyncGenerator<AgentEvent> {
   const res = await fetch(`${BASE}/homeos/investigate-stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ profile_text: profileText, limit }),
+    body: JSON.stringify({ profile_text: profileText, limit, model }),
   });
   if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
 
@@ -326,11 +327,12 @@ export async function* investigateStream(
 export async function* refineStream(
   caseId: string,
   message: string,
+  model?: string,
 ): AsyncGenerator<AgentEvent> {
   const res = await fetch(`${BASE}/homeos/cases/${caseId}/refine`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, model }),
   });
   if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
 
@@ -394,4 +396,19 @@ export async function* chatInCase(
 
 export async function getNews(): Promise<NewsItem[]> {
   return getJSON<NewsItem[]>("/news");
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+}
+
+export interface ModelsResponse {
+  models: ModelInfo[];
+  default: string;
+}
+
+export function getModels(): Promise<ModelsResponse> {
+  return getJSON<ModelsResponse>("/models");
 }

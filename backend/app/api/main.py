@@ -99,6 +99,26 @@ def health():
             "mode": "postgis" if get_engine_or_none() else "mock"}
 
 
+@app.get("/models")
+def list_models():
+    """List available AI models for HomeOS agents."""
+    return {
+        "models": [
+            {"id": "openai/gpt-5.4-mini", "name": "GPT-5.4 Mini", "provider": "OpenAI"},
+            {"id": "openai/gpt-5.4-nano", "name": "GPT-5.4 Nano", "provider": "OpenAI"},
+            {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini", "provider": "OpenAI"},
+            {"id": "openai/gpt-4-turbo", "name": "GPT-4 Turbo", "provider": "OpenAI"},
+            {"id": "anthropic/claude-sonnet-4.5", "name": "Claude 4.5 Sonnet", "provider": "Anthropic"},
+            {"id": "anthropic/claude-3.5-haiku", "name": "Claude 3.5 Haiku", "provider": "Anthropic"},
+            {"id": "anthropic/claude-opus-4", "name": "Claude 4 Opus", "provider": "Anthropic"},
+            {"id": "meta-llama/llama-3.2-90b", "name": "Llama 3.2 90B", "provider": "Meta"},
+            {"id": "meta-llama/llama-3.1-70b", "name": "Llama 3.1 70B", "provider": "Meta"},
+            {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro", "provider": "Google"},
+        ],
+        "default": "openai/gpt-5.4-nano"
+    }
+
+
 @app.get("/properties/search")
 def properties_search(
     minx: float | None = None, miny: float | None = None,
@@ -304,7 +324,7 @@ async def homeos_investigate_stream(
     _user=Depends(require_subscribed),
 ):
     async def event_gen():
-        async for event in investigate_stream(repo, req.profile_text, req.limit):
+        async for event in investigate_stream(repo, req.profile_text, req.limit, req.model):
             yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(
@@ -367,7 +387,7 @@ async def homeos_refine(
         raise HTTPException(status_code=404, detail="case not found")
 
     async def refine_gen():
-        async for event in refine_stream(repo, case_id, req.message):
+        async for event in refine_stream(repo, case_id, req.message, req.model):
             yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(

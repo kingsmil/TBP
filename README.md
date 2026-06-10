@@ -1,222 +1,272 @@
-# Estate Finder (HDB Match)
+# HDB Match — HomeOS
 
-A **map-first geospatial analytics platform** that helps Singapore HDB buyers
-decide *where* to live — by affordability, accessibility, commute fit, and
-future appreciation potential. It is a spatial-query + analytics + scoring
-engine with a map on top, **not** a property-listing portal. PostGIS is a
-first-class component from day one.
+**An agentic, map-first decision platform for Singapore HDB buyers.**
+
+HDB Match answers the question every Singaporean homebuyer actually asks —
+*"Where should I live, and is this specific flat worth viewing?"* — by combining
+a **PostGIS geospatial engine** with a **live multi-agent AI system** that
+investigates blocks, streams its reasoning, and defends its shortlist in plain
+English.
+
+It is a spatial-query + analytics + scoring engine with a map and an agent on
+top — **not** a listings portal.
 
 > Heuristic decision aid only — scores and forecasts are **not financial advice**.
 
 ---
 
-## Table of contents
+## Two ways to use it
 
-- [Features](#features)
-- [Tech stack](#tech-stack)
-- [Architecture](#architecture)
-- [Repository layout](#repository-layout)
-- [Quick start](#quick-start)
-- [Running without a database (mock mode)](#running-without-a-database-mock-mode)
-- [Testing](#testing)
-- [API reference](#api-reference)
-- [Coordinate reference systems](#coordinate-reference-systems)
-- [Notes & limitations](#notes--limitations)
+| | **Explore** | **HomeOS (AI)** |
+|---|---|---|
+| **For** | Hands-on users who want to drive the map | Users who want an analyst to do the work |
+| **How** | Filter, compare, and read analytics directly on the map | Describe your household in plain English; agents investigate for you |
+| **Output** | Live charts, accessibility scores, estate comparisons | A ranked, evidence-backed shortlist you can interrogate |
+| **Access** | Open to everyone | Subscription-gated |
+
+Both modes read the **same underlying data and services** — HomeOS is the AI
+orchestration layer over the analytics engine, not a separate product.
 
 ---
 
-## Features
+## The headline: HomeOS, a streaming multi-agent investigation
 
-Built in five phases. Every backend feature is covered by tests.
+Type *"Family looking for a 4-room under 800k near primary schools and MRT"* and
+HomeOS opens a **Case**. Five specialist agents then investigate each candidate
+block and **stream their reasoning to the UI live** over Server-Sent Events —
+you watch the analysis happen rather than waiting on a spinner.
 
-**Phase 1 — Geospatial foundation**
-- PostGIS schema with dual geometry (WGS84 + SVY21), month-partitioned
-  transactions, precomputed proximity, and analytics materialized views.
-- Idempotent data ingestion with geometry validation and point-in-polygon
-  resolution of planning areas (mock/sample data included).
-- Interactive Leaflet map over OneMap tiles, served by a PostGIS
-  `ST_AsMVT` vector-tile endpoint.
-- HDB filters: viewport + attributes + proximity + price/PSF band.
-- Analytics dashboard: median/avg PSF & price, volume, PSF-over-time,
-  PSF-by-flat-type, PSF-by-lease-age, price-vs-MRT-distance.
+```
+ProfileAgent          parse the household description → structured buyer profile
+   │
+   ▼  (preference review: asks one clarifying question at a time if a
+   │   high-impact dimension was never stated — commute, schools, risk…)
+   │
+   └── for each candidate block:
+         MarketAgent      recent resale evidence, budget fit, confidence
+         LocationAgent    MRT distance, schools, commute time, bus connectivity
+         RiskAgent        appreciation, future MRT, future BTO supply pressure
+         LifestyleAgent   blended livability score across transport/schools/cost
+         QuestionsAgent   4–6 due-diligence questions to ask before viewing
+   │
+   ▼
+   WorthViewingScorer    aggregates evidence → 0–100 score + verdict + reasons
+   │
+   ▼
+   CaseDone              ranked shortlist lands on the map
+```
 
-**Phase 2 — Accessibility & comparison**
-- 0–100 accessibility sub-scores for MRT, future MRT, bus, and schools, plus a
-  weighted combined score (block- and estate-level).
-- Estate comparison: PSF, growth, lease profile, and accessibility side by side.
+After the shortlist appears, the Case stays **conversational**:
 
-**Phase 3 — Commute & lifestyle**
-- Commute engine behind a provider interface: **OneMap public-transport
-  routing** in production, with a deterministic offline fallback.
-- Commute optimizer + green/yellow/red heatmap (weekly/monthly burden, score).
-- Couple mode: combined burden + fairness score + recommended estates.
-- Lifestyle score: weighted blend of commute, transport, schools, affordability
-  (unsupplied factors are excluded, not averaged).
+- **Ask** — *"Why Bishan over Tampines?"* streams an answer grounded only in the
+  case's own evidence trace.
+- **Refine** — answer a clarifying question and the relevant agents re-run.
 
-**Phase 4 — Appreciation & dream home**
-- Appreciation engine: growth, liquidity, lease, accessibility, future MRT,
-  and future-supply pressure → score + confidence level + risk level.
-- Future MRT impact and future BTO supply analysis.
-- Dream Home Finder: hard requirements + a match score across commute,
-  lifestyle, appreciation, and budget fit.
+### Agents that actually call tools
 
-**Active listings (HDB Flat Portal)**
-- Live resale listings ingested from the official HDB Flat Portal public API,
-  matched to blocks (postal-code exact, then normalized block+street) — one
-  block holds 0..N listings. `make listings-load`, `GET /blocks/{id}/listings`,
-  and an "On the market now" section in the block detail panel.
+Each agent is a [Pydantic AI](https://ai.pydantic.dev/) `Agent` with a typed
+output model and a set of **function-calling tools** — the same services that
+power Explore mode. The LLM decides *when* and *how* to fetch data, rather than
+being handed a static context blob:
 
-**Phase 5 — Recommendations & forecasting**
-- Recommendation engine: composite ranking with human-readable reasons.
-- Undervalued estate detector: peer model (PSF vs accessibility) flags estates
-  priced below comparable peers with positive growth.
-- Advanced forecasting: least-squares PSF trend with a confidence band.
+| Agent | Tools it can call | Typed output |
+|---|---|---|
+| `profile` | — (pure NL parsing) | `HomeOSAvatar` |
+| `market` | `get_transactions` | `MarketEvidence` |
+| `location` | `get_proximity`, `get_commute`, `get_bus_routes` | `LocationEvidence` |
+| `risk` | `get_appreciation`, `get_future_dev`, `get_accessibility` | `RiskEvidence` |
+| `lifestyle` | `get_lifestyle_score` | `LifestyleEvidence` |
+| `questions` | `get_transactions`, `get_proximity` | `AgentQuestions` |
+
+Because tools wrap the deterministic service layer, every number an agent cites
+is reproducible and traceable — there is no hallucinated data path.
+
+### Provider-agnostic, deterministic in CI
+
+The model factory auto-detects its provider from the environment. Production
+runs through the **Vercel AI Gateway** (one key, any underlying model); CI runs
+against Pydantic AI's `TestModel` with **no key and no network**, so the full
+agent pipeline is unit-tested deterministically. Swapping to Anthropic or
+OpenRouter is a single environment variable.
+
+---
+
+## Geospatial foundation
+
+HomeOS is only as good as the spatial engine beneath it. PostGIS is a
+first-class component from day one.
+
+- **Dual-geometry model** — every feature is stored in **WGS84 (EPSG:4326)** for
+  display and **SVY21 (EPSG:3414)**, Singapore's national projection, as a
+  generated column for all metric maths (distance, KNN, buffers, area).
+- **Vector tiles** served straight from the database via `ST_AsMVT`, rendered on
+  a Leaflet map over OneMap tiles.
+- **Precomputed proximity** (block → nearest MRT / schools / bus) and
+  **analytics materialized views** for fast PSF/price/volume aggregations.
+- **Idempotent ingestion** with geometry validation and point-in-polygon
+  resolution of planning areas.
+
+### What it computes
+
+- **Accessibility scoring** — 0–100 sub-scores for MRT, future MRT, bus, and
+  schools, plus a weighted combined score at block and estate level.
+- **Commute engine** — behind a provider interface: live **OneMap
+  public-transport routing** in production, deterministic heuristic offline.
+  Includes a commute optimizer, a green/yellow/red burden heatmap, and a
+  **couple mode** (combined burden + fairness score).
+- **Appreciation & risk** — growth, liquidity, lease decay, accessibility,
+  future-MRT upside and future-BTO supply pressure → score + confidence + risk.
+- **Forecasting** — least-squares PSF trend with a confidence band.
+- **Undervalued detector** — flags estates priced below their accessibility-
+  implied peers.
+- **Recommendations & Dream Home Finder** — composite ranking with
+  human-readable reasons against hard requirements.
+- **Live resale listings** — ingested from the official HDB Flat Portal API and
+  matched to blocks (postal-code exact, then normalized block+street), surfaced
+  as "On the market now" with agent-outreach message drafting.
 
 ---
 
 ## Tech stack
 
 **Backend**
-- Python 3.10+, FastAPI, Uvicorn, Pydantic
+- Python 3.12, FastAPI, Uvicorn, Pydantic v2
+- **Pydantic AI** multi-agent framework with function-calling tools + SSE streaming
 - PostgreSQL + **PostGIS**, SQLAlchemy 2 + GeoAlchemy2, psycopg 3
-- Redis (caching), Celery (background jobs — proximity rebuild, MV refresh)
 - NumPy / Pandas for analytics and forecasting
 - A dependency-free pure-Python geospatial core (SVY21 projection, distance,
   KNN, point-in-polygon) that mirrors PostGIS semantics and runs anywhere
 
 **Frontend**
-- React + Vite + TypeScript, TailwindCSS
-- React Leaflet + OneMap tiles, `@tanstack/react-query`, Recharts
+- React 18 + Vite + TypeScript, TailwindCSS, Radix UI
+- React Leaflet + OneMap tiles, Supercluster, `@tanstack/react-query`, Recharts
+- Streaming agent pipeline UI consuming SSE
 - Vitest + Testing Library
 
-**Data sources** (production)
-- OneMap (tiles, geocoding, routing, planning areas)
-- HDB resale transactions & property info; LTA DataMall (MRT, bus); MOE schools;
-  MRT expansion & BTO data
+**Auth & billing**
+- JWT (python-jose) + bcrypt, **Stripe Checkout + webhooks** for subscription
+  lifecycle, gating AI mode behind an active subscription
+- `AUTH_REQUIRED` flag to toggle gating for local development
 
-**Deployment targets**
-- Frontend: Vercel · Backend: Railway/Render · Database: Supabase PostgreSQL
+**Infrastructure & delivery**
+- Dockerized backend on **AWS EC2**, images in **ECR**
+- **GitHub Actions** CI/CD: test → build → push → deploy via **SSM**, with
+  database migration, materialized-view refresh, and a live-listings sync step
+  baked into the pipeline
+- Terraform / Bedrock / SageMaker scaffolding under `infrastructure/`
+
+**Live data sources**
+- **data.gov.sg** — HDB resale transactions, school directory
+- **OneMap** — map tiles, geocoding, public-transport routing, planning areas
+- **LTA DataMall** — MRT and bus network
+- **HDB Flat Portal** — live resale listings
 
 ---
 
 ## Architecture
 
-A clean, layered, storage-agnostic design:
+A clean, layered, storage-agnostic design — services depend only on a
+`Repository` interface, so the in-memory store (tests / mock mode) and PostGIS
+(production) are interchangeable by configuration.
 
 ```
-core (geo, models, CRS)        pure Python, no deps, fully tested
-  └── repositories             Repository interface
-        ├── memory             in-memory impl (tests / mock mode)
-        └── postgis            SQLAlchemy + PostGIS impl (production)
-  └── services                 search, analytics, accessibility, comparison,
-                               commute (+OneMap), lifestyle, appreciation,
-                               future_dev, dream_home, recommendation, forecasting
-  └── api (FastAPI)            thin HTTP layer over the services
+core (geo, models, CRS)         pure Python, no deps, fully tested
+  └── repositories              Repository interface
+        ├── memory              in-memory impl (tests / mock mode)
+        └── postgis             SQLAlchemy + PostGIS impl (production)
+  └── services                  search, analytics, accessibility, comparison,
+        │                       commute (+OneMap), lifestyle, appreciation,
+        │                       future_dev, dream_home, recommendation, forecast
+        │
+  └── homeos                    the AI layer
+        ├── framework           AgentSpec / ToolSpec, model factory, registry
+        ├── tools               function-calling wrappers over services
+        ├── agents              profile / market / location / risk / lifestyle / questions
+        ├── pipeline            investigate_stream, refine_stream, chat_in_case
+        ├── scoring             worth-viewing aggregation
+        └── case_store          in-memory Case lifecycle + event log
+  └── api (FastAPI)             thin HTTP/SSE layer + auth + Stripe
 ```
 
-Services depend only on the `Repository` interface, so switching from the
-in-memory store to PostGIS is a configuration change. See
-[`docs/HDB-Match-Geospatial-Architecture-Phase1.md`](docs/HDB-Match-Geospatial-Architecture-Phase1.md)
-for the full geospatial design (CRS strategy, indexing, tiling, ingestion).
+See [`docs/HDB-Match-Geospatial-Architecture-Phase1.md`](docs/HDB-Match-Geospatial-Architecture-Phase1.md)
+for the full geospatial design and
+[`FUNCTION_CALLING_IMPLEMENTATION.md`](FUNCTION_CALLING_IMPLEMENTATION.md) for the
+agent tool-calling internals.
 
 ---
 
 ## Repository layout
 
 ```
-estate-finder/
-├── docker-compose.yml          # PostGIS + Redis for local dev
+.
+├── docker-compose.yml          # PostGIS + Redis + backend + frontend for local dev
 ├── Makefile                    # developer commands
-├── docs/                       # architecture design doc
+├── docs/                       # architecture + design docs
+├── infrastructure/             # terraform, ec2, bedrock, sagemaker scaffolding
+├── .github/workflows/          # CI/CD: deploy-backend, deploy-frontend, sync-listings
 ├── backend/
-│   ├── requirements.txt
 │   └── app/
 │       ├── schema/manifest.py  # single source of truth for the data model
 │       ├── db/migrations/sql/  # ordered PostGIS migrations (real DDL)
-│       ├── db/migrate.py        # SQL migration runner
-│       ├── db/maintenance.{sql,py}  # proximity rebuild + MV refresh
-│       ├── core/                # geo engine: crs, geo, models
-│       ├── repositories/        # base / memory / postgis
-│       ├── services/            # analytics, accessibility, commute, scoring …
-│       ├── data/                # mock data + ingestion + seed
-│       └── api/                 # FastAPI app, deps, schemas, tiles
-│       └── tests/               # 146 tests (stdlib unittest / pytest)
+│       ├── core/               # pure-Python geo engine: crs, geo, models
+│       ├── repositories/       # base / memory / postgis
+│       ├── services/           # analytics, accessibility, commute, scoring …
+│       ├── homeos/             # AI agent framework, tools, pipeline, case store
+│       ├── data/               # live ingestion (data.gov.sg, OneMap, HDB Portal)
+│       └── api/                # FastAPI app, auth + Stripe, tiles, SSE endpoints
 └── frontend/
     └── src/
-        ├── lib/                 # api client + pure utils (tested)
-        └── components/          # Map, filters, charts, panels (tested)
+        ├── lib/                # api client, auth, SSE, pure utils (tested)
+        └── components/         # Map, filters, charts, CasesPanel, PipelinePanel …
 ```
 
 ---
 
 ## Quick start
 
-Requires Docker, Python 3.10+, and Node 18+.
+Requires Docker, Python 3.12+, and Node 18+.
 
-### Docker-hosted app with live data.gov.sg resale data
+### Full stack with live resale data
 
 ```bash
 # Start PostGIS, Redis, FastAPI, and Vite in Docker.
 make docker-up
 
 # Load live HDB resale transactions from data.gov.sg into PostGIS.
-# Default imports the first 5,000 records; use DATA_GOV_LIMIT=all for all rows.
+# Default imports the first 5,000 records; DATA_GOV_LIMIT=all loads everything.
 make live-load
 ```
 
-Open:
+- Frontend → `http://localhost:5173`
+- API → `http://localhost:8000`  ·  Swagger → `http://localhost:8000/docs`
 
-- Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:8000`
-- Swagger docs: `http://localhost:8000/docs`
+The resale feed has no coordinates, so the loader geocodes unique block/street
+addresses with OneMap before inserting into PostGIS. Set `ONEMAP_TOKEN` to avoid
+unauthenticated rate limits.
 
-The resale transaction feed is live from data.gov.sg. Because that dataset does
-not include coordinates, the loader geocodes unique block/street addresses with
-OneMap search before inserting blocks into PostGIS. If OneMap rate-limits
-unauthenticated geocoding, set `ONEMAP_TOKEN` or lower `DATA_GOV_LIMIT`.
+### Enabling AI mode locally
 
-### Host-run development
+HomeOS auto-detects its LLM provider. Add a gateway key to `.env`:
 
 ```bash
-# 1. Database (PostGIS) + Redis
-cp .env.example .env
-make db-up
-
-# 2. Backend
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cd ..
-make db-migrate        # apply PostGIS migrations
-make seed              # load sample data (swap for real ingestion later)
-make backend           # FastAPI at http://localhost:8010  (/docs for Swagger)
-
-# 3. Frontend (new terminal)
-make frontend-install
-make frontend-dev      # Vite dev server at http://localhost:5173
+AI_GATEWAY_API_KEY=your_vercel_ai_gateway_key
+LLM_MODEL=openai/gpt-5.4-nano        # any provider/model the gateway routes to
+AUTH_REQUIRED=false                  # skip subscription gating during development
 ```
 
-To enable real OneMap public-transport routing, add a token to `.env`:
+With no key, the agent pipeline runs in **mock mode** — deterministic narratives,
+no network, identical event stream — so you can develop the UI without spend.
 
-```
-ONEMAP_TOKEN=your_token_here
-```
+### Running without a database (mock mode)
 
-Without it, the commute engine uses the built-in heuristic estimator.
-
----
-
-## Running without a database (mock mode)
-
-The API auto-falls back to a **seeded in-memory repository** when
-`DATABASE_URL` is unset, so you can run the backend and frontend with no
-Postgres at all:
+The API falls back to a seeded in-memory repository when `DATABASE_URL` is
+unset, so the backend and frontend run with no Postgres at all:
 
 ```bash
 cd backend && python -m app.run_server
 ```
 
-The map's vector-tile endpoint requires PostGIS; in mock mode the map uses the
+The vector-tile endpoint requires PostGIS; in mock mode the map uses the
 `/reference/{layer}` GeoJSON endpoints instead.
 
 ---
@@ -224,58 +274,57 @@ The map's vector-tile endpoint requires PostGIS; in mock mode the map uses the
 ## Testing
 
 ```bash
-# Dependency-free core suite (146 tests, stdlib only — runs anywhere)
-make test-core
-
-# Full backend suite with pytest (after pip install)
-make test
-
-# Frontend unit/component tests (Vitest)
-make frontend-test
+make test            # full backend suite (pytest)
+make test-core       # dependency-free pure-Python core (stdlib only, runs anywhere)
+make frontend-test   # Vitest unit/component tests
 ```
 
-The pure-Python core, all scoring/analytics logic, data transforms, and API
-service layer are unit-tested. Frontend tests cover pure utilities and core
-components.
+The pure-Python core, all scoring/analytics logic, the **agent pipeline**
+(via `TestModel`, no API key), the SSE event sequence, and the API service layer
+are unit-tested. Frontend tests cover pure utilities and core components
+including the streaming pipeline panel.
 
 ---
 
 ## API reference
 
-Interactive docs at `http://localhost:8010/docs`. Summary:
+Interactive docs at `/docs`. Selected endpoints:
 
 | Method & path | Description |
 |---|---|
 | `GET /health` | Service status + mode (postgis/mock) |
+| **HomeOS (AI)** | |
+| `POST /homeos/investigate-stream` | Open a Case; stream the agent pipeline (SSE) |
+| `GET /homeos/cases` · `GET /homeos/cases/{id}` | List / fetch full Case + trace |
+| `POST /homeos/cases/{id}/chat` | Ask a question grounded in the Case evidence (SSE) |
+| `POST /homeos/cases/{id}/refine` | Answer a clarifying question; re-run agents (SSE) |
+| `POST /homeos/case-file/{block_id}` | Full evidence dossier for one block |
+| **Auth & billing** | |
+| `POST /auth/register` · `POST /auth/login` · `GET /auth/me` | JWT auth |
+| `POST /stripe/checkout` · `POST /stripe/webhook` · `GET /stripe/status` | Subscriptions |
+| **Geospatial & analytics** | |
 | `GET /properties/search` | Filtered block search (viewport + attrs + proximity + price) |
-| `GET /properties/{id}` | Block detail + recent transactions + analytics |
-| `GET /analytics/estate/{id}` | Estate metrics & time series |
-| `GET /analytics/block/{id}` | Block metrics & time series |
-| `GET /accessibility/block/{id}` | MRT/bus/school + combined scores |
-| `GET /accessibility/estate/{id}` | Estate-level accessibility |
-| `GET /comparison/estates` | Side-by-side estate comparison |
+| `GET /tiles/{layer}/{z}/{x}/{y}.pbf` | PostGIS vector tiles (`ST_AsMVT`) |
 | `GET /reference/{layer}` | GeoJSON for mrt/future_mrt/bus_stops/schools/bto |
-| `GET /tiles/{layer}/{z}/{x}/{y}.pbf` | PostGIS vector tiles (ST_AsMVT) |
-| `POST /commute/optimize` | Rank blocks by commute burden |
-| `POST /commute/heatmap` | Per-block commute fit (green/yellow/red) |
+| `GET /analytics/estate/{id}` · `GET /analytics/block/{id}` | Metrics & time series |
+| `GET /accessibility/block/{id}` · `/estate/{id}` | MRT/bus/school + combined scores |
+| `GET /comparison/estates` | Side-by-side estate comparison |
+| `POST /commute/optimize` · `/heatmap` | Commute burden ranking + heatmap |
 | `POST /couple-mode/optimize` | Combined burden + fairness for two people |
 | `POST /lifestyle/block/{id}` | Lifestyle score for a block |
-| `GET /appreciation/{id}` | Appreciation score + confidence + risk |
-| `GET /future-mrt/{id}` | Nearest future MRT + transport growth score |
-| `GET /future-supply/{id}` | Nearby future BTO supply + risk |
-| `POST /dream-home-finder` | Rank blocks against the user's requirements |
-| `GET /forecast/block/{id}` | PSF projection for a block |
-| `GET /forecast/estate/{id}` | PSF projection for an estate |
+| `GET /appreciation/{id}` · `/future-mrt/{id}` · `/future-supply/{id}` | Risk signals |
+| `GET /forecast/block/{id}` · `/estate/{id}` | PSF projection with confidence band |
 | `GET /undervalued` | Estates priced below accessibility-implied peers |
-| `POST /recommendations` | Composite block recommendations with reasons |
+| `POST /recommendations` · `/dream-home-finder` | Composite ranking with reasons |
+| `GET /blocks/{id}/listings` | Live resale listings for a block |
 
 ---
 
 ## Coordinate reference systems
 
 - **EPSG:4326 (WGS84)** — canonical geometry, display & interchange.
-- **EPSG:3414 (SVY21)** — generated column for all metric maths (distance,
-  buffer, KNN, area). Singapore's national projection.
+- **EPSG:3414 (SVY21)** — generated column for all metric maths. Singapore's
+  national projection.
 - **EPSG:3857 (Web Mercator)** — vector-tile output only.
 
 Rule: measuring distance/area → SVY21; rendering/exporting → WGS84.
@@ -284,8 +333,8 @@ Rule: measuring distance/area → SVY21; rendering/exporting → WGS84.
 
 ## Notes & limitations
 
-- The repository ships with **mock/sample data**; wire the real OneMap/HDB/LTA/
-  MOE pipelines into `backend/app/data/` to load production data.
+- Cases are held in memory for the session — there is no cross-refresh Case
+  persistence by design.
 - Commute uses OneMap routing when `ONEMAP_TOKEN` is set, otherwise a heuristic.
 - Scores, appreciation, and forecasts are heuristic decision aids and are
   **not financial advice**.

@@ -1,4 +1,4 @@
-from app.homeos.framework.spec import AgentSpec
+from app.homeos.framework.spec import AgentSpec, PrefDimension
 from app.homeos.models.evidence import RiskEvidence
 
 risk_definition = AgentSpec(
@@ -17,4 +17,9 @@ risk_definition = AgentSpec(
     output_type=RiskEvidence,
     tool_names=["appreciation", "future_dev", "accessibility"],
     prefetch=[],
+    activating_prefs=[
+        PrefDimension(field="risk_tolerance",
+                      prompt="Risk tolerance (low = penalise high-risk blocks harder)",
+                      default="low"),
+    ],
 )

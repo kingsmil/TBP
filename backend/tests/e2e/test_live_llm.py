@@ -12,6 +12,7 @@ import asyncio
 import os
 import unittest
 
+from tests.e2e.live_log import LiveRunLog
 from tests.e2e.test_tools_e2e import _connect
 
 
@@ -22,6 +23,8 @@ class TestLiveModelToolCalls(unittest.TestCase):
             raise unittest.SkipTest("set LIVE_LLM=1 (or run_e2e.py --live) for live model tests")
         if not os.environ.get("AI_GATEWAY_API_KEY"):
             raise unittest.SkipTest("AI_GATEWAY_API_KEY not set — no live provider")
+        cls.log = LiveRunLog("agent-tool-calls")
+        cls.addClassCleanup(lambda: print(f"\n  live log: {cls.log.close()}"))
         cls.engine, cls.repo = _connect()
         from app.homeos.wiring import setup
         setup()
@@ -59,6 +62,12 @@ class TestLiveModelToolCalls(unittest.TestCase):
         spec = self.tr.get_agent(agent_name)
         expected = self._expected_call_names(spec)
         result, called = self._run_and_collect_calls(agent_name)
+        output_dump = result.output.model_dump()
+        self.log.record("agent_output", agent=agent_name, block_id=self.block_id,
+                        tool_calls=sorted(called), output=output_dump)
+        self.log.section(f"{agent_name} (block {self.block_id})")
+        self.log.line(f"tool calls: `{sorted(called)}`")
+        self.log.block(output_dump)
         self.assertIsInstance(result.output, spec.output_type)
         missing = expected - called
         self.assertFalse(

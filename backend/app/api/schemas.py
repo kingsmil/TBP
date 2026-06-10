@@ -131,3 +131,11 @@ class DreamHomeRequest(BaseModel):
             weights=self.weights,
             limit=self.limit,
         )
+
+
+class OutreachRequest(BaseModel):
+    """Body for POST /listings/{listing_id}/outreach-message."""
+    case_id: str | None = None
+    contact_name: str | None = None
+    availability: list[str] = Field(default_factory=list)
+    note: str | None = None

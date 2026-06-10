@@ -500,8 +500,37 @@ def _lightweight_rank(candidates: list[dict], prefs: dict, top_n: int) -> list[d
     return sorted(candidates, key=_score, reverse=True)[:top_n]
 
 
-_ANALYSIS_THRESHOLD = 10
-_SOFT_THRESHOLD = 30
+_ANALYSIS_THRESHOLD = 5
+_SOFT_THRESHOLD = 5
+
+
+_PROCEED_PHRASES = {
+    "proceed", "go ahead", "continue", "analyse", "analyze",
+    "just proceed", "proceed please", "lets go", "let's go", "go",
+}
+
+
+def _is_proceed_intent(message: str) -> bool:
+    """True when the user wants to skip remaining questions and analyse now.
+
+    The clarifying prompts explicitly tell users to "say 'proceed'", so this
+    must be honoured wherever a refinement answer arrives.
+    """
+    m = (message or "").strip().lower().rstrip(" .!")
+    return m in _PROCEED_PHRASES or m.startswith("proceed")
+
+
+def _ready_to_proceed_question(count: int) -> str:
+    """Confirm prompt shown once a result set is small enough to analyse.
+
+    Surfaced with a single 'Proceed' quick-reply chip on the frontend
+    (field='ready_to_proceed'); the user can also keep refining instead.
+    """
+    blocks = "block" if count == 1 else "blocks"
+    return (
+        f"Ready to analyse {count} {blocks}? "
+        "Tap Proceed to start, or keep refining."
+    )
 
 
 def _clarifying_question(
@@ -777,6 +806,9 @@ async def investigate_stream(
         yield {"event": "agent_done", "agent": "search", "block_id": None}
         homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "search", "block_id": None})
 
+        # Only ask questions while the result set is still large. At or below
+        # _ANALYSIS_THRESHOLD there is nothing to narrow, so go straight to
+        # deep analysis (no clarifying questions, no preference review).
         if len(all_candidates) > _ANALYSIS_THRESHOLD:
             _current_pipeline = homeos_case_store.get_case(case_id).get("pipeline", [])
             question, field = _clarifying_question(prefs, len(all_candidates), _current_pipeline)
@@ -790,6 +822,19 @@ async def investigate_stream(
                 yield q_evt
                 homeos_case_store.append_event(case_id, q_evt)
                 return
+
+            # Preference completeness review — only while the set is large.
+            review_q, review_field = _preference_review(
+                query_dict, prefs, len(all_candidates), _current_pipeline)
+            if review_q is not None:
+                logger.info("[case:%s] PREFERENCE REVIEW  count=%d", case_id[:8], len(all_candidates))
+                homeos_case_store.set_status(case_id, "refining")
+                q_evt = {"event": "clarifying_question", "case_id": case_id,
+                         "question": review_q, "field": review_field}
+                yield q_evt
+                homeos_case_store.append_event(case_id, q_evt)
+                return
+
             logger.info(
                 "[case:%s] all constraints set, proceeding with top-%d from %d",
                 case_id[:8], _ANALYSIS_THRESHOLD, len(all_candidates),
@@ -804,15 +849,12 @@ async def investigate_stream(
             yield proceed_evt
             homeos_case_store.append_event(case_id, proceed_evt)
 
-        # ── Phase 2b: Preference completeness review (one round per case) ────
-        _current_pipeline = homeos_case_store.get_case(case_id).get("pipeline", [])
-        review_q, review_field = _preference_review(
-            query_dict, prefs, len(all_candidates), _current_pipeline)
-        if review_q is not None:
-            logger.info("[case:%s] PREFERENCE REVIEW  count=%d", case_id[:8], len(all_candidates))
+        # Small result set: confirm before analysing (user taps Proceed chip).
+        if len(all_candidates) <= _ANALYSIS_THRESHOLD:
             homeos_case_store.set_status(case_id, "refining")
             q_evt = {"event": "clarifying_question", "case_id": case_id,
-                     "question": review_q, "field": review_field}
+                     "question": _ready_to_proceed_question(len(all_candidates)),
+                     "field": "ready_to_proceed"}
             yield q_evt
             homeos_case_store.append_event(case_id, q_evt)
             return
@@ -847,25 +889,31 @@ async def refine_stream(
     logger.info("[case:%s] REFINE  message=%r", case_id[:8], user_message[:80])
 
     try:
-        refinement_prompt = _build_refinement_prompt(case)
-        logger.info("[case:%s] refinement prompt:\n%s", case_id[:8], refinement_prompt)
-
-        if is_mock_mode():
-            avatar = mock_profile_avatar(refinement_prompt, parse_homeos_profile(refinement_prompt))
+        # "proceed" (and friends) means: stop asking, analyse what we have now.
+        force_proceed = _is_proceed_intent(user_message)
+        if force_proceed:
+            logger.info("[case:%s] PROCEED intent — analysing current candidates", case_id[:8])
+            prefs = {k: v for k, v in case.get("search_prefs", {}).items() if v is not None}
         else:
-            avatar, _, _ = await _run_profile_agent(refinement_prompt)
+            refinement_prompt = _build_refinement_prompt(case)
+            logger.info("[case:%s] refinement prompt:\n%s", case_id[:8], refinement_prompt)
 
-        avatar_dict = avatar.model_dump()
-        prefs_from_ai = {k: v for k, v in avatar_dict.get("preferences", {}).items() if v is not None}
+            if is_mock_mode():
+                avatar = mock_profile_avatar(refinement_prompt, parse_homeos_profile(refinement_prompt))
+            else:
+                avatar, _, _ = await _run_profile_agent(refinement_prompt)
 
-        base_prefs = {k: v for k, v in case.get("search_prefs", {}).items() if v is not None}
-        overrides = _direct_answer_overrides(user_message, case["pipeline"])
-        if overrides:
-            logger.info("[case:%s] direct overrides applied: %s", case_id[:8], overrides)
-        prefs = {**prefs_from_ai, **base_prefs, **overrides}
+            avatar_dict = avatar.model_dump()
+            prefs_from_ai = {k: v for k, v in avatar_dict.get("preferences", {}).items() if v is not None}
 
-        avatar_dict["preferences"] = prefs
-        homeos_case_store.set_avatar(case_id, avatar_dict)
+            base_prefs = {k: v for k, v in case.get("search_prefs", {}).items() if v is not None}
+            overrides = _direct_answer_overrides(user_message, case["pipeline"])
+            if overrides:
+                logger.info("[case:%s] direct overrides applied: %s", case_id[:8], overrides)
+            prefs = {**prefs_from_ai, **base_prefs, **overrides}
+
+            avatar_dict["preferences"] = prefs
+            homeos_case_store.set_avatar(case_id, avatar_dict)
         logger.info(
             "[case:%s] refined prefs  flat_type=%s max_price=%s commute=%s school=%s town=%s",
             case_id[:8], prefs.get("flat_type"), prefs.get("max_price"),
@@ -893,7 +941,9 @@ async def refine_stream(
         yield {"event": "agent_done", "agent": "search", "block_id": None}
         homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "search", "block_id": None})
 
-        if len(all_candidates) > _ANALYSIS_THRESHOLD:
+        # Skip all questioning when the user asked to proceed, or once the
+        # result set is small enough that there is nothing left to narrow.
+        if not force_proceed and len(all_candidates) > _ANALYSIS_THRESHOLD:
             question, field = _clarifying_question(prefs, len(all_candidates), case["pipeline"])
             if question is not None:
                 logger.info("[case:%s] STILL REFINING  count=%d  field=%s", case_id[:8], len(all_candidates), field)
@@ -902,6 +952,20 @@ async def refine_stream(
                 yield q_evt
                 homeos_case_store.append_event(case_id, q_evt)
                 return
+
+            # Preference completeness review — only while the set is large.
+            _current_pipeline = homeos_case_store.get_case(case_id).get("pipeline", [])
+            review_q, review_field = _preference_review(
+                query_dict, prefs, len(all_candidates), _current_pipeline)
+            if review_q is not None:
+                logger.info("[case:%s] PREFERENCE REVIEW  count=%d", case_id[:8], len(all_candidates))
+                homeos_case_store.set_status(case_id, "refining")
+                q_evt = {"event": "clarifying_question", "case_id": case_id,
+                         "question": review_q, "field": review_field}
+                yield q_evt
+                homeos_case_store.append_event(case_id, q_evt)
+                return
+
             logger.info(
                 "[case:%s] all constraints set, proceeding with top-%d from %d",
                 case_id[:8], _ANALYSIS_THRESHOLD, len(all_candidates),
@@ -916,15 +980,13 @@ async def refine_stream(
             yield proceed_evt
             homeos_case_store.append_event(case_id, proceed_evt)
 
-        # ── Preference completeness review (one round per case) ──────────────
-        _current_pipeline = homeos_case_store.get_case(case_id).get("pipeline", [])
-        review_q, review_field = _preference_review(
-            query_dict, prefs, len(all_candidates), _current_pipeline)
-        if review_q is not None:
-            logger.info("[case:%s] PREFERENCE REVIEW  count=%d", case_id[:8], len(all_candidates))
+        # Small result set: confirm before analysing (user taps Proceed chip),
+        # unless they already asked to proceed.
+        if not force_proceed and len(all_candidates) <= _ANALYSIS_THRESHOLD:
             homeos_case_store.set_status(case_id, "refining")
             q_evt = {"event": "clarifying_question", "case_id": case_id,
-                     "question": review_q, "field": review_field}
+                     "question": _ready_to_proceed_question(len(all_candidates)),
+                     "field": "ready_to_proceed"}
             yield q_evt
             homeos_case_store.append_event(case_id, q_evt)
             return

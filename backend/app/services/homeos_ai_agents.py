@@ -25,6 +25,7 @@ from app.homeos.models.avatar import HomeOSAvatar
 from app.homeos.models.outreach import OutreachMessage
 from app.homeos.models.evidence import (
     AgentQuestions,
+    LifestyleEvidence,
     LocationEvidence,
     MarketEvidence,
     RiskEvidence,
@@ -140,6 +141,18 @@ questions_agent: Agent[None, AgentQuestions] = Agent(
     ),
 )
 
+
+lifestyle_agent: Agent[None, LifestyleEvidence] = Agent(
+    get_model(),
+    output_type=LifestyleEvidence,
+    system_prompt=(
+        "You are an HDB lifestyle analyst for Singapore. "
+        "Given a block's blended lifestyle score (0-100), commute band (green/yellow/red), "
+        "individual factor scores (transport, schools, affordability, commute), "
+        "and optional couple fairness score, summarise the lifestyle fit. "
+        "Write a one-sentence narrative (max 30 words) describing overall livability for this buyer."
+    ),
+)
 
 outreach_agent: Agent[None, OutreachMessage] = Agent(
     get_model(),

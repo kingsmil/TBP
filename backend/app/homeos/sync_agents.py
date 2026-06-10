@@ -13,6 +13,7 @@ from app.services.appreciation import appreciation
 from app.services.future_dev import future_mrt, future_supply
 from app.homeos.mock.tools import is_mock_mode
 from app.homeos.mock.agents import (
+    mock_lifestyle_narrative,
     mock_location_narrative,
     mock_market_narrative,
     mock_questions,
@@ -29,6 +30,11 @@ def _get_ai_agents():
         risk_agent,
     )
     return location_agent, market_agent, questions_agent, risk_agent
+
+
+def _get_lifestyle_agent():
+    from app.services.homeos_ai_agents import lifestyle_agent
+    return lifestyle_agent
 
 
 def market_analysis_agent(
@@ -225,3 +231,73 @@ def viewing_questions_agent(evidence: dict[str, Any]) -> list[str]:
         result = asyncio.run(questions_agent.run(prompt))
         extra = [q for q in result.output.questions if q and q not in base_questions]
     return (base_questions + extra)[:6]
+
+
+def lifestyle_analysis_agent(
+    repo: Repository,
+    block_id: int,
+    provider: Any | None = None,
+    destinations: list[Any] | None = None,
+    person_a: Any | None = None,
+    person_b: Any | None = None,
+    weights: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Lifestyle sub-agent: blends Lifestyle Score, Commute Heatmap, and Couple Mode.
+
+    Returns evidence dict with lifestyle_score, commute_band, couple_fairness,
+    per-factor scores, watchouts, and an LLM-generated narrative.
+    """
+    from app.services.lifestyle import block_lifestyle
+    from app.services.commute.optimizer import commute_burden, commute_score, score_band
+    from app.services.commute.couple import fairness_score
+
+    ls = block_lifestyle(repo, block_id, provider, destinations, weights)
+
+    commute_band: str | None = None
+    if provider is not None and destinations:
+        b = repo.block(block_id)
+        if b is not None:
+            weekly = commute_burden(provider, b.point, destinations)["weekly_minutes"]
+            commute_band = score_band(commute_score(weekly))
+
+    couple_fairness: float | None = None
+    if provider is not None and person_a is not None and person_b is not None:
+        b = repo.block(block_id)
+        if b is not None:
+            wk_a = commute_burden(provider, b.point, list(person_a.destinations))["weekly_minutes"]
+            wk_b = commute_burden(provider, b.point, list(person_b.destinations))["weekly_minutes"]
+            couple_fairness = fairness_score(wk_a, wk_b)
+
+    factors = ls.get("factors", {}) if ls else {}
+    watchouts: list[str] = []
+    score = ls.get("lifestyle_score") if ls else None
+    if score is not None and score < 40:
+        watchouts.append("Overall lifestyle score is below average for this area.")
+    if commute_band == "red":
+        watchouts.append("Commute burden is high from this block to the given destinations.")
+    if couple_fairness is not None and couple_fairness < 50:
+        watchouts.append("Commute balance between the two persons is uneven.")
+
+    evidence: dict[str, Any] = {
+        "lifestyle_score": score,
+        "commute_band": commute_band,
+        "couple_fairness": couple_fairness,
+        "factors": factors,
+        "watchouts": watchouts,
+    }
+
+    if is_mock_mode():
+        narrative = mock_lifestyle_narrative(evidence)
+    else:
+        agent = _get_lifestyle_agent()
+        prompt = (
+            f"block_id={block_id}, lifestyle_score={score}, "
+            f"commute_band={commute_band}, couple_fairness={couple_fairness}, "
+            f"factors={factors}, watchouts={watchouts}"
+        )
+        result = asyncio.run(agent.run(prompt))
+        score_str = f"{score:.1f}" if score is not None else "n/a"
+        narrative = result.output.narrative or f"Lifestyle score {score_str}/100 with {commute_band or 'unknown'} commute band."
+
+    evidence["narrative"] = narrative
+    return evidence

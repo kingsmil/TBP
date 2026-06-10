@@ -267,7 +267,8 @@ def homeos_investigate(req: HomeOSInvestigationRequest,
 
 @app.post("/homeos/case-file/{block_id}")
 def homeos_case_file(block_id: int, req: HomeOSCaseFileRequest,
-                     repo: Repository = Depends(get_repository)):
+                     repo: Repository = Depends(get_repository),
+                     _user=Depends(require_subscribed)):
     if req.case_id:
         assembled = assemble_case_file_from_case(req.case_id, block_id)
         if assembled is not None:
@@ -597,8 +598,9 @@ def get_news():
             "https://api.exa.ai/search",
             json={
                 "query": "Latest Singapore resale and BTO HDB property market news",
-                "numResults": 10,
-                "type": "news",
+                "num_results": 10,
+                "type": "neural",
+                "category": "news",
             },
             headers={"Authorization": f"Bearer {settings.exa_api_key}"},
             timeout=15.0,

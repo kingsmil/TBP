@@ -39,7 +39,7 @@ jobs:
       - name: Build for production
         working-directory: frontend
         env:
-          VITE_API_BASE: http://54.203.13.36:8000
+          VITE_API_BASE: http://44.230.151.142:8000
         run: npm run build
 
       - name: Configure AWS credentials
@@ -99,11 +99,11 @@ jobs:
       - name: Health check
         run: |
           sleep 5
-          curl -fsS --retry 5 --retry-delay 3 http://54.203.13.36/ -o /tmp/index.html
+          curl -fsS --retry 5 --retry-delay 3 http://44.230.151.142/ -o /tmp/index.html
           JS_PATH=$(grep -oE 'src="[^"]+\.js"' /tmp/index.html | head -1 | cut -d'"' -f2)
           CSS_PATH=$(grep -oE 'href="[^"]+\.css"' /tmp/index.html | head -1 | cut -d'"' -f2)
           test -n "$JS_PATH"
           test -n "$CSS_PATH"
-          curl -fsS --retry 5 --retry-delay 3 "http://54.203.13.36$JS_PATH" -o /dev/null
-          curl -fsS --retry 5 --retry-delay 3 "http://54.203.13.36$CSS_PATH" -o /dev/null
-          echo "Frontend live at http://54.203.13.36"
+          curl -fsS --retry 5 --retry-delay 3 "http://44.230.151.142$JS_PATH" -o /dev/null
+          curl -fsS --retry 5 --retry-delay 3 "http://44.230.151.142$CSS_PATH" -o /dev/null
+          echo "Frontend live at http://44.230.151.142"

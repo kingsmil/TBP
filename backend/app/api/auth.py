@@ -26,7 +26,7 @@ from pydantic import BaseModel, EmailStr
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID", "")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://54.203.13.36")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://44.230.151.142")
 
 # ── JWT config ────────────────────────────────────────────────────────────────
 JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")

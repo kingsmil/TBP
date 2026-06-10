@@ -598,8 +598,9 @@ def get_news():
             "https://api.exa.ai/search",
             json={
                 "query": "Latest Singapore resale and BTO HDB property market news",
-                "numResults": 10,
-                "type": "news",
+                "num_results": 10,
+                "type": "neural",
+                "category": "news",
             },
             headers={"Authorization": f"Bearer {settings.exa_api_key}"},
             timeout=15.0,

@@ -35,6 +35,7 @@ import UpgradeModal from "./components/UpgradeModal";
 import { Separator } from "./components/ui/separator";
 import {
   chatInCase,
+  getCase,
   getCases,
   getEstateAnalytics,
   getEstateComparison,
@@ -349,10 +350,28 @@ export default function App() {
     );
   }, [activeCaseId, activeCaseFull, _processStream]);
 
-  const handleSelectCase = useCallback((caseId: string) => {
+  const handleSelectCase = useCallback(async (caseId: string) => {
     setActiveCaseId(caseId);
     setRightPanel("pipeline");
     setAiSelectedBlockId(null);
+    setStreamingEvents([]);
+    setFramedCaseId(null);
+
+    // A case still mid-stream in this tab has no persisted snapshot to fetch.
+    if (caseId.startsWith("pending-")) return;
+
+    try {
+      const full = await getCase(caseId);
+      setActiveCaseFull(full);
+      const ids = full.shortlist.map((row) => row.block_id);
+      setShortlistIds(ids);
+      setHasAiMapFilter(full.status === "done" && ids.length > 0);
+    } catch {
+      // 404 / not owned — clear the stale view.
+      setActiveCaseFull(null);
+      setShortlistIds([]);
+      setHasAiMapFilter(false);
+    }
   }, []);
 
   const handleSelectBlock = useCallback((blockId: number) => {

@@ -39,9 +39,11 @@ class ProximityTool(ToolAdapter):
         activating_prefs=[
             PrefDimension(field="commute_priority",
                           prompt="MRT importance (high = within 600 m, medium = within 1.2 km)",
+                          question="How important is being close to an MRT? (High = within 600 m, Medium = within 1.2 km)",
                           query_key="max_mrt_distance_m"),
             PrefDimension(field="school_priority",
                           prompt="Primary schools nearby (high = 2+ within 1 km, medium = 1+)",
+                          question="Do you need primary schools nearby? (High = 2+ within 1 km, Medium = 1+)",
                           query_key="min_schools_within_1km"),
         ],
     )

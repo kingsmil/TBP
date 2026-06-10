@@ -103,13 +103,17 @@ class TestInvestigateStreamLive(unittest.TestCase):
                 f"never reached deep analysis after {MAX_REFINE_ROUNDS} refinement "
                 f"rounds; questions asked: {asked}")
 
-        # ── Preference review must have fired exactly once ────────────────────
+        # ── Clarifying questions must use dimension-specific fields, not catch-all ────────────────────
         case = case_store.get_case(case_id)
-        reviews = [e for e in case["pipeline"]
-                   if e.get("event") == "clarifying_question"
-                   and e.get("field") == "preference_review"]
-        self.assertEqual(len(reviews), 1,
-                         f"expected exactly one preference review; got {len(reviews)}")
+        all_questions = [e for e in case["pipeline"]
+                         if e.get("event") == "clarifying_question"]
+        for q in all_questions:
+            self.assertNotEqual(
+                q.get("field"), "preference_review",
+                f"preference_review catch-all field must no longer be used; "
+                f"got field: {q.get('field')}, questions: {[e.get('field') for e in all_questions]}")
+            self.assertIsNotNone(q.get("field"),
+                                 f"clarifying_question missing field; got: {q}")
 
         # ── Step 3: deep-analysis event grammar per (agent, block) ────────────
         deep = [e for e in events if e.get("agent") in DEEP_AGENTS]

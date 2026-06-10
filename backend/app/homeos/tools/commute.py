@@ -59,6 +59,7 @@ class CommuteTool(ToolAdapter):
         activating_prefs=[PrefDimension(
             field="work_locations",
             prompt="Where do you (and your partner) work? - unlocks commute analysis",
+            question="Where do you (and your partner) work? — unlocks commute-time analysis",
             default=[],
         )],
     )

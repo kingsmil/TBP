@@ -6,6 +6,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   type?: "profile" | "search" | "question" | "result" | "chat";
+  field?: string;
 }
 
 function buildChatHistory(
@@ -48,7 +49,7 @@ function buildChatHistory(
         type: "search",
       });
     } else if (e.event === "clarifying_question" && e.question) {
-      messages.push({ role: "assistant", content: e.question, type: "question" });
+      messages.push({ role: "assistant", content: e.question, type: "question", field: e.field });
       // Interleave the user's answer immediately after the question
       if (convIdx < conversation.length && conversation[convIdx].role === "user") {
         messages.push({ role: "user", content: conversation[convIdx].content, type: "chat" });
@@ -138,6 +139,35 @@ interface Props {
   onSignInRequired: () => void;
 }
 
+const CHIP_OPTIONS: Record<string, { label: string; value: string }[]> = {
+  commute_priority: [
+    { label: "High (<600 m)", value: "high" },
+    { label: "Medium (<1.2 km)", value: "medium" },
+    { label: "Not important", value: "not important" },
+  ],
+  school_priority: [
+    { label: "2+ schools", value: "high" },
+    { label: "1+ school", value: "medium" },
+    { label: "Not needed", value: "not important" },
+  ],
+  risk_tolerance: [
+    { label: "Low risk", value: "low" },
+    { label: "Medium", value: "medium" },
+    { label: "High risk ok", value: "high" },
+  ],
+  bus_reliance: [
+    { label: "Yes, no car", value: "high" },
+    { label: "Have a car", value: "low" },
+  ],
+  flat_type: [
+    { label: "2-room", value: "2 room" },
+    { label: "3-room", value: "3 room" },
+    { label: "4-room", value: "4 room" },
+    { label: "5-room", value: "5 room" },
+    { label: "Executive", value: "executive" },
+  ],
+};
+
 const DEFAULT_PROFILE =
   "Family looking for 4 room under 800k near primary schools and MRT.";
 
@@ -183,6 +213,11 @@ export default function CasesPanel({
           chatChunks,
         )
       : [];
+
+  const lastQuestion = isRefining
+    ? [...chatHistory].reverse().find((m) => m.type === "question")
+    : null;
+  const activeChips = lastQuestion?.field ? (CHIP_OPTIONS[lastQuestion.field] ?? null) : null;
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -287,6 +322,20 @@ export default function CasesPanel({
               // biome-ignore lint/suspicious/noArrayIndexKey: stable chat order
               <ChatBubble key={i} msg={msg} />
             ))}
+            {activeChips && (
+              <div className="flex flex-wrap gap-1.5 px-1 pb-1">
+                {activeChips.map((chip) => (
+                  <button
+                    key={chip.value}
+                    type="button"
+                    onClick={() => { onRefine(chip.value); }}
+                    className="rounded-full border border-border bg-background px-3 py-1 text-xs hover:bg-muted"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {isRunning && (
               <div className="flex justify-start">
                 <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-muted px-3 py-2">

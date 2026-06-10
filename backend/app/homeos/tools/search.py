@@ -107,12 +107,15 @@ class SearchTool(ToolAdapter):
         activating_prefs=[
             PrefDimension(field="flat_type",
                           prompt="Flat type (2/3/4/5-room or Executive)",
+                          question="What type of flat are you looking for? (2-room, 3-room, 4-room, 5-room, or Executive)",
                           query_key="flat_type"),
             PrefDimension(field="max_price",
                           prompt="Your budget ceiling — drives the budget-fit verdict",
+                          question="What is your maximum budget? (e.g. $500k, $700k, $1M)",
                           query_key="max_price"),
             PrefDimension(field="town",
                           prompt="A preferred town or estate (optional)",
+                          question="Is there a town or estate you prefer? (e.g. Tampines, Bishan, Toa Payoh)",
                           query_key="town"),
         ],
     )

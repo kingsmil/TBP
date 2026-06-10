@@ -31,8 +31,8 @@ class TestPreferenceReviewLive(unittest.TestCase):
             events = []
             async for e in investigate_stream(self.repo, PROFILE, limit=3):
                 events.append(e)
-            # answer at most 2 questions (review + safety margin), then expect done
-            for _ in range(2):
+            # answer each dim question with 'proceed' (up to 10 rounds)
+            for _ in range(10):
                 if not events or events[-1]["event"] != "clarifying_question":
                     break
                 case_id = events[-1]["case_id"]
@@ -51,26 +51,28 @@ class TestPreferenceReviewLive(unittest.TestCase):
             f"expected a narrow search (~3 blocks) for {PROFILE!r}, got {count} — "
             "if the live model dropped a constraint, tighten PROFILE")
 
-        # THE feature: exactly one consolidated review, BEFORE deep analysis
-        reviews = [e for e in events
-                   if e["event"] == "clarifying_question"
-                   and e.get("field") == "preference_review"]
-        self.assertEqual(
-            len(reviews), 1,
-            "the stream must pause exactly once at a preference review "
-            f"(clarifying events: {[e.get('field') for e in events if e['event'] == 'clarifying_question']})")
-        self.assertIn("proceed", reviews[0]["question"])
-        review_idx = events.index(reviews[0])
+        # THE feature: questions fire one at a time with specific dim fields
+        q_events = [e for e in events if e["event"] == "clarifying_question"]
+        self.assertTrue(q_events, "expected at least one clarifying question before deep analysis")
+        for q in q_events:
+            self.assertNotEqual(
+                q.get("field"), "preference_review",
+                "preference_review catch-all field must no longer be used — got: "
+                f"{[e.get('field') for e in events if e['event'] == 'clarifying_question']}",
+            )
+            self.assertIsNotNone(q.get("field"))
+        last_q_idx = max(events.index(q) for q in q_events)
         deep_idx = [i for i, e in enumerate(events)
                     if e.get("agent") in ("market", "location", "risk")]
-        self.assertTrue(deep_idx, "journey must reach deep analysis after 'proceed'")
-        self.assertLess(review_idx, min(deep_idx))
+        self.assertTrue(deep_idx, "journey must reach deep analysis after answering questions")
+        self.assertLess(last_q_idx, min(deep_idx))
 
         # journey completes against the real 3 blocks
         self.assertEqual(events[-1]["event"], "case_done")
         self.assertGreaterEqual(len(events[-1]["shortlist"]), 1)
 
-        print(f"\n  review question:\n  {reviews[0]['question']}")
+        print(f"\n  clarifying questions asked: {[e.get('field') for e in q_events]}")
+        print(f"  first question: {q_events[0]['question']}")
 
 
 if __name__ == "__main__":

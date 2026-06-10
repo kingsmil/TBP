@@ -22,15 +22,15 @@ function buildChatHistory(
 
   // Use pipeline (committed history) + streaming (in-flight), but don't double-count:
   // streamingEvents are cleared and moved into pipeline when the stream completes.
-  const allEvents = pipeline.length > 0 ? pipeline : streamingEvents;
+  const allEvents = (pipeline.length > 0 ? pipeline : streamingEvents).filter(
+    (event) => event.event === "clarifying_question" || event.event === "case_done",
+  );
 
   // Walk conversation messages in order, inserting each user answer right after its question.
   let convIdx = 0;
 
   for (const e of allEvents) {
     if (e.event === "agent_summary" && e.agent === "profile" && e.narrative) {
-      messages.push({ role: "assistant", content: e.narrative, type: "profile" });
-    } else if (e.event === "agent_summary" && e.agent === "search" && e.data) {
       const data = e.data as Record<string, unknown>;
       const count = data["candidates_found"] as number;
       const query = data["search_query"] as Record<string, unknown> | undefined;
@@ -55,6 +55,14 @@ function buildChatHistory(
         convIdx++;
       }
     } else if (e.event === "case_done" && e.shortlist) {
+      if (e.shortlist.length === 0) {
+        messages.push({
+          role: "assistant",
+          content: "No properties meet specified requirements. Please try with less strict requirements.",
+          type: "result",
+        });
+        continue;
+      }
       const worth = e.shortlist.filter((r) => r.worth_viewing_score >= 60).length;
       messages.push({
         role: "assistant",
@@ -310,6 +318,7 @@ export default function CasesPanel({
         />
         <button
           type="submit"
+          aria-label="Send message"
           disabled={isRunning || !input.trim()}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
         >

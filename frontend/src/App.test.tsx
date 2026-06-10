@@ -137,4 +137,24 @@ describe("App", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByTestId("selected-block")).toHaveTextContent("none");
   });
+
+  it("keeps AI and Explore selections independent", async () => {
+    renderApp();
+
+    fireEvent.click(screen.getByRole("button", { name: "Select block 1" }));
+    expect(screen.getByTestId("selected-block")).toHaveTextContent("1");
+
+    fireEvent.click(screen.getByRole("button", { name: /^explore$/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /ai mode/i })).toBeInTheDocument());
+    expect(screen.getByTestId("selected-block")).toHaveTextContent("none");
+
+    fireEvent.click(screen.getByRole("button", { name: "Select block 2" }));
+    expect(screen.getByTestId("selected-block")).toHaveTextContent("2");
+
+    fireEvent.click(screen.getByRole("button", { name: /ai mode/i }));
+    expect(screen.getByTestId("selected-block")).toHaveTextContent("1");
+
+    fireEvent.click(screen.getByRole("button", { name: /^explore$/i }));
+    expect(screen.getByTestId("selected-block")).toHaveTextContent("2");
+  });
 });

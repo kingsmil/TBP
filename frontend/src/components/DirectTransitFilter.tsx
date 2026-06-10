@@ -9,9 +9,10 @@ import type { DirectTransitDestination, DirectTransitResponse, SearchFilters } f
 interface Props {
   filters: SearchFilters;
   onResults: (results: DirectTransitResponse | null) => void;
+  onDestinationsChange?: (destinations: DirectTransitDestination[]) => void;
 }
 
-export default function DirectTransitFilter({ filters, onResults }: Props) {
+export default function DirectTransitFilter({ filters, onResults, onDestinationsChange }: Props) {
   const [query, setQuery] = useState("");
   const [label, setLabel] = useState("Workplace");
   const [suggestions, setSuggestions] = useState<Awaited<ReturnType<typeof geocodeAddress>>["results"]>([]);
@@ -22,6 +23,16 @@ export default function DirectTransitFilter({ filters, onResults }: Props) {
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(false);
   const firstFilterRender = useRef(true);
+
+  function updateDestinations(
+    update: (current: DirectTransitDestination[]) => DirectTransitDestination[],
+  ) {
+    setDestinations((current) => {
+      const next = update(current);
+      onDestinationsChange?.(next);
+      return next;
+    });
+  }
 
   async function searchAddress() {
     if (query.trim().length < 2) return;
@@ -92,7 +103,7 @@ export default function DirectTransitFilter({ filters, onResults }: Props) {
         </div>
         {destinations.length > 0 && (
           <Button variant="ghost" size="sm" onClick={() => {
-            setDestinations([]);
+            updateDestinations(() => []);
             setSuggestions([]);
             setStatus(null);
             setActive(false);
@@ -121,8 +132,9 @@ export default function DirectTransitFilter({ filters, onResults }: Props) {
               type="button"
               key={`${result.lat}-${result.lon}-${result.label}`}
               onClick={() => {
-                setDestinations((current) => [...current, {
+                updateDestinations((current) => [...current, {
                   name: label.trim() || result.label,
+                  address: result.label,
                   lat: result.lat,
                   lon: result.lon,
                 }]);
@@ -138,9 +150,17 @@ export default function DirectTransitFilter({ filters, onResults }: Props) {
       )}
 
       {destinations.map((destination, index) => (
-        <div key={`${destination.name}-${index}`} className="flex items-center justify-between rounded-md bg-muted px-3 py-2 text-xs">
-          <span><strong>{destination.name}</strong> ({destination.lat.toFixed(4)}, {destination.lon.toFixed(4)})</span>
-          <button type="button" onClick={() => setDestinations((items) => items.filter((_, i) => i !== index))}>
+        <div key={`${destination.name}-${index}`} className="flex items-start justify-between gap-3 rounded-md bg-muted px-3 py-2 text-xs">
+          <div className="min-w-0">
+            <div className="font-semibold">{destination.name}</div>
+            <div className="mt-0.5 break-words text-muted-foreground">{destination.address ?? destination.name}</div>
+          </div>
+          <button
+            type="button"
+            aria-label={`Remove ${destination.name}`}
+            className="mt-0.5 shrink-0"
+            onClick={() => updateDestinations((items) => items.filter((_, i) => i !== index))}
+          >
             <X className="h-3.5 w-3.5" />
           </button>
         </div>

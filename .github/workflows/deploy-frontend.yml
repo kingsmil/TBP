@@ -63,7 +63,13 @@ jobs:
             --instance-ids $EC2_INSTANCE_ID \
             --document-name "AWS-RunShellScript" \
             --parameters '{"commands":[
-              "aws s3 sync s3://hdb-match-data/frontend-dist/ /usr/share/nginx/html/ --delete --region us-west-2",
+              "mkdir -p /usr/share/nginx/html/assets",
+              "aws s3 sync s3://hdb-match-data/frontend-dist/assets/ /usr/share/nginx/html/assets/ --delete --region us-west-2",
+              "test -n \"$(find /usr/share/nginx/html/assets -maxdepth 1 -type f -name '\''*.js'\'' -print -quit)\"",
+              "test -n \"$(find /usr/share/nginx/html/assets -maxdepth 1 -type f -name '\''*.css'\'' -print -quit)\"",
+              "aws s3 cp s3://hdb-match-data/frontend-dist/index.html /usr/share/nginx/html/index.html.next --region us-west-2",
+              "test -s /usr/share/nginx/html/index.html.next",
+              "mv /usr/share/nginx/html/index.html.next /usr/share/nginx/html/index.html",
               "nginx -t && systemctl reload nginx",
               "echo DEPLOY_DONE"
             ]}' \
@@ -93,5 +99,11 @@ jobs:
       - name: Health check
         run: |
           sleep 5
-          curl -f --retry 5 --retry-delay 3 http://54.203.13.36/
+          curl -fsS --retry 5 --retry-delay 3 http://54.203.13.36/ -o /tmp/index.html
+          JS_PATH=$(grep -oE 'src="[^"]+\.js"' /tmp/index.html | head -1 | cut -d'"' -f2)
+          CSS_PATH=$(grep -oE 'href="[^"]+\.css"' /tmp/index.html | head -1 | cut -d'"' -f2)
+          test -n "$JS_PATH"
+          test -n "$CSS_PATH"
+          curl -fsS --retry 5 --retry-delay 3 "http://54.203.13.36$JS_PATH" -o /dev/null
+          curl -fsS --retry 5 --retry-delay 3 "http://54.203.13.36$CSS_PATH" -o /dev/null
           echo "Frontend live at http://54.203.13.36"

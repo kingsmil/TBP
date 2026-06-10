@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai import Agent
 
 from app.homeos.framework.registry import get_model
-from app.homeos.framework.spec import AgentSpec, ToolSpec
+from app.homeos.framework.spec import AgentSpec, PrefDimension, ToolSpec
 from app.homeos.framework.tool import ToolAdapter
 
 if TYPE_CHECKING:
@@ -79,6 +79,18 @@ class ToolRepository:
             }
             for spec in self._agents.values()
         ]
+
+    def review_dimensions(self) -> list[PrefDimension]:
+        """Union of activating_prefs across tools then agents, registration
+        order, deduplicated by field (first declaration wins)."""
+        dims: dict[str, PrefDimension] = {}
+        for adapter in self._tools.values():
+            for d in adapter.spec.activating_prefs:
+                dims.setdefault(d.field, d)
+        for spec in self._agents.values():
+            for d in spec.activating_prefs:
+                dims.setdefault(d.field, d)
+        return list(dims.values())
 
     # ── agent builder ─────────────────────────────────────────────────────────
 

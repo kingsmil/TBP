@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from pydantic import BaseModel
 
 
 @dataclass
 class PrefDimension:
-    """A buyer-preference dimension that unlocks a tool/agent. Consumed by the
-    Spec 1 preference-review gate; declared here so tools can self-describe."""
-    field: str            # key in HomeOSPreferences / prefs dict
-    prompt: str           # bullet shown to the buyer
-    query_key: str | None = None  # SearchQuery key whose absence == "not stated"
-    default: str | None = None    # for non-search dims: value meaning "never stated"
+    """A buyer-preference dimension that activates a tool or agent capability.
+
+    query_key: SearchQuery key whose absence in the executed query means
+               "never stated" (search-side dims).
+    default:   for dims that never reach the SearchQuery — the value that
+               means "never stated" (e.g. risk_tolerance default 'low').
+    Exactly one of query_key/default should be set.
+    """
+
+    field: str
+    prompt: str
+    query_key: str | None = None
+    default: Any | None = None
 
 
 @dataclass

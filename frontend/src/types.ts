@@ -33,6 +33,7 @@ export interface BlockSummary {
 
 export interface DirectTransitDestination {
   name: string;
+  address?: string;
   lat: number;
   lon: number;
 }
@@ -397,4 +398,44 @@ export interface ActiveListing {
 export interface BlockListingsResponse {
   count: number;
   listings: ActiveListing[];
+}
+
+export interface OutreachMessageResponse {
+  listing_id: number;
+  message: string;
+  questions: string[];
+  whatsapp_url?: string;
+  email_url?: string;
+  agent_name?: string;
+}
+
+export interface ListingSummary {
+  listing_id: number;
+  price: number;
+  flat_type: string;
+  floor_area_sqm: number;
+  floor_area_sqft: number;
+  storey_range: string;
+  remaining_lease: string;
+  description?: string;
+}
+
+export interface BlockAgent {
+  agent_name?: string;
+  agent_phone?: string;
+  agent_email?: string;
+  agency_name?: string;
+  listings: ListingSummary[];
+}
+
+export interface BlockAgentsResponse {
+  block: {
+    block_id: number;
+    block_number: string;
+    street_name: string;
+    town: string;
+  };
+  agents: BlockAgent[];
+  owner_listings: ListingSummary[];
+  listing_count: number;
 }

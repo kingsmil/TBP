@@ -15,7 +15,7 @@ import DisplayPanel from "./components/DisplayPanel";
 import EstateComparison from "./components/EstateComparison";
 import FilterPanel from "./components/FilterPanel";
 import HomeOSDetailPanel from "./components/HomeOSDetailPanel";
-import MapView from "./components/MapView";
+import MapView, { type MapViewState } from "./components/MapView";
 import { MAP_SEARCH_LIMIT } from "./lib/mapConfig";
 import PipelinePanel from "./components/PipelinePanel";
 import PsfTrendChart from "./components/PsfTrendChart";
@@ -32,6 +32,7 @@ import {
 import { formatPsf, formatSGD } from "./lib/format";
 import type {
   AgentEvent,
+  DirectTransitDestination,
   DirectTransitResponse,
   HomeOSCase,
   HomeOSCaseSummary,
@@ -73,8 +74,12 @@ export default function App() {
   // Shared
   const [filters, setFilters] = useState<SearchFilters>({ limit: MAP_SEARCH_LIMIT });
   const [directTransit, setDirectTransit] = useState<DirectTransitResponse | null>(null);
-  const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null);
+  const [directTransitDestinations, setDirectTransitDestinations] = useState<DirectTransitDestination[]>([]);
+  const [aiSelectedBlockId, setAiSelectedBlockId] = useState<number | null>(null);
+  const [exploreSelectedBlockId, setExploreSelectedBlockId] = useState<number | null>(null);
   const [shortlistIds, setShortlistIds] = useState<number[]>([]);
+  const [aiMapView, setAiMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
+  const [exploreMapView, setExploreMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
   const [sidebarOpen, setSidebarOpen] = useState(true); // explore mode only
   const [nearbyBusRadiusM, setNearbyBusRadiusM] = useState(200);
 
@@ -86,6 +91,9 @@ export default function App() {
   const [chatChunks, setChatChunks] = useState("");
   const [rightPanel, setRightPanel] = useState<RightPanel>("pipeline");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [framedCaseId, setFramedCaseId] = useState<string | null>(null);
+
+  const selectedBlockId = mode === "ai" ? aiSelectedBlockId : exploreSelectedBlockId;
 
   const search = useQuery({
     queryKey: ["search", filters],
@@ -121,12 +129,6 @@ export default function App() {
       for await (const event of gen) {
         accumulated.push(event);
         setStreamingEvents([...accumulated]);
-
-        // When search returns candidates, highlight them on the map immediately
-        if (event.event === "agent_summary" && event.agent === "search" && event.data) {
-          const ids = (event.data as Record<string, unknown>)["candidate_ids"] as number[] | undefined;
-          if (ids?.length) setShortlistIds(ids);
-        }
 
         if (event.event === "clarifying_question") {
           finalCaseId = event.case_id ?? caseId;
@@ -199,6 +201,8 @@ export default function App() {
     setStreamingEvents([]);
     setActiveCaseFull(null);
     setShortlistIds([]);
+    setAiSelectedBlockId(null);
+    setFramedCaseId(null);
     setRightPanel("pipeline");
 
     const tempId = `pending-${Date.now()}`;
@@ -221,6 +225,8 @@ export default function App() {
     const currentCase = activeCaseFull;
     if (!currentCase) return;
 
+    setFramedCaseId(null);
+
     setCases((prev) =>
       prev.map((c) => c.case_id === activeCaseId ? { ...c, status: "running" } : c)
     );
@@ -242,18 +248,22 @@ export default function App() {
   const handleSelectCase = useCallback((caseId: string) => {
     setActiveCaseId(caseId);
     setRightPanel("pipeline");
-    setSelectedBlockId(null);
+    setAiSelectedBlockId(null);
   }, []);
 
   const handleSelectBlock = useCallback((blockId: number) => {
-    setSelectedBlockId(blockId);
+    setAiSelectedBlockId(blockId);
     setRightPanel("block_detail");
   }, []);
 
   const clearSelectedBlock = useCallback(() => {
-    setSelectedBlockId(null);
-    setRightPanel("pipeline");
-  }, []);
+    if (mode === "ai") {
+      setAiSelectedBlockId(null);
+      setRightPanel("pipeline");
+    } else {
+      setExploreSelectedBlockId(null);
+    }
+  }, [mode]);
 
   useEffect(() => {
     if (selectedBlockId == null) return;
@@ -345,7 +355,11 @@ export default function App() {
               <Separator />
               <FilterPanel filters={filters} onChange={setFilters} />
               <Separator />
-              <DirectTransitFilter filters={filters} onResults={setDirectTransit} />
+              <DirectTransitFilter
+                filters={filters}
+                onResults={setDirectTransit}
+                onDestinationsChange={setDirectTransitDestinations}
+              />
               <Separator />
               <DisplayPanel
                 nearbyBusRadiusM={nearbyBusRadiusM}
@@ -395,10 +409,12 @@ export default function App() {
           )}
           <MapView
             blocks={blocks}
-            shortlistIds={shortlistIds}
-            selectedBlockId={selectedBlockId}
-            onSelectBlock={setSelectedBlockId}
+            selectedBlockId={exploreSelectedBlockId}
+            onSelectBlock={setExploreSelectedBlockId}
             nearbyBusRadiusM={nearbyBusRadiusM}
+            destinations={directTransitDestinations}
+            initialView={exploreMapView}
+            onViewChange={setExploreMapView}
           />
           <HomeOSDetailPanel
             block={selectedBlock}
@@ -464,10 +480,19 @@ export default function App() {
         <MapView
           blocks={blocks}
           shortlistIds={shortlistIds}
-          selectedBlockId={selectedBlockId}
+          selectedBlockId={aiSelectedBlockId}
           onSelectBlock={handleSelectBlock}
           profileText={activeProfileText}
           nearbyBusRadiusM={nearbyBusRadiusM}
+          recommendationsOnly={activeCaseFull?.status === "done"}
+          initialView={aiMapView}
+          onViewChange={setAiMapView}
+          fitRecommendations={
+            activeCaseFull?.status === "done"
+            && activeCaseFull.case_id !== framedCaseId
+            && shortlistIds.length > 0
+          }
+          onRecommendationsFitted={() => setFramedCaseId(activeCaseFull?.case_id ?? null)}
         />
       </main>
 
@@ -492,6 +517,7 @@ export default function App() {
             <HomeOSDetailPanel
               block={selectedBlock}
               profileText={activeProfileText}
+              caseId={activeCaseId ?? undefined}
               onClose={clearSelectedBlock}
               onBack={clearSelectedBlock}
             />

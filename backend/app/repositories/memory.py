@@ -102,6 +102,10 @@ class InMemoryRepository(Repository):
     def block(self, block_id: int) -> Block | None:
         return self._blocks.get(block_id)
 
+    def blocks_by_number(self, block_number: str) -> Sequence[Block]:
+        bn = block_number.strip().upper()
+        return [b for b in self._blocks.values() if b.block_number.upper() == bn]
+
     def transactions(self) -> Sequence[Transaction]:
         return list(self._txns)
 

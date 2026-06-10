@@ -325,6 +325,17 @@ export default function App() {
     await _processStream(investigateStream(profileText, 5), tempId, profileText, createdAt, tempId);
   }, [_processStream]);
 
+  const handleNewSession = useCallback(() => {
+    setActiveCaseId(null);
+    setActiveCaseFull(null);
+    setStreamingEvents([]);
+    setShortlistIds([]);
+    setHasAiMapFilter(false);
+    setAiSelectedBlockId(null);
+    setFramedCaseId(null);
+    setRightPanel("pipeline");
+  }, []);
+
   const handleRefine = useCallback(async (message: string) => {
     if (!activeCaseId || activeCaseId.startsWith("pending-")) return;
     const currentCase = activeCaseFull;
@@ -692,6 +703,7 @@ export default function App() {
             isStreaming={isStreaming}
             isAuthenticated={!!authUser}
             onNewCase={handleNewCase}
+            onNewSession={handleNewSession}
             onSelectCase={handleSelectCase}
             onSendMessage={handleSendMessage}
             onRefine={handleRefine}

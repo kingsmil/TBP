@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import CasesPanel from "./CasesPanel";
 import type { HomeOSCaseSummary } from "../types";
@@ -20,6 +20,7 @@ const baseProps = {
   isStreaming: false,
   isAuthenticated: true,
   onNewCase: vi.fn(),
+  onNewSession: vi.fn(),
   onSelectCase: vi.fn(),
   onSendMessage: vi.fn(),
   onRefine: vi.fn(),
@@ -46,5 +47,14 @@ describe("CasesPanel", () => {
     render(<CasesPanel {...baseProps} isStreaming />);
     const input = screen.getByRole("textbox");
     expect(input).toBeDisabled();
+  });
+
+  it("+ button opens a blank session instead of auto-submitting a profile", () => {
+    const onNewSession = vi.fn();
+    const onNewCase = vi.fn();
+    render(<CasesPanel {...baseProps} onNewSession={onNewSession} onNewCase={onNewCase} />);
+    fireEvent.click(screen.getByRole("button", { name: /new case/i }));
+    expect(onNewSession).toHaveBeenCalledTimes(1);
+    expect(onNewCase).not.toHaveBeenCalled();
   });
 });

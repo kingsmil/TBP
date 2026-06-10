@@ -133,6 +133,7 @@ interface Props {
   isStreaming: boolean;
   isAuthenticated: boolean;
   onNewCase: (profileText: string) => void;
+  onNewSession: () => void;
   onSelectCase: (caseId: string) => void;
   onSendMessage: (message: string) => void;
   onRefine: (message: string) => void;
@@ -169,9 +170,6 @@ const CHIP_OPTIONS: Record<string, { label: string; value: string }[]> = {
   ready_to_proceed: [{ label: "Proceed", value: "proceed" }],
 };
 
-const DEFAULT_PROFILE =
-  "Family looking for 4 room under 800k near primary schools and MRT.";
-
 export default function CasesPanel({
   cases,
   activeCaseId,
@@ -181,6 +179,7 @@ export default function CasesPanel({
   isStreaming,
   isAuthenticated,
   onNewCase,
+  onNewSession,
   onSelectCase,
   onSendMessage,
   onRefine,
@@ -302,7 +301,7 @@ export default function CasesPanel({
           title="New case"
           onClick={() => {
             setShowDropdown(false);
-            onNewCase(DEFAULT_PROFILE);
+            onNewSession();
           }}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background hover:bg-muted text-muted-foreground"
         >

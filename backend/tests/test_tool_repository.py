@@ -55,5 +55,35 @@ class TestAgentSpec(unittest.TestCase):
         self.assertEqual(spec.prefetch, [])
 
 
+class TestToolAdapterSpec(unittest.TestCase):
+    def test_concrete_tool_with_spec_attribute(self):
+        from app.homeos.framework.tool import ToolAdapter
+        from app.homeos.framework.spec import ToolSpec
+
+        class Out(BaseModel):
+            value: int
+
+        class MyTool(ToolAdapter):
+            spec = ToolSpec(
+                name="my_tool",
+                description="Does something.",
+                use_case="Use when X.",
+                output_type=Out,
+            )
+
+            def fetch(self, repo, block_id, prefs):
+                return {"value": 1}
+
+            def as_tool(self, repo, block_id, prefs):
+                def get():
+                    return {"value": 1}
+                return get
+
+        t = MyTool()
+        self.assertEqual(t.name, "my_tool")
+        self.assertEqual(t.description, "Does something.")
+        self.assertEqual(t.spec.use_case, "Use when X.")
+
+
 if __name__ == "__main__":
     unittest.main()

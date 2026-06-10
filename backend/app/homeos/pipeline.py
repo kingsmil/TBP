@@ -20,7 +20,7 @@ from app.homeos.mock.agents import (
     mock_risk_narrative,
 )
 from app.homeos.mock.tools import is_mock_mode, mock_delay_seconds
-from app.homeos.scoring import worth_viewing_score, _verdict, _confidence
+from app.homeos.scoring import worth_viewing_score, _verdict, _confidence, item_texts
 
 FLAT_TYPES = ("2 ROOM", "3 ROOM", "4 ROOM", "5 ROOM", "EXECUTIVE")
 
@@ -953,13 +953,14 @@ def build_homeos_case_file(repo: Repository, profile_text: str, block_id: int) -
         "evidence": {
             "recent_sales": market,
             "connections": location["connections"],
-            "risks": watchouts,
+            "risks": item_texts(watchouts),
             "future_signals": {
                 "future_mrt": risk["future_mrt"],
                 "future_supply": risk["future_supply"],
             },
             "agent_questions": questions,
         },
+        "trace": [],
     }
 
 

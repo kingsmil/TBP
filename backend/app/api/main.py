@@ -304,7 +304,9 @@ async def homeos_investigate_stream(
     _user=Depends(require_subscribed),
 ):
     async def event_gen():
-        async for event in investigate_stream(repo, req.profile_text, req.limit):
+        async for event in investigate_stream(
+            repo, req.profile_text, req.limit, user_id=_user.user_id
+        ):
             yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(
@@ -316,7 +318,7 @@ async def homeos_investigate_stream(
 
 @app.get("/homeos/cases")
 def homeos_list_cases(_user=Depends(require_subscribed)):
-    cases = homeos_case_store.list_cases()
+    cases = homeos_case_store.list_cases(user_id=_user.user_id)
     return [
         {
             "case_id": c["case_id"],
@@ -332,7 +334,7 @@ def homeos_list_cases(_user=Depends(require_subscribed)):
 @app.get("/homeos/cases/{case_id}")
 def homeos_get_case(case_id: str, _user=Depends(require_subscribed)):
     case = homeos_case_store.get_case(case_id)
-    if case is None:
+    if case is None or case.get("user_id", 0) != _user.user_id:
         raise HTTPException(status_code=404, detail="case not found")
     return case
 
@@ -340,7 +342,8 @@ def homeos_get_case(case_id: str, _user=Depends(require_subscribed)):
 @app.post("/homeos/cases/{case_id}/chat")
 async def homeos_chat(case_id: str, req: HomeOSChatRequest,
                       _user=Depends(require_subscribed)):
-    if homeos_case_store.get_case(case_id) is None:
+    case = homeos_case_store.get_case(case_id)
+    if case is None or case.get("user_id", 0) != _user.user_id:
         raise HTTPException(status_code=404, detail="case not found")
 
     async def chat_gen():
@@ -363,7 +366,7 @@ async def homeos_refine(
     _user=Depends(require_subscribed),
 ):
     case = homeos_case_store.get_case(case_id)
-    if case is None:
+    if case is None or case.get("user_id", 0) != _user.user_id:
         raise HTTPException(status_code=404, detail="case not found")
 
     async def refine_gen():

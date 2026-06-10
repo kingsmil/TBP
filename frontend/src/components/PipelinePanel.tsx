@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, Download, Home, MapPin, Smile, TrendingUp } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Download, Home, Loader2, MapPin, Smile, TrendingUp } from "lucide-react";
 import AgentProgressRows from "./AgentProgressRows";
 import { deriveAgentProgress, deriveBlockNarratives } from "../lib/agentProgress";
 import type { AgentEvent, AgentKey, BlockNarrativeMap, HomeOSCase, HomeOSShortlistRow } from "../types";
@@ -126,8 +126,12 @@ export default function PipelinePanel({
   const derivedNarratives = useMemo(() => deriveBlockNarratives(allEvents), [allEvents]);
   const blockNarratives = externalNarratives ?? derivedNarratives;
 
+  const hasBlockEvents = useMemo(
+    () => allEvents.some((e) => e.block_id != null),
+    [allEvents],
+  );
+
   const globalStatus = useMemo(() => {
-    const hasBlockEvents = allEvents.some((e) => e.block_id != null);
     if (hasBlockEvents) return null;
     const last = [...allEvents].reverse().find(
       (e) => e.event === "agent_start" || e.event === "agent_done" || e.event === "agent_summary",
@@ -136,7 +140,7 @@ export default function PipelinePanel({
     if (last.agent === "profile") return "Profiling requirements…";
     if (last.agent === "search") return "Searching for candidates…";
     return null;
-  }, [allEvents]);
+  }, [allEvents, hasBlockEvents]);
 
   function handleDownloadCase() {
     if (!activeCase) return;
@@ -195,8 +199,17 @@ export default function PipelinePanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {isWorking && shortlist.length === 0 && (
-          <AgentProgressRows agentProgress={agentProgress} globalStatus={globalStatus} />
+        {isWorking && shortlist.length === 0 && !hasBlockEvents && (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/60 p-3">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <p className="text-xs text-muted-foreground">
+              {globalStatus ?? "Finding the best matching listings..."}
+            </p>
+          </div>
+        )}
+
+        {isWorking && shortlist.length === 0 && hasBlockEvents && (
+          <AgentProgressRows agentProgress={agentProgress} globalStatus={null} />
         )}
 
         {isRefining && shortlist.length === 0 && (

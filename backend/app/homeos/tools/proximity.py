@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
+from pydantic import BaseModel
+
+from app.homeos.framework.spec import ToolSpec
 from app.homeos.framework.tool import ToolAdapter
 from app.homeos.mock.tools import mock_proximity_data
 
@@ -10,9 +13,30 @@ if TYPE_CHECKING:
     from app.repositories.base import Repository
 
 
+class ProximityConnection(BaseModel):
+    model_config = {"extra": "ignore"}
+    type: str
+    name: str
+    distance_m: float | None = None
+    count: int | None = None
+    signal: Literal["strong", "moderate", "weak"]
+
+
+class ProximityOutput(BaseModel):
+    model_config = {"extra": "ignore"}
+    connections: list[ProximityConnection]
+
+
 class ProximityTool(ToolAdapter):
-    name = "proximity"
-    description = "Fetch MRT distance and school count for a block."
+    spec = ToolSpec(
+        name="proximity",
+        description="Fetch nearest MRT distance and primary school count within 1km for a block.",
+        use_case=(
+            "Use to assess commute convenience and school access. "
+            "Call when the buyer has commute_priority or school_priority set."
+        ),
+        output_type=ProximityOutput,
+    )
 
     def fetch(self, repo: "Repository", block_id: int | None, prefs: dict) -> dict[str, Any]:
         if self.mock:

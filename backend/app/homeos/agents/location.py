@@ -1,8 +1,9 @@
-from app.homeos.framework.agent import AgentDefinition
+from app.homeos.framework.spec import AgentSpec
 from app.homeos.models.evidence import LocationEvidence
 
-location_definition = AgentDefinition(
+location_definition = AgentSpec(
     name="location",
+    description="Evaluates MRT distance and school proximity to score location suitability for a buyer.",
     system_prompt=(
         "You are an HDB location analyst. "
         "Given MRT distance and school proximity data (in pre-fetched context), "

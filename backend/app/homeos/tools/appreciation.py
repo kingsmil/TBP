@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
+from pydantic import BaseModel
+
+from app.homeos.framework.spec import ToolSpec
 from app.homeos.framework.tool import ToolAdapter
 from app.homeos.mock.tools import mock_appreciation_data
 
@@ -10,9 +13,23 @@ if TYPE_CHECKING:
     from app.repositories.base import Repository
 
 
+class AppreciationOutput(BaseModel):
+    model_config = {"extra": "ignore"}
+    appreciation_score: float
+    risk_level: Literal["high", "medium", "low"]
+    confidence_level: Literal["high", "medium", "low"] = "medium"
+
+
 class AppreciationTool(ToolAdapter):
-    name = "appreciation"
-    description = "Fetch appreciation score and risk level for a block."
+    spec = ToolSpec(
+        name="appreciation",
+        description="Compute an 8-factor appreciation score (0–100) for a block.",
+        use_case=(
+            "Use to assess long-term value growth potential and investment risk. "
+            "Call when buyer has appreciation_priority or risk_tolerance set."
+        ),
+        output_type=AppreciationOutput,
+    )
 
     def fetch(self, repo: "Repository", block_id: int | None, prefs: dict) -> dict[str, Any]:
         if self.mock:

@@ -1,8 +1,9 @@
-from app.homeos.framework.agent import AgentDefinition
+from app.homeos.framework.spec import AgentSpec
 from app.homeos.models.evidence import MarketEvidence
 
-market_definition = AgentDefinition(
+market_definition = AgentSpec(
     name="market",
+    description="Summarises recent transaction data to assess budget fit and market activity for a block.",
     system_prompt=(
         "You are an HDB market analyst. "
         "Given recent transaction data and a buyer's budget (in pre-fetched context), "

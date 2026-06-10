@@ -105,6 +105,35 @@ class TestToolsE2E(unittest.TestCase):
         self.assertTrue(first.town)
         self.assertGreater(first.block_id, 0)
 
+    def test_commute_tool_resolves_real_station(self):
+        from app.homeos.tools.commute import CommuteTool, CommuteOutput
+        with self.engine.connect() as conn:
+            row = conn.exec_driver_sql(
+                "SELECT station_name FROM mrt_stations "
+                "WHERE status = 'operational' LIMIT 1").fetchone()
+        if row is None:
+            self.skipTest("no MRT stations ingested")
+        output = CommuteOutput.model_validate(CommuteTool().fetch(
+            self.repo, self.block_id, {"work_locations": [row[0]]}))
+        self.assertTrue(output.available)
+        self.assertTrue(output.destinations[0].resolved)
+        self.assertGreater(output.worst_commute_min, 0)
+
+    def test_bus_routes_tool_is_honest_about_empty_tables(self):
+        """Compose DB ships 0 bus_stops/bus_routes rows (no LTA key): the tool
+        must say unavailable, never fabricate coverage. If routes ARE ingested,
+        it must report them."""
+        from app.homeos.tools.bus_routes import BusRoutesTool, BusRoutesOutput
+        with self.engine.connect() as conn:
+            route_rows = conn.exec_driver_sql("SELECT count(*) FROM bus_routes").scalar()
+        output = BusRoutesOutput.model_validate(
+            BusRoutesTool().fetch(self.repo, self.block_id, {}))
+        if route_rows == 0:
+            self.assertFalse(output.available)
+            self.assertEqual(output.services, [])
+        else:
+            self.assertTrue(output.available)
+
 
 class TestAgentsE2E(unittest.TestCase):
     """Agents built via ToolRepository prefetch REAL PostGIS data into their

@@ -33,8 +33,10 @@ import { buildSearchQuery } from "./format";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
+import { authHeaders } from "./auth";
+
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
   if (!res.ok) {
     throw new Error(`API ${res.status}: ${path}`);
   }
@@ -44,13 +46,31 @@ async function getJSON<T>(path: string): Promise<T> {
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`API ${res.status}: ${path}`);
+    const detail = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(detail?.detail ?? `API ${res.status}: ${path}`), { status: res.status });
   }
   return (await res.json()) as T;
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+export interface AuthResponse { token: string; email: string; is_subscribed: boolean; }
+
+export function apiRegister(email: string, password: string): Promise<AuthResponse> {
+  return postJSON<AuthResponse>("/auth/register", { email, password });
+}
+export function apiLogin(email: string, password: string): Promise<AuthResponse> {
+  return postJSON<AuthResponse>("/auth/login", { email, password });
+}
+export function apiCreateCheckout(): Promise<{ url: string }> {
+  return postJSON<{ url: string }>("/stripe/checkout", {});
+}
+export function apiSubscriptionStatus(): Promise<{ is_subscribed: boolean; email: string }> {
+  return getJSON("/stripe/status");
 }
 
 export function searchProperties(filters: SearchFilters): Promise<SearchResponse> {

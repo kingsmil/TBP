@@ -440,3 +440,10 @@ export interface BlockAgentsResponse {
   owner_listings: ListingSummary[];
   listing_count: number;
 }
+
+export interface NewsItem {
+  title: string;
+  url: string;
+  published_date: string | null;
+  domain: string | null;
+}

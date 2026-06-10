@@ -14,6 +14,8 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
+import httpx
+
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,6 +26,7 @@ import json
 from fastapi.responses import StreamingResponse
 
 from app.api.schemas import (
+    NewsItem,
     OutreachRequest,
     CommuteRequest,
     CoupleRequest,
@@ -38,6 +41,7 @@ from app.api.schemas import (
     RecommendationRequest,
     DirectTransitRequest,
 )
+from app.config import settings
 from app.core.models import HDBTown, SearchQuery
 from app.homeos import case_store as homeos_case_store
 from app.homeos.case_assembler import assemble_case_file_from_case
@@ -582,6 +586,37 @@ def bus_stop_reach(bus_stop_code: str, repo: Repository = Depends(get_repository
             detail="Bus routes are not loaded. Set LTA_DATAMALL_API_KEY and run python -m app.data.sync_bus_network.",
         )
     return result
+
+
+@app.get("/news", response_model=list[NewsItem])
+def get_news():
+    from urllib.parse import urlparse
+    if not settings.exa_api_key:
+        raise HTTPException(status_code=503, detail="EXA_API_KEY is not configured")
+    try:
+        resp = httpx.post(
+            "https://api.exa.ai/search",
+            json={
+                "query": "Latest Singapore resale and BTO HDB property market news",
+                "numResults": 10,
+                "type": "news",
+            },
+            headers={"Authorization": f"Bearer {settings.exa_api_key}"},
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Exa API error: {exc}") from exc
+    raw = resp.json().get("results", [])
+    return [
+        NewsItem(
+            title=item.get("title") or "",
+            url=item.get("url") or "",
+            published_date=item.get("publishedDate"),
+            domain=urlparse(item.get("url", "")).netloc or None,
+        )
+        for item in raw
+    ]
 
 
 @app.get("/tiles/{layer}/{z}/{x}/{y}.pbf")

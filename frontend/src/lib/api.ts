@@ -24,6 +24,7 @@ import type {
   HomeOSScheduleViewingBody,
   HomeOSScheduleViewingResponse,
   LifestyleResult,
+  NewsItem,
   RecommendationResponse,
   SearchFilters,
   SearchResponse,
@@ -389,4 +390,8 @@ export async function* chatInCase(
       }
     }
   }
+}
+
+export async function getNews(): Promise<NewsItem[]> {
+  return getJSON<NewsItem[]>("/news");
 }

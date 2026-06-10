@@ -3,7 +3,8 @@ import type { AgentTrace, AgentSource, TraceToolCall } from "../types";
 
 const LABELS: Record<AgentSource, string> = {
   market: "Market",
-  location: "Lifestyle",
+  location: "Location",
+  lifestyle: "Lifestyle",
   risk: "Risk",
 };
 

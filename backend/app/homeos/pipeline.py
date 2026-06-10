@@ -401,6 +401,52 @@ def _clarifying_question(
     return (None, None)
 
 
+def _preference_review(
+    query_dict: dict, prefs: dict, count: int, pipeline: list[dict] | None = None
+) -> tuple[str | None, str | None]:
+    """One-shot completeness check before deep analysis.
+
+    Dimensions come from the tool/agent catalogue (activating_prefs).
+    Search dims are 'done' when their key survived into the executed query
+    (query_dict drops None fields); default-dims use default+never-asked.
+    """
+    from app.homeos.wiring import tool_repository
+
+    asked: set[str] = {
+        e["field"]
+        for e in (pipeline or [])
+        if e.get("event") == "clarifying_question" and e.get("field")
+    }
+    if "preference_review" in asked:
+        return (None, None)
+
+    missing: list[str] = []
+    for dim in tool_repository.review_dimensions():
+        if dim.field in asked:
+            continue
+        if dim.query_key is not None:
+            if dim.query_key in query_dict:
+                continue
+        elif dim.default is not None:
+            if prefs.get(dim.field, dim.default) != dim.default:
+                continue
+        missing.append(dim.prompt)
+
+    if not missing:
+        return (None, None)
+
+    set_parts = ", ".join(f"{k}={v}" for k, v in query_dict.items())
+    summary = set_parts if set_parts else "your description"
+    bullets = "\n".join(f"• {m}" for m in missing)
+    question = (
+        f"I've narrowed it to {count} blocks matching {summary}. "
+        "Before I run the deep analysis, you can sharpen it further — you haven't told me:\n"
+        f"{bullets}\n"
+        "Answer any of these, or say 'proceed' and I'll analyse as-is."
+    )
+    return (question, "preference_review")
+
+
 def _build_refinement_prompt(case: dict) -> str:
     questions = [
         e["question"]
@@ -581,6 +627,19 @@ async def investigate_stream(
             yield proceed_evt
             homeos_case_store.append_event(case_id, proceed_evt)
 
+        # ── Phase 2b: Preference completeness review (one round per case) ────
+        _current_pipeline = homeos_case_store.get_case(case_id).get("pipeline", [])
+        review_q, review_field = _preference_review(
+            query_dict, prefs, len(all_candidates), _current_pipeline)
+        if review_q is not None:
+            logger.info("[case:%s] PREFERENCE REVIEW  count=%d", case_id[:8], len(all_candidates))
+            homeos_case_store.set_status(case_id, "refining")
+            q_evt = {"event": "clarifying_question", "case_id": case_id,
+                     "question": review_q, "field": review_field}
+            yield q_evt
+            homeos_case_store.append_event(case_id, q_evt)
+            return
+
         # ── Phase 3: Deep analysis ──────────────────────────────────────────
         async for evt in _deep_analysis_stream(repo, case_id, ranked, prefs):
             yield evt
@@ -679,6 +738,19 @@ async def refine_stream(
             }
             yield proceed_evt
             homeos_case_store.append_event(case_id, proceed_evt)
+
+        # ── Preference completeness review (one round per case) ──────────────
+        _current_pipeline = homeos_case_store.get_case(case_id).get("pipeline", [])
+        review_q, review_field = _preference_review(
+            query_dict, prefs, len(all_candidates), _current_pipeline)
+        if review_q is not None:
+            logger.info("[case:%s] PREFERENCE REVIEW  count=%d", case_id[:8], len(all_candidates))
+            homeos_case_store.set_status(case_id, "refining")
+            q_evt = {"event": "clarifying_question", "case_id": case_id,
+                     "question": review_q, "field": review_field}
+            yield q_evt
+            homeos_case_store.append_event(case_id, q_evt)
+            return
 
         async for evt in _deep_analysis_stream(repo, case_id, ranked, prefs):
             yield evt

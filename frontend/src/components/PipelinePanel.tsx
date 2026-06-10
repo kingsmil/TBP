@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Home, Loader2, MapPin } from "lucide-react";
+import { Download, Home, Loader2, MapPin } from "lucide-react";
 import type { AgentEvent, HomeOSCase, HomeOSShortlistRow } from "../types";
 
 interface Props {
@@ -66,6 +66,20 @@ export default function PipelinePanel({
   const isError = activeCase?.status === "error";
   const hasNoMatches = (activeCase?.status === "done" || caseDoneEvent != null) && shortlist.length === 0;
 
+  function handleDownloadCase() {
+    if (!activeCase) return;
+    const payload = JSON.stringify(activeCase, null, 2);
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `homeos-case-${activeCase.case_id.slice(0, 8)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
   if (!activeCase && streamingEvents.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-6">
@@ -81,17 +95,31 @@ export default function PipelinePanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border p-4">
-        <p className="text-sm font-bold text-foreground">Recommended listings</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {hasNoMatches
-            ? "No properties meet specified requirements. Please try with less strict requirements."
-            : shortlist.length > 0
-            ? `${shortlist.length} homes matched to your requirements.`
-            : isRefining
-              ? "Answer the question in the chat to refine your recommendations."
-              : "HomeOS is matching homes to your requirements."}
-        </p>
+      <div className="flex items-start justify-between gap-3 border-b border-border p-4">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-foreground">Recommended listings</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {hasNoMatches
+              ? "No properties meet specified requirements. Please try with less strict requirements."
+              : shortlist.length > 0
+              ? `${shortlist.length} homes matched to your requirements.`
+              : isRefining
+                ? "Answer the question in the chat to refine your recommendations."
+                : "HomeOS is matching homes to your requirements."}
+          </p>
+        </div>
+        {activeCase && (
+          <button
+            type="button"
+            onClick={handleDownloadCase}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+            aria-label="Download case"
+            title="Download case"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>Download</span>
+          </button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">

@@ -18,25 +18,11 @@ const mockCase: HomeOSCase = {
       school_priority: "high",
       risk_tolerance: "low",
       appreciation_priority: "medium",
+      work_locations: [],
+      bus_reliance: "low",
     },
   },
-  pipeline: [
-    { event: "agent_start", agent: "profile", block_id: null },
-    {
-      event: "agent_summary",
-      agent: "profile",
-      block_id: null,
-      narrative: "Mock profile: Family buyer, 4-room, $800k budget.",
-    },
-    { event: "agent_done", agent: "profile", block_id: null },
-    { event: "agent_start", agent: "market", block_id: 1 },
-    {
-      event: "agent_summary",
-      agent: "market",
-      block_id: 1,
-      narrative: "Mock market: 6 recent sales support budget.",
-    },
-  ],
+  pipeline: [],
   shortlist: [
     {
       block_id: 1,
@@ -66,7 +52,7 @@ const mockCase: HomeOSCase = {
 };
 
 describe("PipelinePanel", () => {
-  it("renders avatar label and agent summary narratives", () => {
+  it("renders recommended listings for the active case", () => {
     render(
       <PipelinePanel
         activeCase={mockCase}
@@ -76,14 +62,68 @@ describe("PipelinePanel", () => {
       />,
     );
 
-    expect(screen.getByText("Mock HomeOS Agent")).toBeInTheDocument();
-    expect(
-      screen.getByText("Mock profile: Family buyer, 4-room, $800k budget."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Mock market: 6 recent sales support budget.")).toBeInTheDocument();
+    expect(screen.getByText(/2 homes matched/i)).toBeInTheDocument();
+    expect(screen.getByText(/Blk 117 BISHAN ST 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/Blk 118 BISHAN ST 4/i)).toBeInTheDocument();
   });
 
-  it("shows running agent steps from streaming events", () => {
+  it("shows a download case button in the visible shortlist panel", () => {
+    render(
+      <PipelinePanel
+        activeCase={mockCase}
+        streamingEvents={[]}
+        onSelectBlock={vi.fn()}
+        onSendMessage={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /download case/i })).toBeInTheDocument();
+  });
+
+  it("downloads the active case as json", () => {
+    const createObjectURLMock = vi.fn(() => "blob:test");
+    const revokeObjectURLMock = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURLMock,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURLMock,
+    });
+    const click = vi.fn();
+    const appendChild = vi.spyOn(document.body, "appendChild");
+    const originalCreateElement = document.createElement.bind(document);
+    const createElement = vi.spyOn(document, "createElement");
+    createElement.mockImplementation((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName === "a") {
+        element.click = click;
+      }
+      return element;
+    });
+
+    render(
+      <PipelinePanel
+        activeCase={mockCase}
+        streamingEvents={[]}
+        onSelectBlock={vi.fn()}
+        onSendMessage={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /download case/i }));
+
+    expect(createObjectURLMock).toHaveBeenCalledWith(expect.any(Blob));
+    expect(appendChild).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:test");
+
+    appendChild.mockRestore();
+    createElement.mockRestore();
+  });
+
+  it("shows running state from streaming events", () => {
     const streaming: AgentEvent[] = [
       { event: "agent_start", agent: "location", block_id: 2 },
     ];
@@ -97,70 +137,6 @@ describe("PipelinePanel", () => {
       />,
     );
 
-    expect(screen.getByText(/Querying Location Graph/i)).toBeInTheDocument();
-  });
-
-  it("renders multiple recommended listings for one case", () => {
-    render(
-      <PipelinePanel
-        activeCase={mockCase}
-        streamingEvents={[]}
-        onSelectBlock={vi.fn()}
-        onSendMessage={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText(/2 recommended listings/i)).toBeInTheDocument();
-    expect(screen.getByText(/Blk 117 BISHAN ST 3/i)).toBeInTheDocument();
-    expect(screen.getByText(/Blk 118 BISHAN ST 4/i)).toBeInTheDocument();
-  });
-
-  it("expands an agent row to show full details when clicked", () => {
-    render(
-      <PipelinePanel
-        activeCase={{
-          ...mockCase,
-          pipeline: [
-            {
-              event: "agent_summary",
-              agent: "risk",
-              block_id: 1,
-              narrative: "Mock risk: no major watchouts surfaced; score adjustment is 7.8.",
-              data: { score_adjustment: 7.8, watchouts: [] },
-            },
-          ],
-        }}
-        streamingEvents={[]}
-        onSelectBlock={vi.fn()}
-        onSendMessage={vi.fn()}
-      />,
-    );
-
-    expect(screen.queryByText(/score_adjustment/)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Mock risk:/i }));
-
-    expect(screen.getByText("Risk Agent")).toBeInTheDocument();
-    expect(screen.getByText(/score_adjustment/)).toBeInTheDocument();
-    expect(screen.getByText("Blk 1")).toBeInTheDocument();
-  });
-
-  it("calls onSendMessage when chat is submitted", () => {
-    const onSend = vi.fn();
-    render(
-      <PipelinePanel
-        activeCase={mockCase}
-        streamingEvents={[]}
-        onSelectBlock={vi.fn()}
-        onSendMessage={onSend}
-      />,
-    );
-
-    fireEvent.change(screen.getByPlaceholderText(/ask/i), {
-      target: { value: "Why Bishan?" },
-    });
-    fireEvent.submit(screen.getByRole("form"));
-
-    expect(onSend).toHaveBeenCalledWith("Why Bishan?");
+    expect(screen.getByText(/Finding the best matching listings/i)).toBeInTheDocument();
   });
 });

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
+from pydantic import BaseModel
+
+from app.homeos.framework.spec import ToolSpec
 from app.homeos.framework.tool import ToolAdapter
 from app.homeos.mock.tools import mock_transaction_data
 from app.services.stats import summarize
@@ -11,9 +14,26 @@ if TYPE_CHECKING:
     from app.repositories.base import Repository
 
 
+class TransactionsOutput(BaseModel):
+    model_config = {"extra": "ignore"}
+    transaction_count: int
+    median_price: float | None = None
+    median_psf: float | None = None
+    window_months: int
+    budget_signal: Literal["within_budget", "above_budget", "unknown"]
+    confidence: Literal["high", "medium", "low"]
+
+
 class TransactionsTool(ToolAdapter):
-    name = "transactions"
-    description = "Fetch recent HDB resale transactions for a block."
+    spec = ToolSpec(
+        name="transactions",
+        description="Fetch recent HDB resale transactions for a block.",
+        use_case=(
+            "Use to assess market activity and budget fit. "
+            "Call when you need median price, PSF, or transaction volume for a specific block."
+        ),
+        output_type=TransactionsOutput,
+    )
 
     def fetch(self, repo: "Repository", block_id: int | None, prefs: dict) -> dict[str, Any]:
         if self.mock:

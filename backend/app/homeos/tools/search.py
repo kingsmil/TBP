@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from pydantic import BaseModel
+
+from app.homeos.framework.spec import ToolSpec
 from app.homeos.framework.tool import ToolAdapter
 from app.homeos.mock.tools import mock_search_data
 
@@ -10,9 +13,37 @@ if TYPE_CHECKING:
     from app.repositories.base import Repository
 
 
+class BlockSummary(BaseModel):
+    model_config = {"extra": "ignore"}
+    block_id: int
+    block_number: str
+    street_name: str
+    town: str
+    lon: float = 0.0
+    lat: float = 0.0
+    lease_commencement_year: int | None = None
+    nearest_mrt_distance_m: float | None = None
+    schools_within_1km: int | None = None
+    median_psf: float | None = None
+    median_price: float | None = None
+    txn_count: int | None = None
+
+
+class SearchOutput(BaseModel):
+    model_config = {"extra": "ignore"}
+    results: list[BlockSummary]
+
+
 class SearchTool(ToolAdapter):
-    name = "search"
-    description = "Search HDB blocks matching buyer preferences."
+    spec = ToolSpec(
+        name="search",
+        description="Search and filter HDB blocks by flat type, max price, town, MRT distance, and school count.",
+        use_case=(
+            "Use during the search phase to find candidate blocks matching buyer preferences. "
+            "Do not call during per-block deep analysis — use block-specific tools instead."
+        ),
+        output_type=SearchOutput,
+    )
 
     def fetch(self, repo: "Repository", block_id: int | None, prefs: dict) -> dict[str, Any]:
         if self.mock:

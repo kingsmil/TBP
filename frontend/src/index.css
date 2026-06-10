@@ -8,6 +8,19 @@ html, body, #root { height: 100%; margin: 0; }
    so the container background blends instead of showing as grey. */
 .leaflet-container { background: #aacbdf; }
 
+/* Cluster count labels — strip the default Leaflet tooltip chrome */
+.cluster-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.cluster-label::before { display: none !important; }
+
 @layer base {
   :root {
     /* Frieren watercolor palette */

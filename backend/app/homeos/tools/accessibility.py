@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from pydantic import BaseModel
+
+from app.homeos.framework.spec import ToolSpec
 from app.homeos.framework.tool import ToolAdapter
 from app.homeos.mock.tools import mock_accessibility_data
 
@@ -10,9 +13,36 @@ if TYPE_CHECKING:
     from app.repositories.base import Repository
 
 
+class AccessibilityRaw(BaseModel):
+    model_config = {"extra": "ignore"}
+    nearest_mrt_distance_m: float | None = None
+    nearest_bus_distance_m: float | None = None
+    bus_stops_within_400m: int = 0
+    schools_within_1km: int = 0
+
+
+class AccessibilityOutput(BaseModel):
+    model_config = {"extra": "ignore"}
+    mrt_score: float = 0.0
+    bus_score: float = 0.0
+    school_score: float = 0.0
+    combined_score: float = 0.0
+    raw: AccessibilityRaw | None = None
+    # mock-mode keys (real mode omits them; extra keys are ignored either way)
+    bus_stops_within_500m: int | None = None
+    nearest_bus_distance_m: float | None = None
+
+
 class AccessibilityTool(ToolAdapter):
-    name = "accessibility"
-    description = "Fetch bus stop accessibility data for a block."
+    spec = ToolSpec(
+        name="accessibility",
+        description="Fetch MRT, bus, and school accessibility scores for a block.",
+        use_case=(
+            "Use to assess overall transport and amenity convenience. "
+            "Call when buyer has no car or commute_priority is high."
+        ),
+        output_type=AccessibilityOutput,
+    )
 
     def fetch(self, repo: "Repository", block_id: int | None, prefs: dict) -> dict[str, Any]:
         if self.mock:

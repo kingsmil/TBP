@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.homeos.framework.spec import AgentSpec, PrefDimension, ToolSpec
 from app.homeos.models.avatar import HomeOSPreferences
+from app.homeos.scoring import worth_viewing_score
 from app.repositories.memory import InMemoryRepository
 
 
@@ -213,6 +214,43 @@ class TestBusRoutesTool(unittest.TestCase):
         out = BusRoutesOutput.model_validate(
             BusRoutesTool(mock=True).fetch(InMemoryRepository(), 1, {}))
         self.assertTrue(out.available)
+
+
+_MARKET = {"budget_signal": "within_budget", "transaction_count": 5}
+_RISK = {"watchouts": [], "score_adjustment": 0.0}
+
+
+class TestLongCommuteWatchout(unittest.TestCase):
+    def _location(self, worst, available=True):
+        return {
+            "connections": [],
+            "commute": {
+                "available": available,
+                "destinations": [
+                    {"name": "Raffles Place", "resolved": True, "travel_min": worst, "mode": "pt"},
+                    {"name": "Jurong East", "resolved": True, "travel_min": 20.0, "mode": "pt"},
+                ],
+                "worst_commute_min": worst,
+            },
+        }
+
+    def test_watchout_added_when_worst_over_60(self):
+        _, _, watchouts = worth_viewing_score(_MARKET, self._location(75.0), _RISK, {})
+        self.assertTrue(any("Long commute to Raffles Place" in w for w in watchouts))
+
+    def test_no_watchout_at_or_under_60(self):
+        _, _, watchouts = worth_viewing_score(_MARKET, self._location(60.0), _RISK, {})
+        self.assertFalse(any("Long commute" in w for w in watchouts))
+
+    def test_no_watchout_when_unavailable(self):
+        _, _, watchouts = worth_viewing_score(
+            _MARKET, self._location(75.0, available=False), _RISK, {})
+        self.assertFalse(any("Long commute" in w for w in watchouts))
+
+    def test_score_unchanged_by_commute(self):
+        base, _, _ = worth_viewing_score(_MARKET, {"connections": []}, _RISK, {})
+        scored, _, _ = worth_viewing_score(_MARKET, self._location(75.0), _RISK, {})
+        self.assertEqual(base, scored)
 
 
 if __name__ == "__main__":

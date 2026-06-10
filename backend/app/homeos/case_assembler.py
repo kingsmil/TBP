@@ -5,7 +5,7 @@ from app.homeos import case_store
 from app.homeos.scoring import item_texts
 from app.homeos.sync_agents import base_viewing_questions
 
-_AGENTS = ("market", "location", "risk")
+_AGENTS = ("market", "location", "lifestyle", "risk")
 
 
 def assemble_case_file_from_case(case_id: str, block_id: int) -> dict[str, Any] | None:

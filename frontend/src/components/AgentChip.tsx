@@ -2,7 +2,7 @@ import type { AgentSource } from "../types";
 
 const LABELS: Record<AgentSource, string> = {
   market: "Market",
-  location: "Lifestyle",
+  location: "Location",
   lifestyle: "Lifestyle",
   risk: "Risk",
 };

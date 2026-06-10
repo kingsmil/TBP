@@ -283,19 +283,23 @@ class TestWiring(unittest.TestCase):
         import app.homeos.wiring as wiring_mod
         cls.tr = wiring_mod.tool_repository
 
-    def test_tool_repository_has_all_eight_tools(self):
+    def test_tool_repository_has_all_nine_tools(self):
         names = {e["name"] for e in self.tr.describe_tools()}
         self.assertEqual(
             names,
             {
                 "transactions", "proximity", "appreciation", "future_dev",
                 "accessibility", "search", "commute", "bus_routes",
+                "lifestyle_score",
             }
         )
 
-    def test_tool_repository_has_all_five_agents(self):
+    def test_tool_repository_has_all_six_agents(self):
         names = {a["name"] for a in self.tr.describe_agents()}
-        self.assertEqual(names, {"profile", "market", "location", "risk", "questions"})
+        self.assertEqual(
+            names,
+            {"profile", "market", "location", "risk", "questions", "lifestyle"},
+        )
 
     def test_tools_for_market_agent(self):
         tools = self.tr.tools_for_agent("market")

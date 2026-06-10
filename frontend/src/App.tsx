@@ -25,6 +25,7 @@ import EstateComparison from "./components/EstateComparison";
 import FilterPanel from "./components/FilterPanel";
 import HomeOSDetailPanel from "./components/HomeOSDetailPanel";
 import MapView, { type MapViewState } from "./components/MapView";
+import ModelSelector from "./components/ModelSelector";
 import { MAP_SEARCH_LIMIT } from "./lib/mapConfig";
 import NewsPanel from "./components/NewsPanel";
 import PipelinePanel from "./components/PipelinePanel";
@@ -44,6 +45,7 @@ import {
 } from "./lib/api";
 import { clearAuth, getStoredUser, type AuthUser } from "./lib/auth";
 import { formatPsf, formatSGD } from "./lib/format";
+import { getStoredModel, setStoredModel } from "./lib/modelPreference";
 import type {
   AgentEvent,
   DirectTransitDestination,
@@ -175,8 +177,14 @@ export default function App() {
   const [rightTab, setRightTab] = useState<"display" | "news">("display");
   const [isStreaming, setIsStreaming] = useState(false);
   const [framedCaseId, setFramedCaseId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>(() => getStoredModel() ?? "");
 
   const selectedBlockId = mode === "ai" ? aiSelectedBlockId : exploreSelectedBlockId;
+
+  const handleModelChange = useCallback((model: string) => {
+    setSelectedModel(model);
+    setStoredModel(model);
+  }, []);
 
   const search = useQuery({
     queryKey: ["search", filters],
@@ -311,8 +319,14 @@ export default function App() {
     setCases((prev) => [tempSummary, ...prev]);
     setActiveCaseId(tempId);
 
-    await _processStream(investigateStream(profileText, 5), tempId, profileText, createdAt, tempId);
-  }, [_processStream]);
+    await _processStream(
+      investigateStream(profileText, 5, selectedModel || undefined),
+      tempId,
+      profileText,
+      createdAt,
+      tempId,
+    );
+  }, [_processStream, selectedModel]);
 
   const handleRefine = useCallback(async (message: string) => {
     if (!activeCaseId || activeCaseId.startsWith("pending-")) return;
@@ -331,13 +345,13 @@ export default function App() {
     } : prev);
 
     await _processStream(
-      refineStream(activeCaseId, message),
+      refineStream(activeCaseId, message, selectedModel || undefined),
       activeCaseId,
       currentCase.profile_text,
       currentCase.created_at,
       activeCaseId,
     );
-  }, [activeCaseId, activeCaseFull, _processStream]);
+  }, [activeCaseId, activeCaseFull, _processStream, selectedModel]);
 
   const handleSelectCase = useCallback((caseId: string) => {
     setActiveCaseId(caseId);
@@ -653,6 +667,9 @@ export default function App() {
             )}
           </div>
         </header>
+        <div className="border-b border-border px-4 py-2">
+          <ModelSelector value={selectedModel} onChange={handleModelChange} />
+        </div>
         <div className="flex-1 overflow-hidden">
           <CasesPanel
             cases={cases}

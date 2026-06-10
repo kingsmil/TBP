@@ -109,10 +109,32 @@ export default function AuthModal({ onSuccess, onClose }: Props) {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-[10px] text-muted-foreground">
-          Free account gives access to Explore mode.{" "}
-          <span className="font-medium text-primary">AI mode requires a Pro subscription ($9.99/mo).</span>
-        </p>
+        <div className="mt-4 text-center text-[10px] text-muted-foreground">
+          <p>Free account gives access to Explore mode.</p>
+          <p className="mt-1 font-medium text-primary">
+            AI mode requires a Pro subscription ($9.99/mo).
+          </p>
+        </div>
+
+        <div className="mt-5 flex items-center justify-center gap-2 border-t border-border pt-4 text-muted-foreground">
+          <span className="text-[10px] font-medium uppercase tracking-[0.16em]">Powered by</span>
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-[#635bff]/10 px-2 py-1 text-[#635bff]">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect width="24" height="24" rx="6" fill="currentColor" />
+              <path
+                d="M12.4 8.15c-1.22 0-1.95.38-1.95 1.02 0 .71.92 1.02 2.08 1.42 1.89.65 4.37 1.51 4.37 4.22 0 2.62-2.08 4.19-5.43 4.19-1.39 0-2.95-.27-4.47-.91v-3.08c1.38.75 3.12 1.3 4.47 1.3 1.09 0 1.78-.36 1.78-1.05 0-.77-.99-1.1-2.2-1.53-1.86-.66-4.08-1.55-4.08-4.09 0-2.6 2.01-4.14 5.43-4.14 1.38 0 2.76.21 4.14.75v3.03c-1.26-.61-2.85-1.13-4.14-1.13Z"
+                fill="white"
+              />
+            </svg>
+            <span className="text-xs font-bold tracking-tight">stripe</span>
+          </span>
+        </div>
       </div>
     </div>
   );

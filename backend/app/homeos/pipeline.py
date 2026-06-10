@@ -158,18 +158,18 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
 
 # ── Registry-backed agent runner ──────────────────────────────────────────────
 
-async def _run_profile_agent(prompt: str):
+async def _run_profile_agent(prompt: str, model_override: str | None = None):
     """Run the profile agent via the tool repository. Returns (HomeOSAvatar, {}, result)."""
     from app.homeos.wiring import tool_repository
-    agent, prefetched = tool_repository.build_agent("profile", repo=None, block_id=None, prefs={})
+    agent, prefetched = tool_repository.build_agent("profile", repo=None, block_id=None, prefs={}, model_override=model_override)
     result = await agent.run(prompt)
     return result.output, prefetched, result
 
 
-async def _run_block_agent(name: str, repo: Repository, block_id: int, prefs: dict, prompt: str):
+async def _run_block_agent(name: str, repo: Repository, block_id: int, prefs: dict, prompt: str, model_override: str | None = None):
     """Run a named block-level agent. Returns (output_model, prefetched_dict, result)."""
     from app.homeos.wiring import tool_repository
-    agent, prefetched = tool_repository.build_agent(name, repo=repo, block_id=block_id, prefs=prefs)
+    agent, prefetched = tool_repository.build_agent(name, repo=repo, block_id=block_id, prefs=prefs, model_override=model_override)
     result = await agent.run(prompt)
     return result.output, prefetched, result
 
@@ -248,6 +248,7 @@ async def _deep_analysis_stream(
     case_id: str,
     candidates: list[dict],
     prefs: dict,
+    model_override: str | None = None,
 ) -> AsyncGenerator[dict, None]:
     """Phase 3: run market/location/risk agents on each candidate via registry."""
     rows = []
@@ -280,6 +281,7 @@ async def _deep_analysis_stream(
                 output, _, result = await _run_block_agent(
                     "market", repo, block_id, prefs,
                     "Analyze market evidence for this block using the available tools.",
+                    model_override,
                 )
                 market_evidence = output.model_dump()
                 tool_calls = _extract_tool_calls(result)
@@ -314,6 +316,7 @@ async def _deep_analysis_stream(
                 output, _, result = await _run_block_agent(
                     "location", repo, block_id, prefs,
                     "Analyze location and connectivity for this block using the available tools.",
+                    model_override,
                 )
                 location_evidence = output.model_dump()
                 tool_calls = _extract_tool_calls(result)
@@ -369,6 +372,7 @@ async def _deep_analysis_stream(
                 output, _, result = await _run_block_agent(
                     "risk", repo, block_id, prefs,
                     f"Analyze risk factors for this block. Buyer risk_tolerance: {prefs.get('risk_tolerance', 'low')}",
+                    model_override,
                 )
                 risk_evidence = output.model_dump()
                 tool_calls = _extract_tool_calls(result)
@@ -770,6 +774,7 @@ async def investigate_stream(
     repo: Repository,
     profile_text: str,
     limit: int = 5,
+    model_override: str | None = None,
 ) -> AsyncGenerator[dict, None]:
     case = homeos_case_store.create_case(profile_text)
     case_id = case["case_id"]
@@ -786,7 +791,7 @@ async def investigate_stream(
             avatar = mock_profile_avatar(profile_text, parse_homeos_profile(profile_text))
             tool_calls = []
         else:
-            avatar, _, result = await _run_profile_agent(profile_text)
+            avatar, _, result = await _run_profile_agent(profile_text, model_override)
             tool_calls = _extract_tool_calls(result)
 
         avatar_dict = avatar.model_dump()
@@ -888,7 +893,7 @@ async def investigate_stream(
             return
 
         # ── Phase 3: Deep analysis ──────────────────────────────────────────
-        async for evt in _deep_analysis_stream(repo, case_id, ranked, prefs):
+        async for evt in _deep_analysis_stream(repo, case_id, ranked, prefs, model_override):
             yield evt
 
     except Exception as exc:
@@ -903,6 +908,7 @@ async def refine_stream(
     repo: Repository,
     case_id: str,
     user_message: str,
+    model_override: str | None = None,
 ) -> AsyncGenerator[dict, None]:
     case = homeos_case_store.get_case(case_id)
     if case is None:
@@ -929,7 +935,7 @@ async def refine_stream(
             if is_mock_mode():
                 avatar = mock_profile_avatar(refinement_prompt, parse_homeos_profile(refinement_prompt))
             else:
-                avatar, _, _ = await _run_profile_agent(refinement_prompt)
+                avatar, _, _ = await _run_profile_agent(refinement_prompt, model_override)
 
             avatar_dict = avatar.model_dump()
             prefs_from_ai = {k: v for k, v in avatar_dict.get("preferences", {}).items() if v is not None}
@@ -1019,7 +1025,7 @@ async def refine_stream(
             homeos_case_store.append_event(case_id, q_evt)
             return
 
-        async for evt in _deep_analysis_stream(repo, case_id, ranked, prefs):
+        async for evt in _deep_analysis_stream(repo, case_id, ranked, prefs, model_override):
             yield evt
 
     except Exception as exc:

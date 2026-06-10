@@ -101,6 +101,7 @@ class ToolRepository:
         block_id: int | None,
         prefs: dict,
         use_prefetch: bool = True,
+        model_override: str | None = None,
     ) -> tuple[Agent[Any, Any], dict[str, Any]]:
         """Pre-fetch tool data, inject as context, attach tool closures.
 
@@ -131,7 +132,7 @@ class ToolRepository:
         ]
 
         agent: Agent[Any, Any] = Agent(
-            get_model(),
+            get_model(model_override),
             output_type=spec.output_type,
             system_prompt=system_prompt,
             tools=tools,

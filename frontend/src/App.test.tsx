@@ -4,7 +4,19 @@ import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 
 vi.mock("./components/MapView", () => ({
-  default: () => <div data-testid="map-view" />,
+  default: ({
+    selectedBlockId,
+    onSelectBlock,
+  }: {
+    selectedBlockId?: number | null;
+    onSelectBlock?: (blockId: number) => void;
+  }) => (
+    <div data-testid="map-view">
+      <span data-testid="selected-block">{selectedBlockId ?? "none"}</span>
+      <button type="button" onClick={() => onSelectBlock?.(1)}>Select block 1</button>
+      <button type="button" onClick={() => onSelectBlock?.(2)}>Select block 2</button>
+    </div>
+  ),
 }));
 
 vi.mock("./lib/api", () => ({
@@ -20,6 +32,7 @@ vi.mock("./lib/api", () => ({
     status: "done",
   })),
   getCases: vi.fn(async () => []),
+  getBlockListings: vi.fn(async () => ({ block_id: 1, count: 0, listings: [] })),
   getEstateAnalytics: vi.fn(async () => ({
     scope: "estate",
     planning_area_id: 1,
@@ -96,18 +109,32 @@ function renderApp() {
 }
 
 describe("App", () => {
-  it("switches the left pane to manual live data mode", async () => {
+  it("switches from AI mode to Explore mode", async () => {
     renderApp();
 
-    expect(screen.getByRole("button", { name: /ai mode/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /manual/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /manual/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^explore$/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/manual mode/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /ai mode/i })).toBeInTheDocument();
     });
-    expect(screen.getByText(/browse the live dataset/i)).toBeInTheDocument();
     expect(screen.getByText(/estate comparison/i)).toBeInTheDocument();
+  });
+
+  it("can select again after close and deselect with Escape", async () => {
+    renderApp();
+    fireEvent.click(screen.getByRole("button", { name: /^explore$/i }));
+
+    await waitFor(() => expect(screen.getByText("Select block 1")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Select block 1" }));
+    expect(screen.getByTestId("selected-block")).toHaveTextContent("1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close panel" }));
+    expect(screen.getByTestId("selected-block")).toHaveTextContent("none");
+
+    fireEvent.click(screen.getByRole("button", { name: "Select block 2" }));
+    expect(screen.getByTestId("selected-block")).toHaveTextContent("2");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByTestId("selected-block")).toHaveTextContent("none");
   });
 });

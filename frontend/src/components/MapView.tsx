@@ -1,13 +1,14 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Bus } from "lucide-react";
-import { CircleMarker, MapContainer, Pane, Polyline, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { Circle, CircleMarker, MapContainer, Pane, Polyline, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import type { LatLngBoundsExpression } from "leaflet";
 import useSupercluster from "use-supercluster";
 import type { BlockSummary } from "../types";
 import { ACCESS_COLORS, formatDistance, formatPsf, formatSGD, mrtAccessClass } from "../lib/format";
 import { getBusStopReach, getReferenceLayer } from "../lib/api";
 import type { BusReachResponse } from "../lib/api";
+import { distanceMetres } from "../lib/geo";
 
 const ONEMAP_TILES =
   "https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png";
@@ -269,12 +270,36 @@ function BusRouteFitter({ reach, activeService }: {
   return null;
 }
 
+function NearbyBusRouteFitter({
+  selectedBlock,
+  routes,
+  loading,
+}: {
+  selectedBlock: BlockSummary | null;
+  routes: (BusReachResponse["services"][number] & { originCode: string })[];
+  loading: boolean;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (!selectedBlock || loading || routes.length === 0) return;
+    const points = [
+      [selectedBlock.lat, selectedBlock.lon] as [number, number],
+      ...routes.flatMap((service) =>
+        service.stops.map((stop) => [stop.lat, stop.lon] as [number, number]),
+      ),
+    ];
+    map.fitBounds(points, { padding: [45, 45], maxZoom: 14, animate: true });
+  }, [loading, map, routes, selectedBlock]);
+  return null;
+}
+
 interface Props {
   blocks: BlockSummary[];
   shortlistIds?: number[];
   selectedBlockId?: number | null;
   onSelectBlock?: (blockId: number) => void;
   profileText?: string; // reserved for future case-file integration
+  nearbyBusRadiusM?: number;
 }
 
 export default function MapView({
@@ -282,15 +307,21 @@ export default function MapView({
   shortlistIds = [],
   selectedBlockId,
   onSelectBlock,
+  nearbyBusRadiusM = 0,
 }: Props) {
+  const showNearbyBusRoutes = nearbyBusRadiusM > 0;
   const shortlistSet = useMemo(() => new Set(shortlistIds), [shortlistIds]);
   const [busMode, setBusMode] = useState(false);
   const [selectedBusStop, setSelectedBusStop] = useState<string | null>(null);
   const [activeBusService, setActiveBusService] = useState<string | null>(null);
+  const selectedBlock = useMemo(
+    () => blocks.find((block) => block.block_id === selectedBlockId) ?? null,
+    [blocks, selectedBlockId],
+  );
   const busStops = useQuery({
     queryKey: ["reference", "bus_stops"],
     queryFn: () => getReferenceLayer("bus_stops"),
-    enabled: busMode,
+    enabled: busMode || (showNearbyBusRoutes && selectedBlock != null),
   });
   const busReach = useQuery({
     queryKey: ["bus-reach", selectedBusStop],
@@ -301,6 +332,38 @@ export default function MapView({
     activeBusService == null
       || `${service.service_no}-${service.direction}` === activeBusService
   ) ?? [];
+  const nearbyStops = useMemo(() => {
+    if (!showNearbyBusRoutes || !selectedBlock || !busStops.data) return [];
+    return busStops.data.features.flatMap((feature) => {
+      const [lon, lat] = feature.geometry.coordinates;
+      const distance = distanceMetres(selectedBlock, { lat, lon });
+      if (distance > nearbyBusRadiusM) return [];
+      return [{
+        code: String(feature.properties.code ?? ""),
+        description: String(feature.properties.description ?? "Bus stop"),
+        lat,
+        lon,
+        distance,
+      }];
+    }).filter((stop) => stop.code).sort((a, b) => a.distance - b.distance);
+  }, [busStops.data, nearbyBusRadiusM, selectedBlock, showNearbyBusRoutes]);
+  const nearbyReachQueries = useQueries({
+    queries: nearbyStops.map((stop) => ({
+      queryKey: ["bus-reach", stop.code],
+      queryFn: () => getBusStopReach(stop.code),
+      enabled: showNearbyBusRoutes && !busMode,
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+  const nearbyRoutes = nearbyReachQueries.flatMap((query, stopIndex) =>
+    (query.data?.services ?? []).map((service) => ({
+      ...service,
+      originCode: nearbyStops[stopIndex].code,
+    })),
+  );
+  const nearbyRoutesLoading = nearbyReachQueries.some((query) => query.isLoading);
+  const nearbyRoutesError = nearbyReachQueries.some((query) => query.isError);
+  const nearbyRouteFocus = !busMode && showNearbyBusRoutes && selectedBlock != null;
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#aacbdf]">
@@ -316,6 +379,13 @@ export default function MapView({
       >
         <MapResizer />
         <BusRouteFitter reach={busReach.data} activeService={activeBusService} />
+        {!busMode && showNearbyBusRoutes && (
+          <NearbyBusRouteFitter
+            selectedBlock={selectedBlock}
+            routes={nearbyRoutes}
+            loading={nearbyRoutesLoading}
+          />
+        )}
 
         <TileLayer
           url={ONEMAP_TILES}
@@ -325,7 +395,7 @@ export default function MapView({
           keepBuffer={4}
         />
 
-        {!busMode && (
+        {!busMode && !nearbyRouteFocus && (
           <ClusteredBlocks
             blocks={blocks}
             shortlistIds={shortlistSet}
@@ -334,7 +404,12 @@ export default function MapView({
           />
         )}
 
-        <Pane name="bus-routes" style={{ zIndex: 610 }}>
+        {(busMode || nearbyRouteFocus) && (
+        <Pane
+          key={busMode ? "bus-routes-interactive" : `nearby-routes-${selectedBlockId}`}
+          name={busMode ? "bus-routes" : "nearby-bus-routes"}
+          style={{ zIndex: 610, pointerEvents: busMode ? "auto" : "none" }}
+        >
           {busMode && displayedServices.map((service, index) => {
             const positions = service.stops.map((stop) => [stop.lat, stop.lon] as [number, number]);
             const color = BUS_COLORS[index % BUS_COLORS.length];
@@ -358,8 +433,68 @@ export default function MapView({
               </Fragment>
             );
           })}
+          {nearbyRouteFocus && nearbyRoutes.map((service, index) => {
+            const positions = service.stops.map((stop) => [stop.lat, stop.lon] as [number, number]);
+            const color = BUS_COLORS[index % BUS_COLORS.length];
+            return (
+              <Fragment key={`nearby-${service.originCode}-${service.service_no}-${service.direction}`}>
+                <Polyline
+                  positions={positions}
+                  interactive={false}
+                  pathOptions={{ pane: "nearby-bus-routes", color: "#ffffff", weight: 7, opacity: 0.75 }}
+                />
+                <Polyline
+                  positions={positions}
+                  interactive={false}
+                  pathOptions={{ pane: "nearby-bus-routes", color, weight: 4, opacity: 0.9 }}
+                />
+              </Fragment>
+            );
+          })}
         </Pane>
+        )}
 
+        {!busMode && showNearbyBusRoutes && selectedBlock && (
+          <Pane
+            key={`nearby-origins-${selectedBlock.block_id}`}
+            name="nearby-bus-origins"
+            style={{ zIndex: 625, pointerEvents: "none" }}
+          >
+            <Circle
+              center={[selectedBlock.lat, selectedBlock.lon]}
+              radius={nearbyBusRadiusM}
+              interactive={false}
+              pathOptions={{ color: "#2563eb", fillColor: "#60a5fa", fillOpacity: 0.08, dashArray: "6 5" }}
+            />
+            <CircleMarker
+              center={[selectedBlock.lat, selectedBlock.lon]}
+              radius={11}
+              interactive={false}
+              pathOptions={{
+                pane: "nearby-bus-origins",
+                color: "#7f1d1d",
+                fillColor: SELECTED_COLOR,
+                fillOpacity: 1,
+                weight: 3,
+              }}
+            >
+              <Tooltip direction="top" opacity={0.95}>
+                Blk {selectedBlock.block_number} {selectedBlock.street_name}
+              </Tooltip>
+            </CircleMarker>
+            {nearbyStops.map((stop) => (
+              <CircleMarker
+                key={`nearby-origin-${stop.code}`}
+                center={[stop.lat, stop.lon]}
+                radius={8}
+                interactive={false}
+                pathOptions={{ pane: "nearby-bus-origins", color: "#1e3a8a", fillColor: "#facc15", fillOpacity: 0.95, weight: 2 }}
+              />
+            ))}
+          </Pane>
+        )}
+
+        {busMode && (
         <Pane name="bus-stops" style={{ zIndex: 620 }}>
           {busMode && busStops.data?.features
             .filter((feature) => {
@@ -407,6 +542,7 @@ export default function MapView({
             );
           })}
         </Pane>
+        )}
       </MapContainer>
 
       <button
@@ -485,7 +621,35 @@ export default function MapView({
         </div>
       )}
 
-      {!busMode && <div className="absolute bottom-6 right-3 z-[1000] rounded-xl border border-border bg-card/90 p-3 shadow-md backdrop-blur-sm">
+      {!busMode && showNearbyBusRoutes && (
+        <div className="absolute right-3 top-14 z-[1000] w-72 rounded-xl border border-border bg-card/95 p-3 shadow-md backdrop-blur-sm">
+          {!selectedBlock && <p className="text-sm">Select a property to show bus routes from stops within {nearbyBusRadiusM} m.</p>}
+          {selectedBlock && busStops.isLoading && <p className="text-sm">Finding nearby bus stops...</p>}
+          {selectedBlock && busStops.data && nearbyStops.length === 0 && (
+            <p className="text-sm">No bus stops were found within {nearbyBusRadiusM} m of this property.</p>
+          )}
+          {selectedBlock && nearbyStops.length > 0 && (
+            <>
+              <p className="font-semibold">Bus routes within {nearbyBusRadiusM} m</p>
+              <p className="mt-1 text-sm">
+                {nearbyStops.length} nearby {nearbyStops.length === 1 ? "stop" : "stops"}
+                {nearbyRoutes.length > 0 ? `, ${nearbyRoutes.length} routes` : ""}.
+              </p>
+              {nearbyRoutesLoading && <p className="mt-1 text-xs text-muted-foreground">Loading route lines...</p>}
+              {nearbyRoutesError && <p className="mt-1 text-xs text-destructive">Some route data could not be loaded.</p>}
+              <div className="mt-2 space-y-1">
+                {nearbyStops.map((stop) => (
+                  <p key={`nearby-summary-${stop.code}`} className="text-xs text-muted-foreground">
+                    {stop.code}: {stop.description} ({Math.round(stop.distance)} m)
+                  </p>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {!busMode && !nearbyRouteFocus && <div className="absolute bottom-6 right-3 z-[1000] rounded-xl border border-border bg-card/90 p-3 shadow-md backdrop-blur-sm">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           MRT Access
         </p>

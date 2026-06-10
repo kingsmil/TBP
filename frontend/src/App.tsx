@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   PanelLeftClose,
@@ -7,9 +7,11 @@ import {
   BarChart2,
   Table2,
   TrendingUp,
+  Eye,
 } from "lucide-react";
 import CasesPanel from "./components/CasesPanel";
 import DirectTransitFilter from "./components/DirectTransitFilter";
+import DisplayPanel from "./components/DisplayPanel";
 import EstateComparison from "./components/EstateComparison";
 import FilterPanel from "./components/FilterPanel";
 import HomeOSDetailPanel from "./components/HomeOSDetailPanel";
@@ -74,6 +76,7 @@ export default function App() {
   const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null);
   const [shortlistIds, setShortlistIds] = useState<number[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true); // explore mode only
+  const [nearbyBusRadiusM, setNearbyBusRadiusM] = useState(200);
 
   // AI mode
   const [cases, setCases] = useState<HomeOSCaseSummary[]>([]);
@@ -247,6 +250,23 @@ export default function App() {
     setRightPanel("block_detail");
   }, []);
 
+  const clearSelectedBlock = useCallback(() => {
+    setSelectedBlockId(null);
+    setRightPanel("pipeline");
+  }, []);
+
+  useEffect(() => {
+    if (selectedBlockId == null) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      clearSelectedBlock();
+    };
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [clearSelectedBlock, selectedBlockId]);
+
   const handleSendMessage = useCallback(
     async (message: string) => {
       if (!activeCaseId || activeCaseId.startsWith("pending-")) return;
@@ -296,6 +316,7 @@ export default function App() {
               </div>
               <Separator className="w-7 my-1" />
               <RailIcon icon={SlidersHorizontal} label="Filters"           onClick={() => setSidebarOpen(true)} />
+              <RailIcon icon={Eye}               label="Display"           onClick={() => setSidebarOpen(true)} />
               <RailIcon icon={TrendingUp}        label="Stats"             onClick={() => setSidebarOpen(true)} />
               <RailIcon icon={BarChart2}         label="PSF Trend"         onClick={() => setSidebarOpen(true)} />
               <RailIcon icon={Table2}            label="Estate Comparison" onClick={() => setSidebarOpen(true)} />
@@ -325,6 +346,12 @@ export default function App() {
               <FilterPanel filters={filters} onChange={setFilters} />
               <Separator />
               <DirectTransitFilter filters={filters} onResults={setDirectTransit} />
+              <Separator />
+              <DisplayPanel
+                nearbyBusRadiusM={nearbyBusRadiusM}
+                onNearbyBusRadiusChange={setNearbyBusRadiusM}
+                hasSelectedProperty={selectedBlock != null}
+              />
               <Separator />
               <div className="grid grid-cols-2 gap-2 p-4">
                 <StatCard label="Matches"      value={String(directTransit?.count ?? search.data?.count ?? 0)} isLoading={search.isLoading} />
@@ -371,11 +398,12 @@ export default function App() {
             shortlistIds={shortlistIds}
             selectedBlockId={selectedBlockId}
             onSelectBlock={setSelectedBlockId}
+            nearbyBusRadiusM={nearbyBusRadiusM}
           />
           <HomeOSDetailPanel
             block={selectedBlock}
             profileText={undefined}
-            onClose={() => setSelectedBlockId(null)}
+            onClose={clearSelectedBlock}
           />
         </main>
       </div>
@@ -439,30 +467,36 @@ export default function App() {
           selectedBlockId={selectedBlockId}
           onSelectBlock={handleSelectBlock}
           profileText={activeProfileText}
+          nearbyBusRadiusM={nearbyBusRadiusM}
         />
       </main>
 
       {/* Right: Pipeline or Block Detail */}
       <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card overflow-hidden">
-        {rightPanel === "pipeline" ? (
-          <PipelinePanel
-            activeCase={activeCaseFull}
-            streamingEvents={streamingEvents}
-            onSelectBlock={handleSelectBlock}
-            onSendMessage={handleSendMessage}
-            chatChunks={chatChunks}
-          />
-        ) : (
-          <HomeOSDetailPanel
-            block={selectedBlock}
-            profileText={activeProfileText}
-            onClose={() => {
-              setSelectedBlockId(null);
-              setRightPanel("pipeline");
-            }}
-            onBack={() => setRightPanel("pipeline")}
-          />
-        )}
+        <DisplayPanel
+          nearbyBusRadiusM={nearbyBusRadiusM}
+          onNearbyBusRadiusChange={setNearbyBusRadiusM}
+          hasSelectedProperty={selectedBlock != null}
+        />
+        <Separator />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {rightPanel === "pipeline" ? (
+            <PipelinePanel
+              activeCase={activeCaseFull}
+              streamingEvents={streamingEvents}
+              onSelectBlock={handleSelectBlock}
+              onSendMessage={handleSendMessage}
+              chatChunks={chatChunks}
+            />
+          ) : (
+            <HomeOSDetailPanel
+              block={selectedBlock}
+              profileText={activeProfileText}
+              onClose={clearSelectedBlock}
+              onBack={clearSelectedBlock}
+            />
+          )}
+        </div>
       </aside>
     </div>
   );

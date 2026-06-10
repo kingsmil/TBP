@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import ActiveListingsSection from "./ActiveListingsSection";
 import AgentChip from "./AgentChip";
+import AgentTraceSection from "./AgentTraceSection";
 import { getHomeOSCaseFile, scheduleHomeOSViewing } from "../lib/api";
 import { formatDistance, formatPsf, formatSGD } from "../lib/format";
 import type { BlockSummary, HomeOSCaseFile, HomeOSScheduleViewingResponse, HomeOSShortlistRow } from "../types";
@@ -206,6 +207,8 @@ export default function HomeOSDetailPanel({ block, profileText, caseId, recommen
           )}
         </div>
       )}
+
+      {profileText && caseFile && <AgentTraceSection trace={caseFile.trace} />}
 
       {/* Schedule viewing */}
       {profileText && caseFile && !outbox && (

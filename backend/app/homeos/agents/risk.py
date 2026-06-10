@@ -20,6 +20,7 @@ risk_definition = AgentSpec(
     activating_prefs=[
         PrefDimension(field="risk_tolerance",
                       prompt="Risk tolerance (low = penalise high-risk blocks harder)",
+                      question="How comfortable are you with investment risk? (Low = penalise higher-risk blocks harder)",
                       default="low"),
     ],
 )

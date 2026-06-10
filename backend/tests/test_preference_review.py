@@ -39,6 +39,23 @@ class TestCatalogueDimensions(unittest.TestCase):
         self.assertIsNone(dims["bus_reliance"].query_key)
         self.assertEqual(dims["bus_reliance"].default, "low")
 
+    def test_pref_dimension_has_question_field(self):
+        from app.homeos.framework.spec import PrefDimension
+        # with explicit question
+        d = PrefDimension(field="x", prompt="p", question="Is this right?")
+        self.assertEqual(d.question, "Is this right?")
+        # default is empty string
+        d2 = PrefDimension(field="x", prompt="p")
+        self.assertEqual(d2.question, "")
+
+    def test_all_dims_have_question_strings(self):
+        dims = {d.field: d for d in self.tr.review_dimensions()}
+        for field, dim in dims.items():
+            self.assertNotEqual(
+                dim.question, "",
+                f"PrefDimension '{field}' has no question string — add question= to its declaration",
+            )
+
 
 def _q(field):
     return {"event": "clarifying_question", "field": field, "question": "x"}
@@ -66,38 +83,70 @@ class TestPreferenceReview(unittest.TestCase):
         self.assertIsNone(q)
         self.assertIsNone(field)
 
-    def test_lists_exactly_the_missing_dimensions(self):
+    def test_returns_one_question_with_specific_dim_field(self):
         q, field = self._review({"flat_type": "4 ROOM", "max_price": 400000.0}, {})
-        self.assertEqual(field, "preference_review")
-        self.assertIn("MRT importance", q)
-        self.assertIn("Primary schools", q)
-        self.assertIn("town or estate", q)
-        self.assertIn("Risk tolerance", q)
-        self.assertNotIn("budget ceiling", q)
-        self.assertNotIn("Flat type", q)
-        self.assertIn("3 blocks", q)
-        self.assertIn("proceed", q)
+        # Returns a single question for one specific dim (not the old "preference_review" catch-all)
+        self.assertIsNotNone(q)
+        self.assertIsNotNone(field)
+        self.assertNotEqual(field, "preference_review")
+        self.assertIn(field, {"commute_priority", "school_priority", "town",
+                               "work_locations", "bus_reliance", "risk_tolerance"})
+        # No bullet list
+        self.assertNotIn("•", q)
+        self.assertNotIn("haven't told me", q)
+        self.assertNotIn("Answer any of these", q)
 
-    def test_asked_history_suppresses_dimensions(self):
+    def test_question_uses_dim_question_string(self):
+        # Only risk_tolerance missing
+        query_dict = {
+            "flat_type": "4 ROOM", "max_price": 400000.0, "town": "TAMPINES",
+            "max_mrt_distance_m": 600.0, "min_schools_within_1km": 2,
+        }
+        q, field = self._review(
+            query_dict,
+            {"work_locations": ["Raffles Place"], "bus_reliance": "high"},
+        )
+        self.assertEqual(field, "risk_tolerance")
+        self.assertIn("investment risk", q)
+
+    def test_preamble_uses_count_low(self):
+        query_dict = {
+            "flat_type": "4 ROOM", "max_price": 400000.0, "town": "TAMPINES",
+            "max_mrt_distance_m": 600.0, "min_schools_within_1km": 2,
+        }
+        q, _ = self._review(query_dict, {"work_locations": ["Raffles Place"], "bus_reliance": "high"}, count=3)
+        self.assertIn("3 blocks", q)
+
+    def test_preamble_uses_still_for_high_count(self):
+        query_dict = {
+            "flat_type": "4 ROOM", "max_price": 400000.0, "town": "TAMPINES",
+            "max_mrt_distance_m": 600.0, "min_schools_within_1km": 2,
+        }
+        q, _ = self._review(query_dict, {"work_locations": ["Raffles Place"], "bus_reliance": "high"}, count=15)
+        self.assertIn("15 options", q)
+
+    def test_asked_dims_are_skipped(self):
         pipeline = [_q("commute_priority"), _q("school_priority"), _q("town")]
         q, field = self._review({"flat_type": "4 ROOM", "max_price": 400000.0}, {},
                                 pipeline=pipeline)
-        self.assertEqual(field, "preference_review")
-        self.assertNotIn("MRT importance", q)
-        self.assertNotIn("Primary schools", q)
-        self.assertNotIn("town or estate", q)
-        self.assertIn("Risk tolerance", q)
+        self.assertIsNotNone(q)
+        self.assertNotEqual(field, "preference_review")
+        self.assertIn(field, {"work_locations", "bus_reliance", "risk_tolerance"})
 
-    def test_fires_once_per_case(self):
-        q, field = self._review({"flat_type": "4 ROOM"}, {},
-                                pipeline=[_q("preference_review")])
+    def test_all_dims_asked_returns_none(self):
+        all_fields = ["flat_type", "max_price", "town", "commute_priority",
+                      "school_priority", "risk_tolerance", "work_locations", "bus_reliance"]
+        pipeline = [_q(f) for f in all_fields]
+        q, field = self._review({}, {}, pipeline=pipeline)
         self.assertIsNone(q)
         self.assertIsNone(field)
 
-    def test_question_includes_set_params_summary(self):
-        q, _ = self._review({"flat_type": "4 ROOM", "max_price": 400000.0}, {})
-        self.assertIn("flat_type=4 ROOM", q)
-        self.assertIn("max_price=400000.0", q)
+    def test_query_key_in_dict_skips_dim(self):
+        # max_mrt_distance_m in query_dict → commute_priority skipped
+        q, field = self._review(
+            {"flat_type": "4 ROOM", "max_price": 400000.0, "max_mrt_distance_m": 600.0}, {}
+        )
+        self.assertNotEqual(field, "commute_priority")
 
 
 if __name__ == "__main__":

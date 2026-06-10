@@ -14,6 +14,7 @@ from app.repositories.base import Repository
 from app.homeos import case_store as homeos_case_store
 from app.homeos.mock.agents import (
     mock_chat_answer,
+    mock_lifestyle_narrative,
     mock_location_narrative,
     mock_market_narrative,
     mock_profile_avatar,
@@ -196,6 +197,29 @@ def _extract_tool_calls(result) -> list[dict]:
     return tool_calls
 
 
+# ── Lifestyle helpers ─────────────────────────────────────────────────────────
+
+def _build_lifestyle_inputs(repo: Repository, prefs: dict):
+    """Return (provider, destinations) from prefs work_locations, or (None, None)."""
+    from app.services.commute.models import Destination
+    from app.services.commute.provider import HeuristicCommuteProvider
+    from app.homeos.tools.commute import _resolve_station
+
+    workplaces = prefs.get("work_locations") or []
+    stations = list(repo.mrt_stations(status="operational"))
+    if not stations:
+        return None, None
+
+    provider = HeuristicCommuteProvider(stations)
+    destinations = []
+    for name in workplaces:
+        station = _resolve_station(str(name), stations)
+        if station is not None:
+            destinations.append(Destination(name=station.station_name, point=station.point, visits_per_week=5))
+
+    return provider, destinations or None
+
+
 # ── Deep analysis ─────────────────────────────────────────────────────────────
 
 async def _deep_analysis_stream(
@@ -211,6 +235,7 @@ async def _deep_analysis_stream(
         market_evidence: dict = {}
         location_evidence: dict = {}
         risk_evidence: dict = {}
+        lifestyle_evidence: dict = {}
 
         try:
             mock = is_mock_mode()
@@ -338,12 +363,43 @@ async def _deep_analysis_stream(
             yield {"event": "agent_done", "agent": "risk", "block_id": block_id}
             homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "risk", "block_id": block_id})
 
+            # ── Lifestyle ─────────────────────────────────────────────────────
+            start_evt = {"event": "agent_start", "agent": "lifestyle", "block_id": block_id}
+            yield start_evt
+            homeos_case_store.append_event(case_id, start_evt)
+            if mock:
+                await asyncio.sleep(mock_delay_seconds())
+
+            from app.homeos.sync_agents import lifestyle_analysis_agent
+            provider, destinations = _build_lifestyle_inputs(repo, prefs)
+            if mock:
+                ls_data = {
+                    "lifestyle_score": None,
+                    "commute_band": None,
+                    "couple_fairness": None,
+                    "factors": {},
+                    "watchouts": [],
+                }
+                ls_data["narrative"] = mock_lifestyle_narrative(ls_data)
+                lifestyle_evidence = ls_data
+            else:
+                lifestyle_evidence = await asyncio.to_thread(
+                    lifestyle_analysis_agent, repo, block_id, provider, destinations
+                )
+
+            yield {"event": "agent_data", "agent": "lifestyle", "block_id": block_id, "data": lifestyle_evidence}
+            homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "lifestyle", "block_id": block_id, "data": lifestyle_evidence})
+            yield {"event": "agent_summary", "agent": "lifestyle", "block_id": block_id, "narrative": lifestyle_evidence.get("narrative", "")}
+            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "lifestyle", "block_id": block_id, "narrative": lifestyle_evidence.get("narrative", "")})
+            yield {"event": "agent_done", "agent": "lifestyle", "block_id": block_id}
+            homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "lifestyle", "block_id": block_id})
+
         except Exception as exc:
             logger.warning("[case:%s] agent error for block %d: %s — skipping", case_id[:8], block_id, exc)
             continue
 
         txn_count = market_evidence.get("transaction_count", 0)
-        score, reasons, watchouts = worth_viewing_score(market_evidence, location_evidence, risk_evidence, prefs)
+        score, reasons, watchouts = worth_viewing_score(market_evidence, location_evidence, risk_evidence, prefs, lifestyle_evidence)
         logger.info(
             "[case:%s] SCORED block_id=%d  score=%.1f  verdict=%s  txn=%d",
             case_id[:8], block_id, score, _verdict(score), txn_count,
@@ -358,6 +414,8 @@ async def _deep_analysis_stream(
             "confidence": _confidence(txn_count),
             "top_reasons": reasons,
             "top_watchouts": watchouts,
+            "lifestyle_score": lifestyle_evidence.get("lifestyle_score"),
+            "commute_band": lifestyle_evidence.get("commute_band"),
         })
 
     rows.sort(key=lambda r: (-r["worth_viewing_score"], r["block_id"]))
@@ -491,11 +549,10 @@ def _clarifying_question(
 def _preference_review(
     query_dict: dict, prefs: dict, count: int, pipeline: list[dict] | None = None
 ) -> tuple[str | None, str | None]:
-    """One-shot completeness check before deep analysis.
+    """Ask one missing preference dimension at a time before deep analysis.
 
-    Dimensions come from the tool/agent catalogue (activating_prefs).
-    Search dims are 'done' when their key survived into the executed query
-    (query_dict drops None fields); default-dims use default+never-asked.
+    Replaces the old multi-bullet consolidated gate. Each dimension tracks its
+    own field in the pipeline asked-set, so no "preference_review" sentinel is needed.
     """
     from app.homeos.wiring import tool_repository
 
@@ -504,10 +561,7 @@ def _preference_review(
         for e in (pipeline or [])
         if e.get("event") == "clarifying_question" and e.get("field")
     }
-    if "preference_review" in asked:
-        return (None, None)
 
-    missing: list[str] = []
     for dim in tool_repository.review_dimensions():
         if dim.field in asked:
             continue
@@ -517,21 +571,12 @@ def _preference_review(
         elif dim.default is not None:
             if prefs.get(dim.field, dim.default) != dim.default:
                 continue
-        missing.append(dim.prompt)
 
-    if not missing:
-        return (None, None)
+        q_text = dim.question or dim.prompt
+        preamble = f"I've narrowed it to {count} {'block' if count == 1 else 'blocks'}." if count <= 10 else f"Still {count} options."
+        return (f"{preamble} {q_text}", dim.field)
 
-    set_parts = ", ".join(f"{k}={v}" for k, v in query_dict.items())
-    summary = set_parts if set_parts else "your description"
-    bullets = "\n".join(f"• {m}" for m in missing)
-    question = (
-        f"I've narrowed it to {count} blocks matching {summary}. "
-        "Before I run the deep analysis, you can sharpen it further — you haven't told me:\n"
-        f"{bullets}\n"
-        "Answer any of these, or say 'proceed' and I'll analyse as-is."
-    )
-    return (question, "preference_review")
+    return (None, None)
 
 
 def _build_refinement_prompt(case: dict) -> str:
@@ -923,6 +968,7 @@ async def chat_in_case(case_id: str, message: str) -> AsyncGenerator[str, None]:
 
 def build_homeos_case_file(repo: Repository, profile_text: str, block_id: int) -> dict[str, Any]:
     from app.homeos.sync_agents import (
+        lifestyle_analysis_agent,
         location_graph_agent,
         market_analysis_agent,
         risk_value_agent,
@@ -934,10 +980,13 @@ def build_homeos_case_file(repo: Repository, profile_text: str, block_id: int) -
         raise ValueError("block not found")
 
     avatar = parse_homeos_profile(profile_text)
-    market = market_analysis_agent(repo, block_id, avatar["preferences"])
+    prefs = avatar["preferences"]
+    market = market_analysis_agent(repo, block_id, prefs)
     location = location_graph_agent(repo, block_id)
-    risk = risk_value_agent(repo, block_id, avatar["preferences"])
-    score, reasons, watchouts = worth_viewing_score(market, location, risk, avatar["preferences"])
+    risk = risk_value_agent(repo, block_id, prefs)
+    provider, destinations = _build_lifestyle_inputs(repo, prefs)
+    lifestyle = lifestyle_analysis_agent(repo, block_id, provider, destinations)
+    score, reasons, watchouts = worth_viewing_score(market, location, risk, prefs, lifestyle)
     questions = viewing_questions_agent({"market": market, "location": location, "risk": risk})
 
     return {
@@ -958,6 +1007,7 @@ def build_homeos_case_file(repo: Repository, profile_text: str, block_id: int) -
                 "future_mrt": risk["future_mrt"],
                 "future_supply": risk["future_supply"],
             },
+            "lifestyle": lifestyle,
             "agent_questions": questions,
         },
         "trace": [],

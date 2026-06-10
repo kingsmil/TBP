@@ -568,7 +568,6 @@ def _preference_review(
         if e.get("event") == "clarifying_question" and e.get("field")
     }
 
-    missing: list[str] = []
     for dim in tool_repository.review_dimensions():
         if dim.field in asked:
             continue
@@ -578,34 +577,17 @@ def _preference_review(
         elif dim.default is not None:
             if prefs.get(dim.field, dim.default) != dim.default:
                 continue
-        missing.append(dim.prompt)
 
-    if not missing:
-        return (None, None)
+        result_label = (
+            f"{count} options" if count > _ANALYSIS_THRESHOLD else f"{count} blocks"
+        )
+        question = (
+            f"I've narrowed it to {result_label}. "
+            f"{dim.question} You can also say 'proceed' and I'll analyse as-is."
+        )
+        return (question, dim.field)
 
-    set_parts = ", ".join(f"{k}={v}" for k, v in query_dict.items())
-
-    # Add non-search preferences that were captured
-    extra_prefs = []
-    if prefs.get("work_locations"):
-        work_list = ", ".join(prefs["work_locations"])
-        extra_prefs.append(f"commute to {work_list}")
-    if prefs.get("bus_reliance") == "high":
-        extra_prefs.append("bus-dependent")
-
-    summary_parts = [set_parts] if set_parts else []
-    if extra_prefs:
-        summary_parts.append(" + ".join(extra_prefs))
-    summary = ", ".join(summary_parts) if summary_parts else "your description"
-
-    bullets = "\n".join(f"• {m}" for m in missing)
-    question = (
-        f"I've narrowed it to {count} blocks matching {summary}. "
-        "Before I run the deep analysis, you can sharpen it further — you haven't told me:\n"
-        f"{bullets}\n"
-        "Answer any of these, or say 'proceed' and I'll analyse as-is."
-    )
-    return (question, "preference_review")
+    return (None, None)
 
 
 def _build_refinement_prompt(case: dict) -> str:

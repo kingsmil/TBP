@@ -749,8 +749,9 @@ async def investigate_stream(
     repo: Repository,
     profile_text: str,
     limit: int = 5,
+    user_id: int = 0,
 ) -> AsyncGenerator[dict, None]:
-    case = homeos_case_store.create_case(profile_text)
+    case = homeos_case_store.create_case(profile_text, user_id=user_id)
     case_id = case["case_id"]
     logger.info("[case:%s] START profile=%r", case_id[:8], profile_text[:80])
 

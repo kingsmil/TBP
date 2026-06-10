@@ -82,11 +82,13 @@ class RecommendationRequest(BaseModel):
 class HomeOSInvestigationRequest(BaseModel):
     profile_text: str = Field(..., min_length=10)
     limit: int = Field(5, ge=1, le=20)
+    model: str | None = None
 
 
 class HomeOSCaseFileRequest(BaseModel):
     profile_text: str = Field(..., min_length=10)
     case_id: str | None = None
+    model: str | None = None
 
 
 class HomeOSScheduleViewingRequest(BaseModel):
@@ -95,19 +97,23 @@ class HomeOSScheduleViewingRequest(BaseModel):
     availability: list[str] = Field(..., min_length=1)
     contact_name: str = Field(..., min_length=1)
     contact_note: str | None = None
+    model: str | None = None
 
 
 class HomeOSStreamRequest(BaseModel):
     profile_text: str = Field(..., min_length=10)
     limit: int = Field(5, ge=1, le=20)
+    model: str | None = None
 
 
 class HomeOSChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
+    model: str | None = None
 
 
 class HomeOSRefineRequest(BaseModel):
     message: str = Field(..., min_length=1)
+    model: str | None = None
 
 
 class DreamHomeRequest(BaseModel):

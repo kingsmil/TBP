@@ -8,10 +8,10 @@ _VERCEL_BASE_URL = "https://ai-gateway.vercel.sh/v1"
 _DEFAULT_GATEWAY_MODEL = "openai/gpt-5.4-nano"
 
 
-def get_model() -> Model:
+def get_model(model_override: str | None = None) -> Model:
     gateway_key = os.getenv("AI_GATEWAY_API_KEY", "")
     provider = os.getenv("LLM_PROVIDER", "vercel" if gateway_key else "test")
-    model_name = os.getenv("LLM_MODEL", _DEFAULT_GATEWAY_MODEL)
+    model_name = model_override or os.getenv("LLM_MODEL", _DEFAULT_GATEWAY_MODEL)
 
     if provider in ("vercel",) or (provider == "test" and gateway_key):
         from pydantic_ai.models.openai import OpenAIModel

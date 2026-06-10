@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
 
-from app.homeos.framework.spec import ToolSpec
+from app.homeos.framework.spec import PrefDimension, ToolSpec
 from app.homeos.framework.tool import ToolAdapter
 from app.homeos.mock.tools import mock_proximity_data
 
@@ -36,6 +36,14 @@ class ProximityTool(ToolAdapter):
             "Call when the buyer has commute_priority or school_priority set."
         ),
         output_type=ProximityOutput,
+        activating_prefs=[
+            PrefDimension(field="commute_priority",
+                          prompt="MRT importance (high = within 600 m, medium = within 1.2 km)",
+                          query_key="max_mrt_distance_m"),
+            PrefDimension(field="school_priority",
+                          prompt="Primary schools nearby (high = 2+ within 1 km, medium = 1+)",
+                          query_key="min_schools_within_1km"),
+        ],
     )
 
     def fetch(self, repo: "Repository", block_id: int | None, prefs: dict) -> dict[str, Any]:

@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bus } from "lucide-react";
 import { CircleMarker, MapContainer, Pane, Polyline, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import type { LatLngBoundsExpression } from "leaflet";
+import useSupercluster from "use-supercluster";
 import type { BlockSummary } from "../types";
 import { ACCESS_COLORS, formatDistance, formatPsf, formatSGD, mrtAccessClass } from "../lib/format";
 import { getBusStopReach, getReferenceLayer } from "../lib/api";
@@ -29,6 +30,172 @@ const LEGEND_ITEMS: { label: string; color: string }[] = [
     { label: "AI shortlist", color: SHORTLIST_COLOR },
 
 ];
+
+// ── Clustering ────────────────────────────────────────────────────────────────
+
+type BlockFeature = GeoJSON.Feature<GeoJSON.Point, BlockSummary & { cluster: false }>;
+
+function ClusteredBlocks({
+  blocks,
+  shortlistIds,
+  selectedBlockId,
+  onSelectBlock,
+}: {
+  blocks: BlockSummary[];
+  shortlistIds: Set<number>;
+  selectedBlockId?: number | null;
+  onSelectBlock?: (id: number) => void;
+}) {
+  const map = useMap();
+  const [bounds, setBounds] = useState<[number, number, number, number]>([103.6, 1.13, 104.01, 1.48]);
+  const [zoom, setZoom] = useState(map.getZoom());
+
+  useEffect(() => {
+    const update = () => {
+      const b = map.getBounds();
+      setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+      setZoom(map.getZoom());
+    };
+    update();
+    map.on("moveend zoomend", update);
+    return () => { map.off("moveend zoomend", update); };
+  }, [map]);
+
+  const points = useMemo<BlockFeature[]>(
+    () =>
+      blocks.map((b) => ({
+        type: "Feature",
+        properties: { ...b, cluster: false as const },
+        geometry: { type: "Point", coordinates: [b.lon, b.lat] },
+      })),
+    [blocks],
+  );
+
+  const { clusters, supercluster } = useSupercluster({
+    points,
+    bounds,
+    zoom,
+    options: { radius: 60, maxZoom: 16, minPoints: 3 },
+  });
+
+  return (
+    <>
+      {clusters.map((cluster) => {
+        const [lon, lat] = cluster.geometry.coordinates;
+        const { cluster: isCluster, cluster_id, point_count } = cluster.properties as {
+          cluster: boolean; cluster_id?: number; point_count?: number;
+        };
+
+        // ── Cluster bubble ───────────────────────────────────────────────
+        if (isCluster && cluster_id != null && point_count != null) {
+          const radius = Math.min(14 + Math.sqrt(point_count) * 1.8, 44);
+          return (
+            <CircleMarker
+              key={`cluster-${cluster_id}`}
+              center={[lat, lon]}
+              radius={radius}
+              pathOptions={{
+                color: "#1e40af",
+                fillColor: "#3b82f6",
+                fillOpacity: 0.82,
+                weight: 2,
+              }}
+              eventHandlers={{
+                click: () => {
+                  const expansionZoom = Math.min(
+                    supercluster!.getClusterExpansionZoom(cluster_id),
+                    18,
+                  );
+                  map.flyTo([lat, lon], expansionZoom, { animate: true, duration: 0.5 });
+                },
+              }}
+            >
+              <Tooltip
+                permanent
+                direction="center"
+                className="cluster-label"
+                opacity={1}
+              >
+                <span style={{ fontWeight: 700, fontSize: radius > 24 ? 13 : 11, color: "#fff" }}>
+                  {point_count > 999 ? `${Math.round(point_count / 100) / 10}k` : point_count}
+                </span>
+              </Tooltip>
+            </CircleMarker>
+          );
+        }
+
+        // ── Individual block marker ───────────────────────────────────────
+        const b = cluster.properties as BlockSummary;
+        const isSelected = b.block_id === selectedBlockId;
+        const isShortlisted = shortlistIds.has(b.block_id);
+        const cls = mrtAccessClass(b.nearest_mrt_distance_m);
+        const color = isSelected ? SELECTED_COLOR : isShortlisted ? SHORTLIST_COLOR : ACCESS_COLORS[cls];
+        const radius = isSelected ? 11 : isShortlisted ? 9 : 7;
+
+        return (
+          <CircleMarker
+            key={b.block_id}
+            center={[lat, lon]}
+            radius={radius}
+            pathOptions={{
+              color,
+              fillColor: color,
+              fillOpacity: isSelected ? 0.95 : isShortlisted ? 0.85 : 0.75,
+              weight: isSelected || isShortlisted ? 2.5 : 1.5,
+            }}
+            eventHandlers={{ click: () => onSelectBlock?.(b.block_id) }}
+          >
+            <Popup>
+              <div className="text-sm min-w-[180px]">
+                <div className="font-semibold">Blk {b.block_number} {b.street_name}</div>
+                <div className="text-gray-500 text-xs mb-2">{b.town}</div>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-400">Median price</span>
+                    <span className="font-medium">{formatSGD(b.median_price)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-400">Median PSF</span>
+                    <span className="font-medium">{formatPsf(b.median_psf)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-400">MRT distance</span>
+                    <span className="font-medium">{formatDistance(b.nearest_mrt_distance_m)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-400">Schools (1km)</span>
+                    <span className="font-medium">{b.schools_within_1km ?? "—"}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-400">Transactions</span>
+                    <span className="font-medium">{b.txn_count}</span>
+                  </div>
+                </div>
+                {b.transit_matches?.map((match) => (
+                  <div key={match.destination} className="mt-2 rounded bg-blue-50 p-2 text-xs text-blue-900">
+                    <div className="font-semibold">Direct to {match.destination}</div>
+                    {match.options.map((option) => (
+                      <div key={`${option.mode}-${option.service}`} className="mt-1">
+                        {option.mode.toUpperCase()} {option.service}: walk {Math.ceil(option.origin_walk_m / 80)} min,
+                        then walk {Math.ceil(option.destination_walk_m / 80)} min
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {isShortlisted && (
+                  <div className="mt-2 rounded bg-violet-50 px-2 py-1 text-xs text-violet-700 font-medium">
+                    ✦ HomeOS shortlisted
+                  </div>
+                )}
+                <p className="mt-2 text-xs text-gray-400 italic">Click to open detail panel →</p>
+              </div>
+            </Popup>
+          </CircleMarker>
+        );
+      })}
+    </>
+  );
+}
 
 /** Fits the map to Singapore bounds on mount so there are no empty tile edges. */
 function MapInitializer() {
@@ -88,7 +255,7 @@ export default function MapView({
   selectedBlockId,
   onSelectBlock,
 }: Props) {
-  const shortlistSet = new Set(shortlistIds);
+  const shortlistSet = useMemo(() => new Set(shortlistIds), [shortlistIds]);
   const [busMode, setBusMode] = useState(false);
   const [selectedBusStop, setSelectedBusStop] = useState<string | null>(null);
   const [activeBusService, setActiveBusService] = useState<string | null>(null);
@@ -131,92 +298,14 @@ export default function MapView({
           keepBuffer={4}
         />
 
-        {!busMode && blocks.map((b) => {
-          const isSelected = b.block_id === selectedBlockId;
-          const isShortlisted = shortlistSet.has(b.block_id);
-          const cls = mrtAccessClass(b.nearest_mrt_distance_m);
-
-          let color: string;
-          if (isSelected) {
-            color = SELECTED_COLOR;
-          } else if (isShortlisted) {
-            color = SHORTLIST_COLOR;
-          } else {
-            color = ACCESS_COLORS[cls];
-          }
-
-          const radius = isSelected ? 11 : isShortlisted ? 9 : 7;
-          const weight = isSelected || isShortlisted ? 2.5 : 1.5;
-
-          return (
-            <CircleMarker
-              key={b.block_id}
-              center={[b.lat, b.lon]}
-              radius={radius}
-              pathOptions={{
-                color,
-                fillColor: color,
-                fillOpacity: isSelected ? 0.95 : isShortlisted ? 0.85 : 0.75,
-                weight,
-              }}
-              eventHandlers={{
-                click: () => onSelectBlock?.(b.block_id),
-              }}
-            >
-              <Popup>
-                <div className="text-sm min-w-[180px]">
-                  <div className="font-semibold">
-                    Blk {b.block_number} {b.street_name}
-                  </div>
-                  <div className="text-gray-500 text-xs mb-2">{b.town}</div>
-
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between gap-4">
-                      <span className="text-gray-400">Median price</span>
-                      <span className="font-medium">{formatSGD(b.median_price)}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-gray-400">Median PSF</span>
-                      <span className="font-medium">{formatPsf(b.median_psf)}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-gray-400">MRT distance</span>
-                      <span className="font-medium">{formatDistance(b.nearest_mrt_distance_m)}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-gray-400">Schools (1km)</span>
-                      <span className="font-medium">{b.schools_within_1km ?? "—"}</span>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <span className="text-gray-400">Transactions</span>
-                      <span className="font-medium">{b.txn_count}</span>
-                    </div>
-                  </div>
-
-                  {b.transit_matches?.map((match) => (
-                    <div key={match.destination} className="mt-2 rounded bg-blue-50 p-2 text-xs text-blue-900">
-                      <div className="font-semibold">Direct to {match.destination}</div>
-                      {match.options.map((option) => (
-                        <div key={`${option.mode}-${option.service}`} className="mt-1">
-                          {option.mode.toUpperCase()} {option.service}: walk {Math.ceil(option.origin_walk_m / 80)} min,
-                          then walk {Math.ceil(option.destination_walk_m / 80)} min
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-
-                  {isShortlisted && (
-                    <div className="mt-2 rounded bg-violet-50 px-2 py-1 text-xs text-violet-700 font-medium">
-                      ✦ HomeOS shortlisted
-                    </div>
-                  )}
-
-                  <p className="mt-2 text-xs text-gray-400 italic">Click to open detail panel →</p>
-                </div>
-              </Popup>
-            </CircleMarker>
-          );
-        })}
+        {!busMode && (
+          <ClusteredBlocks
+            blocks={blocks}
+            shortlistIds={shortlistSet}
+            selectedBlockId={selectedBlockId}
+            onSelectBlock={onSelectBlock}
+          />
+        )}
 
         <Pane name="bus-routes" style={{ zIndex: 610 }}>
           {busMode && displayedServices.map((service, index) => {

@@ -2,7 +2,7 @@
 import unittest
 
 from app.core.geo import Point
-from app.core.models import Block, MrtStation
+from app.core.models import Block, BusStop, MrtStation
 from pydantic import BaseModel
 
 from app.homeos.framework.spec import AgentSpec, PrefDimension, ToolSpec
@@ -120,6 +120,45 @@ class TestCommuteTool(unittest.TestCase):
         spec = CommuteTool.spec
         self.assertIs(spec.output_type, CommuteOutput)
         self.assertEqual(spec.activating_prefs[0].field, "work_locations")
+
+
+class TestInMemoryBusStopReach(unittest.TestCase):
+    def setUp(self):
+        self.repo = InMemoryRepository()
+        self.repo.add_bus_stops([
+            BusStop("01001", "Stop A", Point(103.93, 1.32)),
+            BusStop("01002", "Stop B", Point(103.94, 1.32)),
+            BusStop("01003", "Stop C", Point(103.95, 1.33)),
+        ])
+        self.repo.add_bus_routes([
+            {"service_no": "12", "direction": 1, "stop_sequence": 1, "bus_stop_code": "01001"},
+            {"service_no": "12", "direction": 1, "stop_sequence": 2, "bus_stop_code": "01002"},
+            {"service_no": "12", "direction": 1, "stop_sequence": 3, "bus_stop_code": "01003"},
+            {"service_no": "63", "direction": 1, "stop_sequence": 5, "bus_stop_code": "01002"},
+            {"service_no": "63", "direction": 1, "stop_sequence": 6, "bus_stop_code": "01001"},
+        ])
+
+    def test_unknown_stop_returns_none(self):
+        self.assertIsNone(self.repo.bus_stop_reach("99999"))
+
+    def test_reach_shape_matches_postgis(self):
+        reach = self.repo.bus_stop_reach("01001")
+        self.assertEqual(reach["origin"]["bus_stop_code"], "01001")
+        self.assertEqual(reach["service_count"], 2)
+        by_no = {s["service_no"]: s for s in reach["services"]}
+        # service 12 boards at seq 1 and reaches B and C downstream
+        self.assertEqual([s["bus_stop_code"] for s in by_no["12"]["stops"]],
+                         ["01001", "01002", "01003"])
+        # service 63 boards 01001 at seq 6 - nothing downstream
+        self.assertEqual([s["bus_stop_code"] for s in by_no["63"]["stops"]], ["01001"])
+        self.assertEqual(reach["reachable_stop_count"], 2)
+
+    def test_stop_with_no_routes_returns_empty_services(self):
+        repo = InMemoryRepository()
+        repo.add_bus_stops([BusStop("02001", "Lonely", Point(103.9, 1.3))])
+        reach = repo.bus_stop_reach("02001")
+        self.assertEqual(reach["services"], [])
+        self.assertEqual(reach["service_count"], 0)
 
 
 if __name__ == "__main__":

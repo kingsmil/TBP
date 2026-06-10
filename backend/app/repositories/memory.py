@@ -36,6 +36,7 @@ class InMemoryRepository(Repository):
         self._txns_by_block: dict[int, list[Transaction]] = defaultdict(list)
         self._proximity: dict[int, BlockProximity] = {}
         self._active: dict[int, ActiveListing] = {}
+        self._bus_routes: list[dict] = []
 
     # --- bulk loading ---
     def add_planning_areas(self, items: Iterable[PlanningArea]) -> None:
@@ -71,6 +72,11 @@ class InMemoryRepository(Repository):
         for it in items:
             self._proximity[it.block_id] = it
 
+    def add_bus_routes(self, items: Iterable[dict]) -> None:
+        """Route rows: {service_no, direction, stop_sequence, bus_stop_code}.
+        In-memory only; PostGIS routes are ingested by sync_bus_network.py."""
+        self._bus_routes.extend(items)
+
     # --- reads ---
     def planning_areas(self) -> Sequence[PlanningArea]:
         return list(self._planning_areas.values())
@@ -104,6 +110,59 @@ class InMemoryRepository(Repository):
 
     def proximity(self, block_id: int) -> BlockProximity | None:
         return self._proximity.get(block_id)
+
+    def bus_stop_reach(self, bus_stop_code: str) -> dict | None:
+        origin = self._bus.get(bus_stop_code)
+        if origin is None:
+            return None
+
+        boardings: dict[tuple[str, int], int] = {}
+        for r in self._bus_routes:
+            if r["bus_stop_code"] == bus_stop_code:
+                key = (r["service_no"], r["direction"])
+                boardings[key] = min(boardings.get(key, r["stop_sequence"]), r["stop_sequence"])
+
+        services: list[dict] = []
+        reachable: dict[str, dict] = {}
+        for (service_no, direction), seq in sorted(boardings.items()):
+            downstream = sorted(
+                (
+                    r for r in self._bus_routes
+                    if r["service_no"] == service_no
+                    and r["direction"] == direction
+                    and r["stop_sequence"] >= seq
+                ),
+                key=lambda r: r["stop_sequence"],
+            )
+            stops = []
+            for r in downstream:
+                stop_entity = self._bus.get(r["bus_stop_code"])
+                if stop_entity is None:
+                    continue
+                stop = {
+                    "bus_stop_code": stop_entity.bus_stop_code,
+                    "description": stop_entity.description,
+                    "lat": stop_entity.point.lat,
+                    "lon": stop_entity.point.lon,
+                    "stop_sequence": r["stop_sequence"],
+                }
+                stops.append(stop)
+                if stop_entity.bus_stop_code != bus_stop_code:
+                    reachable[stop_entity.bus_stop_code] = stop
+            services.append({"service_no": service_no, "direction": direction, "stops": stops})
+
+        return {
+            "origin": {
+                "bus_stop_code": origin.bus_stop_code,
+                "description": origin.description,
+                "lat": origin.point.lat,
+                "lon": origin.point.lon,
+            },
+            "service_count": len(services),
+            "reachable_stop_count": len(reachable),
+            "services": services,
+            "reachable_stops": list(reachable.values()),
+        }
 
     # --- active listings (HDB Flat Portal) ---
     def add_active_listings(self, items: Iterable[ActiveListing]) -> None:

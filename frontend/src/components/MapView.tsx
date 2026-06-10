@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Bus } from "lucide-react";
-import { Circle, CircleMarker, MapContainer, Pane, Polyline, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
-import type { LatLngBoundsExpression } from "leaflet";
+import { Circle, CircleMarker, MapContainer, Marker, Pane, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { divIcon, type LatLngBoundsExpression } from "leaflet";
 import useSupercluster from "use-supercluster";
 import type { BlockSummary } from "../types";
 import { ACCESS_COLORS, formatDistance, formatPsf, formatSGD, mrtAccessClass } from "../lib/format";
@@ -210,32 +210,21 @@ function ClusteredBlocks({
 // Centre of Singapore's main HDB belt
 const SG_CENTER: [number, number] = [1.352, 103.820];
 
-/** Pick an initial zoom that keeps HDB clusters visible regardless of container size. */
-function adaptiveZoom(containerWidth: number, containerHeight: number): number {
-  const minDim = Math.min(containerWidth, containerHeight);
-  if (minDim >= 700) return 12;
-  if (minDim >= 500) return 11;
-  return 11;
+export interface MapViewState {
+  center: [number, number];
+  zoom: number;
 }
 
-/** Syncs Leaflet size and sets an adaptive initial view. Handles sidebar open/close. */
+/** Keeps Leaflet sized correctly when surrounding panels open or close. */
 function MapResizer() {
   const map = useMap();
   useLayoutEffect(() => {
     const container = map.getContainer();
     let frame = 0;
-    let isFirstFit = true;
-
     const syncSize = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         map.invalidateSize({ animate: false, pan: false });
-        if (isFirstFit) {
-          const { clientWidth, clientHeight } = container;
-          const z = adaptiveZoom(clientWidth, clientHeight);
-          map.setView(SG_CENTER, z, { animate: false });
-          isFirstFit = false;
-        }
       });
     };
     const handleWindowResize = () => syncSize();
@@ -278,6 +267,94 @@ function BusRouteFitter({ reach, activeService }: {
   return null;
 }
 
+function MapViewTracker({ onViewChange }: { onViewChange?: (view: MapViewState) => void }) {
+  useMapEvents({
+    moveend(event) {
+      const center = event.target.getCenter();
+      onViewChange?.({ center: [center.lat, center.lng], zoom: event.target.getZoom() });
+    },
+  });
+  return null;
+}
+
+function RecommendationFitter({
+  blocks,
+  rankedIds,
+  enabled,
+  onFitted,
+}: {
+  blocks: BlockSummary[];
+  rankedIds: number[];
+  enabled: boolean;
+  onFitted?: () => void;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (!enabled || rankedIds.length === 0) return;
+    const ids = new Set(rankedIds);
+    const points = blocks
+      .filter((block) => ids.has(block.block_id))
+      .map((block) => [block.lat, block.lon] as [number, number]);
+    if (points.length === 1) map.flyTo(points[0], 15, { animate: true, duration: 0.5 });
+    if (points.length > 1) map.fitBounds(points, { padding: [60, 60], maxZoom: 15, animate: true });
+    if (points.length > 0) onFitted?.();
+  }, [blocks, enabled, map, onFitted, rankedIds]);
+  return null;
+}
+
+function RecommendedBlocks({
+  blocks,
+  rankedIds,
+  selectedBlockId,
+  onSelectBlock,
+}: {
+  blocks: BlockSummary[];
+  rankedIds: number[];
+  selectedBlockId?: number | null;
+  onSelectBlock?: (id: number) => void;
+}) {
+  const rankById = useMemo(
+    () => new Map(rankedIds.map((blockId, index) => [blockId, index + 1])),
+    [rankedIds],
+  );
+  const recommendations = useMemo(
+    () => blocks.filter((block) => rankById.has(block.block_id)),
+    [blocks, rankById],
+  );
+
+  return (
+    <Pane name="recommendations" style={{ zIndex: 600 }}>
+      {recommendations.map((block) => {
+        const rank = rankById.get(block.block_id)!;
+        const isSelected = block.block_id === selectedBlockId;
+        const icon = divIcon({
+          className: "recommendation-marker-wrapper",
+          html: `<div class="recommendation-marker${isSelected ? " recommendation-marker-selected" : ""}">${rank}</div>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+          popupAnchor: [0, -16],
+        });
+        return (
+          <Marker
+            key={block.block_id}
+            position={[block.lat, block.lon]}
+            pane="recommendations"
+            icon={icon}
+            eventHandlers={{ click: () => onSelectBlock?.(block.block_id) }}
+          >
+            <Popup>
+              <div className="min-w-[180px] text-sm">
+                <div className="font-semibold">#{rank} Blk {block.block_number} {block.street_name}</div>
+                <div className="text-xs text-gray-500">{block.town}</div>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </Pane>
+  );
+}
+
 function NearbyBusRouteFitter({
   selectedBlock,
   routes,
@@ -288,14 +365,20 @@ function NearbyBusRouteFitter({
   loading: boolean;
 }) {
   const map = useMap();
+  const fittedBlockId = useRef<number | null>(null);
   useEffect(() => {
-    if (!selectedBlock || loading || routes.length === 0) return;
+    if (!selectedBlock) {
+      fittedBlockId.current = null;
+      return;
+    }
+    if (loading || routes.length === 0 || fittedBlockId.current === selectedBlock.block_id) return;
     const points = [
       [selectedBlock.lat, selectedBlock.lon] as [number, number],
       ...routes.flatMap((service) =>
         service.stops.map((stop) => [stop.lat, stop.lon] as [number, number]),
       ),
     ];
+    fittedBlockId.current = selectedBlock.block_id;
     map.fitBounds(points, { padding: [45, 45], maxZoom: 14, animate: true });
   }, [loading, map, routes, selectedBlock]);
   return null;
@@ -332,6 +415,11 @@ interface Props {
   onSelectBlock?: (blockId: number) => void;
   profileText?: string; // reserved for future case-file integration
   nearbyBusRadiusM?: number;
+  recommendationsOnly?: boolean;
+  initialView?: MapViewState;
+  onViewChange?: (view: MapViewState) => void;
+  fitRecommendations?: boolean;
+  onRecommendationsFitted?: () => void;
 }
 
 export default function MapView({
@@ -340,6 +428,11 @@ export default function MapView({
   selectedBlockId,
   onSelectBlock,
   nearbyBusRadiusM = 0,
+  recommendationsOnly = false,
+  initialView = { center: SG_CENTER, zoom: 12 },
+  onViewChange,
+  fitRecommendations = false,
+  onRecommendationsFitted,
 }: Props) {
   const showNearbyBusRoutes = nearbyBusRadiusM > 0;
   const shortlistSet = useMemo(() => new Set(shortlistIds), [shortlistIds]);
@@ -455,8 +548,8 @@ export default function MapView({
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#aacbdf]">
       <MapContainer
-        center={SG_CENTER}
-        zoom={12}
+        center={initialView.center}
+        zoom={initialView.zoom}
         minZoom={11}
         maxZoom={18}
         maxBounds={SG_BOUNDS}
@@ -465,6 +558,13 @@ export default function MapView({
         className="h-full w-full"
       >
         <MapResizer />
+        <MapViewTracker onViewChange={onViewChange} />
+        <RecommendationFitter
+          blocks={blocks}
+          rankedIds={shortlistIds}
+          enabled={fitRecommendations}
+          onFitted={onRecommendationsFitted}
+        />
         <SelectionViewRestorer selectedBlock={selectedBlock} />
         <BusRouteFitter reach={busReach.data} activeService={activeBusService} />
         {!busMode && showNearbyBusRoutes && (
@@ -483,10 +583,19 @@ export default function MapView({
           keepBuffer={4}
         />
 
-        {!busMode && !nearbyRouteFocus && (
+        {!busMode && !nearbyRouteFocus && !recommendationsOnly && (
           <ClusteredBlocks
             blocks={blocks}
             shortlistIds={shortlistSet}
+            selectedBlockId={selectedBlockId}
+            onSelectBlock={onSelectBlock}
+          />
+        )}
+
+        {!busMode && !nearbyRouteFocus && recommendationsOnly && shortlistIds.length > 0 && (
+          <RecommendedBlocks
+            blocks={blocks}
+            rankedIds={shortlistIds}
             selectedBlockId={selectedBlockId}
             onSelectBlock={onSelectBlock}
           />

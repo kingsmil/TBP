@@ -19,6 +19,7 @@ class PrefDimension:
 
     field: str
     prompt: str
+    question: str = ""
     query_key: str | None = None
     default: Any | None = None
 

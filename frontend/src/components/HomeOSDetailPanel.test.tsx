@@ -12,7 +12,7 @@ vi.mock("../lib/api", () => ({
     verdict: "Worth viewing",
     worth_viewing_score: 82,
     confidence: "high",
-    top_reasons: ["Recent comparable sales support the budget."],
+    top_reasons: [{ text: "Recent comparable sales support the budget.", source: "market" }],
     top_watchouts: [],
     evidence: {
       recent_sales: {
@@ -75,7 +75,7 @@ describe("HomeOSDetailPanel", () => {
           verdict: "Worth viewing",
           worth_viewing_score: 91.5,
           confidence: "high",
-          top_reasons: ["Matches the refined requirements."],
+          top_reasons: [{ text: "Matches the refined requirements.", source: "market" }],
           top_watchouts: [],
         }}
         onClose={vi.fn()}

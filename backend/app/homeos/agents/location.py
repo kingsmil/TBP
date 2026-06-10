@@ -19,5 +19,5 @@ location_definition = AgentSpec(
     ),
     output_type=LocationEvidence,
     tool_names=["proximity", "commute", "bus_routes"],
-    prefetch=[],
+    prefetch=["proximity", "commute", "bus_routes"],
 )

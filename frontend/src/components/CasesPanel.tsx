@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Loader2, Plus, Send } from "lucide-react";
+import { ChevronDown, Loader2, LogIn, Plus, Send } from "lucide-react";
 import type { AgentEvent, HomeOSCase, HomeOSCaseSummary } from "../types";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   type?: "profile" | "search" | "question" | "result" | "chat";
+  field?: string;
 }
 
 function buildChatHistory(
@@ -48,7 +49,7 @@ function buildChatHistory(
         type: "search",
       });
     } else if (e.event === "clarifying_question" && e.question) {
-      messages.push({ role: "assistant", content: e.question, type: "question" });
+      messages.push({ role: "assistant", content: e.question, type: "question", field: e.field });
       // Interleave the user's answer immediately after the question
       if (convIdx < conversation.length && conversation[convIdx].role === "user") {
         messages.push({ role: "user", content: conversation[convIdx].content, type: "chat" });
@@ -130,11 +131,42 @@ interface Props {
   streamingEvents: AgentEvent[];
   chatChunks: string;
   isStreaming: boolean;
+  isAuthenticated: boolean;
   onNewCase: (profileText: string) => void;
   onSelectCase: (caseId: string) => void;
   onSendMessage: (message: string) => void;
   onRefine: (message: string) => void;
+  onSignInRequired: () => void;
 }
+
+const CHIP_OPTIONS: Record<string, { label: string; value: string }[]> = {
+  commute_priority: [
+    { label: "High (<600 m)", value: "high" },
+    { label: "Medium (<1.2 km)", value: "medium" },
+    { label: "Not important", value: "not important" },
+  ],
+  school_priority: [
+    { label: "2+ schools", value: "high" },
+    { label: "1+ school", value: "medium" },
+    { label: "Not needed", value: "not important" },
+  ],
+  risk_tolerance: [
+    { label: "Low risk", value: "low" },
+    { label: "Medium", value: "medium" },
+    { label: "High risk ok", value: "high" },
+  ],
+  bus_reliance: [
+    { label: "Yes, no car", value: "high" },
+    { label: "Have a car", value: "low" },
+  ],
+  flat_type: [
+    { label: "2-room", value: "2 room" },
+    { label: "3-room", value: "3 room" },
+    { label: "4-room", value: "4 room" },
+    { label: "5-room", value: "5 room" },
+    { label: "Executive", value: "executive" },
+  ],
+};
 
 const DEFAULT_PROFILE =
   "Family looking for 4 room under 800k near primary schools and MRT.";
@@ -146,10 +178,12 @@ export default function CasesPanel({
   streamingEvents,
   chatChunks,
   isStreaming,
+  isAuthenticated,
   onNewCase,
   onSelectCase,
   onSendMessage,
   onRefine,
+  onSignInRequired,
 }: Props) {
   const [input, setInput] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -179,6 +213,11 @@ export default function CasesPanel({
           chatChunks,
         )
       : [];
+
+  const lastQuestion = isRefining
+    ? [...chatHistory].reverse().find((m) => m.type === "question")
+    : null;
+  const activeChips = lastQuestion?.field ? (CHIP_OPTIONS[lastQuestion.field] ?? null) : null;
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -283,6 +322,20 @@ export default function CasesPanel({
               // biome-ignore lint/suspicious/noArrayIndexKey: stable chat order
               <ChatBubble key={i} msg={msg} />
             ))}
+            {activeChips && (
+              <div className="flex flex-wrap gap-1.5 px-1 pb-1">
+                {activeChips.map((chip) => (
+                  <button
+                    key={chip.value}
+                    type="button"
+                    onClick={() => { onRefine(chip.value); }}
+                    className="rounded-full border border-border bg-background px-3 py-1 text-xs hover:bg-muted"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {isRunning && (
               <div className="flex justify-start">
                 <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-muted px-3 py-2">
@@ -297,34 +350,47 @@ export default function CasesPanel({
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="flex items-end gap-2 border-t border-border p-3">
-        <textarea
-          rows={1}
-          className="flex-1 resize-none overflow-hidden rounded-md border border-input bg-background px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-          placeholder={placeholder}
-          value={input}
-          disabled={isRunning}
-          onChange={(e) => {
-            setInput(e.target.value);
-            e.target.style.height = "auto";
-            e.target.style.height = `${e.target.scrollHeight}px`;
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit(e as unknown as React.FormEvent);
-            }
-          }}
-        />
-        <button
-          type="submit"
-          aria-label="Send message"
-          disabled={isRunning || !input.trim()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </form>
+      {!isAuthenticated ? (
+        <div className="border-t border-border p-3">
+          <button
+            type="button"
+            onClick={onSignInRequired}
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border bg-muted/50 px-3 py-3 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground hover:border-primary/40"
+          >
+            <LogIn className="h-3.5 w-3.5 shrink-0" />
+            Sign in to use AI mode
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex items-end gap-2 border-t border-border p-3">
+          <textarea
+            rows={1}
+            className="flex-1 resize-none overflow-hidden rounded-md border border-input bg-background px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+            placeholder={placeholder}
+            value={input}
+            disabled={isRunning}
+            onChange={(e) => {
+              setInput(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = `${e.target.scrollHeight}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e as unknown as React.FormEvent);
+              }
+            }}
+          />
+          <button
+            type="submit"
+            aria-label="Send message"
+            disabled={isRunning || !input.trim()}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </form>
+      )}
     </div>
   );
 }

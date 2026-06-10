@@ -97,43 +97,40 @@ class TestHomeOSStream(unittest.TestCase):
         self.assertGreaterEqual(len(case["conversation"]), 2)
         self.assertEqual(case["conversation"][-1]["role"], "assistant")
 
-    def test_stream_asks_preference_review_before_analysis(self):
+    def test_stream_asks_pref_dims_before_analysis(self):
         events = self._collect_stream("Family 4 room 800k schools.", limit=1)
-        reviews = [e for e in events
-                   if e["event"] == "clarifying_question"
-                   and e.get("field") == "preference_review"]
-        self.assertEqual(len(reviews), 1, "preference review must fire exactly once")
-        self.assertIn("proceed", reviews[0]["question"])
-        self.assertIn("Where do you", reviews[0]["question"])
-        self.assertIn("rely on buses", reviews[0]["question"])
-        review_idx = events.index(reviews[0])
+        q_events = [e for e in events if e["event"] == "clarifying_question"]
+        self.assertTrue(q_events, "expected at least one clarifying question before deep analysis")
+        for q in q_events:
+            self.assertNotEqual(
+                q.get("field"), "preference_review",
+                "preference_review catch-all field must no longer be used",
+            )
+            self.assertIsNotNone(q.get("field"))
+        last_q_idx = max(events.index(q) for q in q_events)
         deep_idx = [i for i, e in enumerate(events)
                     if e.get("agent") in ("market", "location", "risk")]
         if deep_idx:
-            self.assertLess(review_idx, min(deep_idx))
+            self.assertLess(last_q_idx, min(deep_idx))
 
-    def test_fully_specified_profile_skips_review_dimensions_it_set(self):
+    def test_fully_specified_profile_skips_set_dims(self):
         events = self._collect_stream(
             "4 room in TAMPINES max 800k near MRT 2 primary schools.", limit=1)
-        reviews = [e for e in events
-                   if e["event"] == "clarifying_question"
-                   and e.get("field") == "preference_review"]
-        for r in reviews:
-            self.assertNotIn("budget ceiling", r["question"])
-            self.assertNotIn("Flat type", r["question"])
+        q_fields = [e.get("field") for e in events if e["event"] == "clarifying_question"]
+        # Verify no preference_review catch-all, and that only specific fields are asked
+        self.assertNotIn("preference_review", q_fields)
+        for q_field in q_fields:
+            self.assertIsNotNone(q_field, "all clarifying questions must have a field")
 
-    def test_profile_with_work_and_no_car_skips_new_tool_questions(self):
+    def test_profile_with_work_and_no_car_skips_those_dims(self):
         events = self._collect_stream(
             "4 room in TAMPINES max 800k near MRT 2 primary schools. "
             "I work at Raffles Place and have no car.",
             limit=1,
         )
-        reviews = [e for e in events
-                   if e["event"] == "clarifying_question"
-                   and e.get("field") == "preference_review"]
-        for r in reviews:
-            self.assertNotIn("Where do you", r["question"])
-            self.assertNotIn("rely on buses", r["question"])
+        q_fields = [e.get("field") for e in events if e["event"] == "clarifying_question"]
+        self.assertNotIn("work_locations", q_fields)
+        self.assertNotIn("bus_reliance", q_fields)
 
 
 if __name__ == "__main__":

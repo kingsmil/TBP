@@ -16,10 +16,11 @@ risk_definition = AgentSpec(
     ),
     output_type=RiskEvidence,
     tool_names=["appreciation", "future_dev", "accessibility"],
-    prefetch=[],
+    prefetch=["appreciation", "future_dev", "accessibility"],
     activating_prefs=[
         PrefDimension(field="risk_tolerance",
                       prompt="Risk tolerance (low = penalise high-risk blocks harder)",
+                      question="How comfortable are you with investment risk? (Low = penalise higher-risk blocks harder)",
                       default="low"),
     ],
 )

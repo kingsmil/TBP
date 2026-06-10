@@ -236,16 +236,16 @@ class TestLongCommuteWatchout(unittest.TestCase):
 
     def test_watchout_added_when_worst_over_60(self):
         _, _, watchouts = worth_viewing_score(_MARKET, self._location(75.0), _RISK, {})
-        self.assertTrue(any("Long commute to Raffles Place" in w for w in watchouts))
+        self.assertTrue(any("Long commute to Raffles Place" in w["text"] for w in watchouts))
 
     def test_no_watchout_at_or_under_60(self):
         _, _, watchouts = worth_viewing_score(_MARKET, self._location(60.0), _RISK, {})
-        self.assertFalse(any("Long commute" in w for w in watchouts))
+        self.assertFalse(any("Long commute" in w["text"] for w in watchouts))
 
     def test_no_watchout_when_unavailable(self):
         _, _, watchouts = worth_viewing_score(
             _MARKET, self._location(75.0, available=False), _RISK, {})
-        self.assertFalse(any("Long commute" in w for w in watchouts))
+        self.assertFalse(any("Long commute" in w["text"] for w in watchouts))
 
     def test_score_unchanged_by_commute(self):
         base, _, _ = worth_viewing_score(_MARKET, {"connections": []}, _RISK, {})

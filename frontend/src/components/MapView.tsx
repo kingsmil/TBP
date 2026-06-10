@@ -23,6 +23,14 @@ const SG_BOUNDS: LatLngBoundsExpression = [
 const SHORTLIST_COLOR = "#7c3aed";
 const SELECTED_COLOR = "#dc2626";
 const BUS_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#0891b2"];
+const MRT_COLORS: Record<string, string> = {
+  EW: "#009645",
+  NS: "#d42e12",
+  NE: "#9900aa",
+  CC: "#fa9e0d",
+  DT: "#005ec4",
+  TE: "#9d5b25",
+};
 
 const LEGEND_ITEMS: { label: string; color: string }[] = [
   { label: "≤400m to MRT", color: ACCESS_COLORS.good },
@@ -323,6 +331,11 @@ export default function MapView({
     queryFn: () => getReferenceLayer("bus_stops"),
     enabled: busMode || (showNearbyBusRoutes && selectedBlock != null),
   });
+  const mrtStations = useQuery({
+    queryKey: ["reference", "mrt"],
+    queryFn: () => getReferenceLayer("mrt"),
+    enabled: showNearbyBusRoutes && selectedBlock != null,
+  });
   const busReach = useQuery({
     queryKey: ["bus-reach", selectedBusStop],
     queryFn: () => getBusStopReach(selectedBusStop!),
@@ -347,6 +360,41 @@ export default function MapView({
       }];
     }).filter((stop) => stop.code).sort((a, b) => a.distance - b.distance);
   }, [busStops.data, nearbyBusRadiusM, selectedBlock, showNearbyBusRoutes]);
+  const mrtLines = useMemo(() => {
+    const lines = new Map<string, {
+      stationId: number;
+      name: string;
+      line: string;
+      lat: number;
+      lon: number;
+    }[]>();
+    for (const feature of mrtStations.data?.features ?? []) {
+      const stationId = Number(feature.properties.station_id);
+      const line = String(feature.properties.line_name ?? "");
+      if (!Number.isFinite(stationId) || !line) continue;
+      const [lon, lat] = feature.geometry.coordinates;
+      const stations = lines.get(line) ?? [];
+      stations.push({ stationId, name: String(feature.properties.name ?? "MRT station"), line, lat, lon });
+      lines.set(line, stations);
+    }
+    for (const stations of lines.values()) {
+      stations.sort((a, b) => a.stationId - b.stationId);
+    }
+    return lines;
+  }, [mrtStations.data]);
+  const nearbyMrtStations = useMemo(() => {
+    if (!showNearbyBusRoutes || !selectedBlock) return [];
+    return [...mrtLines.values()].flatMap((stations) => stations).filter((station) =>
+      distanceMetres(selectedBlock, station) <= nearbyBusRadiusM
+    ).map((station) => ({
+      ...station,
+      distance: distanceMetres(selectedBlock, station),
+    })).sort((a, b) => a.distance - b.distance);
+  }, [mrtLines, nearbyBusRadiusM, selectedBlock, showNearbyBusRoutes]);
+  const nearbyMrtLineNames = useMemo(
+    () => [...new Set(nearbyMrtStations.map((station) => station.line))],
+    [nearbyMrtStations],
+  );
   const nearbyReachQueries = useQueries({
     queries: nearbyStops.map((stop) => ({
       queryKey: ["bus-reach", stop.code],
@@ -451,6 +499,25 @@ export default function MapView({
               </Fragment>
             );
           })}
+          {nearbyRouteFocus && nearbyMrtLineNames.map((line) => {
+            const stations = mrtLines.get(line) ?? [];
+            const positions = stations.map((station) => [station.lat, station.lon] as [number, number]);
+            const color = MRT_COLORS[line] ?? "#334155";
+            return (
+              <Fragment key={`nearby-mrt-${line}`}>
+                <Polyline
+                  positions={positions}
+                  interactive={false}
+                  pathOptions={{ pane: "nearby-bus-routes", color: "#ffffff", weight: 9, opacity: 0.8 }}
+                />
+                <Polyline
+                  positions={positions}
+                  interactive={false}
+                  pathOptions={{ pane: "nearby-bus-routes", color, weight: 6, opacity: 0.95 }}
+                />
+              </Fragment>
+            );
+          })}
         </Pane>
         )}
 
@@ -489,6 +556,21 @@ export default function MapView({
                 radius={8}
                 interactive={false}
                 pathOptions={{ pane: "nearby-bus-origins", color: "#1e3a8a", fillColor: "#facc15", fillOpacity: 0.95, weight: 2 }}
+              />
+            ))}
+            {nearbyMrtStations.map((station) => (
+              <CircleMarker
+                key={`nearby-mrt-origin-${station.stationId}`}
+                center={[station.lat, station.lon]}
+                radius={10}
+                interactive={false}
+                pathOptions={{
+                  pane: "nearby-bus-origins",
+                  color: MRT_COLORS[station.line] ?? "#334155",
+                  fillColor: "#ffffff",
+                  fillOpacity: 1,
+                  weight: 4,
+                }}
               />
             ))}
           </Pane>
@@ -623,17 +705,18 @@ export default function MapView({
 
       {!busMode && showNearbyBusRoutes && (
         <div className="absolute right-3 top-14 z-[1000] w-72 rounded-xl border border-border bg-card/95 p-3 shadow-md backdrop-blur-sm">
-          {!selectedBlock && <p className="text-sm">Select a property to show bus routes from stops within {nearbyBusRadiusM} m.</p>}
-          {selectedBlock && busStops.isLoading && <p className="text-sm">Finding nearby bus stops...</p>}
-          {selectedBlock && busStops.data && nearbyStops.length === 0 && (
-            <p className="text-sm">No bus stops were found within {nearbyBusRadiusM} m of this property.</p>
+          {!selectedBlock && <p className="text-sm">Select a property to show transit routes within {nearbyBusRadiusM} m.</p>}
+          {selectedBlock && (busStops.isLoading || mrtStations.isLoading) && <p className="text-sm">Finding nearby transit...</p>}
+          {selectedBlock && busStops.data && mrtStations.data && nearbyStops.length === 0 && nearbyMrtStations.length === 0 && (
+            <p className="text-sm">No bus stops or MRT stations were found within {nearbyBusRadiusM} m of this property.</p>
           )}
-          {selectedBlock && nearbyStops.length > 0 && (
+          {selectedBlock && (nearbyStops.length > 0 || nearbyMrtStations.length > 0) && (
             <>
-              <p className="font-semibold">Bus routes within {nearbyBusRadiusM} m</p>
+              <p className="font-semibold">Transit within {nearbyBusRadiusM} m</p>
               <p className="mt-1 text-sm">
                 {nearbyStops.length} nearby {nearbyStops.length === 1 ? "stop" : "stops"}
-                {nearbyRoutes.length > 0 ? `, ${nearbyRoutes.length} routes` : ""}.
+                {nearbyRoutes.length > 0 ? `, ${nearbyRoutes.length} bus routes` : ""}
+                {nearbyMrtStations.length > 0 ? `, ${nearbyMrtStations.length} MRT station records` : ""}.
               </p>
               {nearbyRoutesLoading && <p className="mt-1 text-xs text-muted-foreground">Loading route lines...</p>}
               {nearbyRoutesError && <p className="mt-1 text-xs text-destructive">Some route data could not be loaded.</p>}
@@ -641,6 +724,11 @@ export default function MapView({
                 {nearbyStops.map((stop) => (
                   <p key={`nearby-summary-${stop.code}`} className="text-xs text-muted-foreground">
                     {stop.code}: {stop.description} ({Math.round(stop.distance)} m)
+                  </p>
+                ))}
+                {nearbyMrtStations.map((station) => (
+                  <p key={`nearby-mrt-summary-${station.stationId}`} className="text-xs font-medium" style={{ color: MRT_COLORS[station.line] ?? "#334155" }}>
+                    {station.line}: {station.name} ({Math.round(station.distance)} m)
                   </p>
                 ))}
               </div>

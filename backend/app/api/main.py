@@ -496,7 +496,8 @@ def reference_layer(layer: str, repo: Repository = Depends(get_repository)):
     if layer == "mrt":
         items = [feat(m.point.lon, m.point.lat,
                       {"station_id": m.station_id, "name": m.station_name,
-                       "status": m.status}) for m in repo.mrt_stations("operational")]
+                       "line_name": m.line_name, "status": m.status})
+                 for m in repo.mrt_stations("operational")]
     elif layer == "future_mrt":
         items = [feat(m.point.lon, m.point.lat,
                       {"station_id": m.station_id, "name": m.station_name,

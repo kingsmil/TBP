@@ -1,4 +1,4 @@
-import { BusFront } from "lucide-react";
+import { TrainFront } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -21,13 +21,13 @@ export default function DisplayPanel({
       </div>
       <div className="space-y-3 rounded-lg border border-border p-3">
         <div className="flex items-start gap-3">
-          <BusFront className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+          <TrainFront className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
           <span>
-            <span className="block text-sm font-medium">Nearby bus route radius</span>
+            <span className="block text-sm font-medium">Nearby transit route radius</span>
             <span className="mt-0.5 block text-xs text-muted-foreground">
             {hasSelectedProperty
-                ? `Show routes from every bus stop within ${nearbyBusRadiusM} m of the selected property.`
-              : "Select a property on the map to display its nearby bus routes."}
+                ? `Show bus and MRT routes within ${nearbyBusRadiusM} m of the selected property.`
+              : "Select a property on the map to display its nearby transit routes."}
             </span>
           </span>
         </div>

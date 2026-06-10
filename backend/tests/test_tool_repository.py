@@ -322,5 +322,64 @@ class TestWiring(unittest.TestCase):
         self.assertEqual(prefetched, {})
 
 
+class TestPrefDimensions(unittest.TestCase):
+    def test_pref_dimension_fields(self):
+        from app.homeos.framework.spec import PrefDimension
+        d = PrefDimension(field="max_price", prompt="Your budget ceiling",
+                          query_key="max_price")
+        self.assertEqual(d.field, "max_price")
+        self.assertEqual(d.query_key, "max_price")
+        self.assertIsNone(d.default)
+
+    def test_specs_default_to_no_activating_prefs(self):
+        from app.homeos.framework.spec import ToolSpec, AgentSpec
+
+        class Out(BaseModel):
+            x: int
+
+        t = ToolSpec(name="t", description="d", use_case="u", output_type=Out)
+        a = AgentSpec(name="a", description="d", system_prompt="s", output_type=Out)
+        self.assertEqual(t.activating_prefs, [])
+        self.assertEqual(a.activating_prefs, [])
+
+    def test_review_dimensions_unions_and_dedups_in_registration_order(self):
+        from app.homeos.tool_repository import ToolRepository
+        from app.homeos.framework.spec import AgentSpec, PrefDimension, ToolSpec
+        from app.homeos.framework.tool import ToolAdapter
+
+        class Out(BaseModel):
+            x: int
+
+        def make_tool(tool_name, prefs):
+            class T(ToolAdapter):
+                spec = ToolSpec(name=tool_name, description="d", use_case="u",
+                                output_type=Out, activating_prefs=prefs)
+                def fetch(self, repo, block_id, prefs):
+                    return {}
+                def as_tool(self, repo, block_id, prefs):
+                    def f():
+                        return {}
+                    return f
+            return T()
+
+        tr = ToolRepository()
+        tr.register_tool(make_tool("alpha", [
+            PrefDimension(field="max_price", prompt="first-wins", query_key="max_price"),
+            PrefDimension(field="town", prompt="town?", query_key="town"),
+        ]))
+        tr.register_tool(make_tool("beta", [
+            PrefDimension(field="max_price", prompt="duplicate-loses", query_key="max_price"),
+        ]))
+        tr.register_agent(AgentSpec(
+            name="agent1", description="d", system_prompt="s", output_type=Out,
+            activating_prefs=[PrefDimension(field="risk_tolerance",
+                                            prompt="risk?", default="low")],
+        ))
+        dims = tr.review_dimensions()
+        self.assertEqual([d.field for d in dims],
+                         ["max_price", "town", "risk_tolerance"])
+        self.assertEqual(dims[0].prompt, "first-wins")
+
+
 if __name__ == "__main__":
     unittest.main()

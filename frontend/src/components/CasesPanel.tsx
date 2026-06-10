@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Loader2, Plus, Send } from "lucide-react";
+import { ChevronDown, Loader2, LogIn, Plus, Send } from "lucide-react";
 import type { AgentEvent, HomeOSCase, HomeOSCaseSummary } from "../types";
 
 interface ChatMessage {
@@ -130,10 +130,12 @@ interface Props {
   streamingEvents: AgentEvent[];
   chatChunks: string;
   isStreaming: boolean;
+  isAuthenticated: boolean;
   onNewCase: (profileText: string) => void;
   onSelectCase: (caseId: string) => void;
   onSendMessage: (message: string) => void;
   onRefine: (message: string) => void;
+  onSignInRequired: () => void;
 }
 
 const DEFAULT_PROFILE =
@@ -146,10 +148,12 @@ export default function CasesPanel({
   streamingEvents,
   chatChunks,
   isStreaming,
+  isAuthenticated,
   onNewCase,
   onSelectCase,
   onSendMessage,
   onRefine,
+  onSignInRequired,
 }: Props) {
   const [input, setInput] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -297,34 +301,47 @@ export default function CasesPanel({
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="flex items-end gap-2 border-t border-border p-3">
-        <textarea
-          rows={1}
-          className="flex-1 resize-none overflow-hidden rounded-md border border-input bg-background px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-          placeholder={placeholder}
-          value={input}
-          disabled={isRunning}
-          onChange={(e) => {
-            setInput(e.target.value);
-            e.target.style.height = "auto";
-            e.target.style.height = `${e.target.scrollHeight}px`;
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit(e as unknown as React.FormEvent);
-            }
-          }}
-        />
-        <button
-          type="submit"
-          aria-label="Send message"
-          disabled={isRunning || !input.trim()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </form>
+      {!isAuthenticated ? (
+        <div className="border-t border-border p-3">
+          <button
+            type="button"
+            onClick={onSignInRequired}
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border bg-muted/50 px-3 py-3 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground hover:border-primary/40"
+          >
+            <LogIn className="h-3.5 w-3.5 shrink-0" />
+            Sign in to use AI mode
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex items-end gap-2 border-t border-border p-3">
+          <textarea
+            rows={1}
+            className="flex-1 resize-none overflow-hidden rounded-md border border-input bg-background px-3 py-2 text-sm leading-snug placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+            placeholder={placeholder}
+            value={input}
+            disabled={isRunning}
+            onChange={(e) => {
+              setInput(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = `${e.target.scrollHeight}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e as unknown as React.FormEvent);
+              }
+            }}
+          />
+          <button
+            type="submit"
+            aria-label="Send message"
+            disabled={isRunning || !input.trim()}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </form>
+      )}
     </div>
   );
 }

@@ -8,11 +8,9 @@ matches each to one of our blocks (one Block -> 0..N ActiveListings):
   3. tiered match to a block: postal exact, then normalized block+street
   4. repo.add_active_listings(matched)  -> idempotent upsert by listing_id
 
-Agent contact fields (name/phone/email/agency) are usually null in the public
-detail payload — the portal gates seller contact behind login. Where the
-portal does expose contact (agent-managed listings), we keep the real name
-and agency but mask_contact() swaps every phone number for one dummy and
-drops emails, so the stored data never lets the demo dial a real person.
+Agent contact fields (name/phone/email/agency) are exposed by the portal for
+agent-managed listings and stored as-is — it is public information served by
+the official public API. Owner-listed units carry no contact (None).
 
 CLI: python -m app.data.hdb_listings [--limit N]
 """
@@ -118,30 +116,6 @@ def parse_detail(raw: dict[str, Any], listing_id: int) -> dict[str, Any]:
     }
 
 
-# Every stored phone number is this dummy — listings keep their real agent
-# name/agency/description, but the demo never dials a real person.
-DUMMY_PHONE = "91234567"
-
-_PHONE_RE = re.compile(r"\b[89]\d{3}\s?\d{4}\b")
-_EMAIL_RE = re.compile(r"\S+@\S+\.\S+")
-
-
-def mask_contact(fields: dict[str, Any]) -> dict[str, Any]:
-    """Replace direct-dial contact channels before anything is stored.
-
-    Real agent names and agencies stay; the phone becomes the dummy
-    number (also inside descriptions) and emails are dropped.
-    """
-    if fields.get("agent_phone"):
-        fields["agent_phone"] = DUMMY_PHONE
-    fields["agent_email"] = None
-    desc = fields.get("description")
-    if desc:
-        desc = _PHONE_RE.sub(DUMMY_PHONE, desc)
-        fields["description"] = _EMAIL_RE.sub("", desc)
-    return fields
-
-
 # ---------------------------------------------------------------------------
 # HTTP client (httpx; browser-like headers for CloudFront)
 # ---------------------------------------------------------------------------
@@ -241,7 +215,7 @@ def ingest_listings(
             log.warning("detail fetch failed for %s: %s", lid, exc)
             continue
         report.listings_fetched += 1
-        fields = mask_contact(parse_detail(raw, int(lid)))
+        fields = parse_detail(raw, int(lid))
         block_id, tier = matcher.match(
             fields["postal_code"], fields["block_number"], fields["street_name"])
         if block_id is None:

@@ -113,33 +113,6 @@ class ParseDetailTest(unittest.TestCase):
         self.assertFalse(d["managed_by_agent"])
 
 
-class MaskContactTest(unittest.TestCase):
-    def test_real_identity_kept_but_phone_dummied_and_email_dropped(self):
-        from app.data.hdb_listings import mask_contact, DUMMY_PHONE
-        fields = {"agent_name": "REAL AGENT", "agent_phone": "86680000",
-                  "agent_email": "agent@realagency.com",
-                  "agency_name": "REAL AGENCY PTE LTD",
-                  "managed_by_agent": True,
-                  "description": "Call 92710000 or mail me@agency.com now"}
-        out = mask_contact(fields)
-        self.assertEqual(out["agent_name"], "REAL AGENT")
-        self.assertEqual(out["agency_name"], "REAL AGENCY PTE LTD")
-        self.assertEqual(out["agent_phone"], DUMMY_PHONE)
-        self.assertIsNone(out["agent_email"])
-        self.assertIn(DUMMY_PHONE, out["description"])
-        self.assertNotIn("92710000", out["description"])
-        self.assertNotIn("me@agency.com", out["description"])
-
-    def test_owner_listing_untouched(self):
-        from app.data.hdb_listings import mask_contact
-        fields = {"agent_name": None, "agent_phone": None, "agent_email": None,
-                  "agency_name": None, "managed_by_agent": False,
-                  "description": "Lovely home, no agents."}
-        out = mask_contact(fields)
-        self.assertIsNone(out["agent_phone"])
-        self.assertEqual(out["description"], "Lovely home, no agents.")
-
-
 class IngestTest(unittest.TestCase):
     def test_ingest_matches_and_stores(self):
         from app.data.hdb_listings import ingest_listings

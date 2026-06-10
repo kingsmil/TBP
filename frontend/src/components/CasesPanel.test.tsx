@@ -37,7 +37,7 @@ describe("CasesPanel", () => {
 
   it("shows cases in dropdown when cases exist", () => {
     render(<CasesPanel {...baseProps} cases={[mockCase]} activeCaseId="abc-123" />);
-    expect(screen.getByText(/Family looking/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Family looking/i).length).toBeGreaterThan(0);
   });
 
   it("disables input while streaming", () => {

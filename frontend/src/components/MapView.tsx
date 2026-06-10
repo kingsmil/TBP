@@ -346,6 +346,21 @@ export default function MapView({
   const [busMode, setBusMode] = useState(false);
   const [selectedBusStop, setSelectedBusStop] = useState<string | null>(null);
   const [activeBusService, setActiveBusService] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedBusStop == null) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setSelectedBusStop(null);
+      setActiveBusService(null);
+    };
+
+    document.addEventListener("keydown", handleEscape, true);
+    return () => document.removeEventListener("keydown", handleEscape, true);
+  }, [selectedBusStop]);
   const selectedBlock = useMemo(
     () => blocks.find((block) => block.block_id === selectedBlockId) ?? null,
     [blocks, selectedBlockId],

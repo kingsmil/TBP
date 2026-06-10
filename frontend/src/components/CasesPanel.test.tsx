@@ -19,11 +19,13 @@ const baseProps = {
   chatChunks: "",
   isStreaming: false,
   isAuthenticated: true,
+  isSubscribed: true,
   onNewCase: vi.fn(),
   onSelectCase: vi.fn(),
   onSendMessage: vi.fn(),
   onRefine: vi.fn(),
   onSignInRequired: vi.fn(),
+  onUpgradeRequired: vi.fn(),
 };
 
 describe("CasesPanel", () => {

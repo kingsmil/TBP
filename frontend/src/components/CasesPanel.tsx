@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Loader2, LogIn, Plus, Send } from "lucide-react";
+import { ChevronDown, Loader2, LogIn, Plus, Send, Sparkles } from "lucide-react";
 import type { AgentEvent, HomeOSCase, HomeOSCaseSummary } from "../types";
 
 interface ChatMessage {
@@ -132,11 +132,13 @@ interface Props {
   chatChunks: string;
   isStreaming: boolean;
   isAuthenticated: boolean;
+  isSubscribed: boolean;
   onNewCase: (profileText: string) => void;
   onSelectCase: (caseId: string) => void;
   onSendMessage: (message: string) => void;
   onRefine: (message: string) => void;
   onSignInRequired: () => void;
+  onUpgradeRequired: () => void;
 }
 
 const CHIP_OPTIONS: Record<string, { label: string; value: string }[]> = {
@@ -180,11 +182,13 @@ export default function CasesPanel({
   chatChunks,
   isStreaming,
   isAuthenticated,
+  isSubscribed,
   onNewCase,
   onSelectCase,
   onSendMessage,
   onRefine,
   onSignInRequired,
+  onUpgradeRequired,
 }: Props) {
   const [input, setInput] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -363,6 +367,17 @@ export default function CasesPanel({
           >
             <LogIn className="h-3.5 w-3.5 shrink-0" />
             Sign in to use AI mode
+          </button>
+        </div>
+      ) : !isSubscribed ? (
+        <div className="border-t border-border p-3">
+          <button
+            type="button"
+            onClick={onUpgradeRequired}
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-3 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+          >
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            Upgrade to Pro to use AI mode
           </button>
         </div>
       ) : (

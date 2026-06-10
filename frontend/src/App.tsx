@@ -86,7 +86,8 @@ function RailIcon({
 }
 
 export default function App() {
-  const [mode, setMode] = useState<Mode>("ai");
+  // Subscribed users land in AI mode; everyone else starts in free Explore mode.
+  const [mode, setMode] = useState<Mode>(() => (getStoredUser()?.is_subscribed ? "ai" : "explore"));
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = window.localStorage.getItem("hdb-match-theme");
     if (saved === "light" || saved === "dark") return saved;
@@ -138,6 +139,14 @@ export default function App() {
   }, []);
 
   const isSubscribed = authUser?.is_subscribed ?? false;
+
+  // Defense-in-depth: never allow AI mode without an active subscription.
+  // Covers stale state, lapsed subscriptions, and direct state manipulation.
+  useEffect(() => {
+    if (mode === "ai" && !isSubscribed) {
+      setMode("explore");
+    }
+  }, [mode, isSubscribed]);
 
   function handleModeSwitch(next: Mode) {
     if (next === "ai" && !isSubscribed) {
@@ -679,11 +688,13 @@ export default function App() {
             chatChunks={chatChunks}
             isStreaming={isStreaming}
             isAuthenticated={!!authUser}
+            isSubscribed={isSubscribed}
             onNewCase={handleNewCase}
             onSelectCase={handleSelectCase}
             onSendMessage={handleSendMessage}
             onRefine={handleRefine}
             onSignInRequired={() => setShowAuthModal(true)}
+            onUpgradeRequired={() => setShowUpgradeModal(true)}
           />
         </div>
         </>}

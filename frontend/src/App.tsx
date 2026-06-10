@@ -8,6 +8,9 @@ import {
   Table2,
   TrendingUp,
   Eye,
+  LogIn,
+  LogOut,
+  Sparkles,
 } from "lucide-react";
 import CasesPanel from "./components/CasesPanel";
 import DirectTransitFilter from "./components/DirectTransitFilter";
@@ -20,6 +23,8 @@ import { MAP_SEARCH_LIMIT } from "./lib/mapConfig";
 import PipelinePanel from "./components/PipelinePanel";
 import PsfTrendChart from "./components/PsfTrendChart";
 import StatCard from "./components/StatCard";
+import AuthModal from "./components/AuthModal";
+import UpgradeModal from "./components/UpgradeModal";
 import { Separator } from "./components/ui/separator";
 import {
   chatInCase,
@@ -28,7 +33,9 @@ import {
   investigateStream,
   refineStream,
   searchProperties,
+  apiSubscriptionStatus,
 } from "./lib/api";
+import { clearAuth, getStoredUser, type AuthUser } from "./lib/auth";
 import { formatPsf, formatSGD } from "./lib/format";
 import type {
   AgentEvent,
@@ -70,6 +77,60 @@ function RailIcon({
 
 export default function App() {
   const [mode, setMode] = useState<Mode>("ai");
+
+  // ── Auth state ──────────────────────────────────────────────────────────────
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+  // Re-check subscription status on mount (in case it changed after Stripe redirect)
+  useEffect(() => {
+    if (!authUser) return;
+    apiSubscriptionStatus()
+      .then((s) => {
+        const updated: AuthUser = { email: s.email, is_subscribed: s.is_subscribed };
+        setAuthUser(updated);
+        import("./lib/auth").then(({ saveAuth, getToken }) => {
+          const t = getToken();
+          if (t) saveAuth(t, updated);
+        });
+      })
+      .catch(() => {/* token expired — stay as-is */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle ?payment=success redirect from Stripe
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success") {
+      window.history.replaceState({}, "", window.location.pathname);
+      // Refresh subscription status
+      apiSubscriptionStatus().then((s) => {
+        const updated: AuthUser = { email: s.email, is_subscribed: s.is_subscribed };
+        setAuthUser(updated);
+        import("./lib/auth").then(({ saveAuth, getToken }) => {
+          const t = getToken();
+          if (t) saveAuth(t, updated);
+        });
+      }).catch(() => {});
+    }
+  }, []);
+
+  const isSubscribed = authUser?.is_subscribed ?? false;
+
+  function handleModeSwitch(next: Mode) {
+    if (next === "ai" && !isSubscribed) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    setMode(next);
+  }
+
+  function handleLogout() {
+    clearAuth();
+    setAuthUser(null);
+    setMode("explore");
+  }
 
   // Shared
   const [filters, setFilters] = useState<SearchFilters>({ limit: MAP_SEARCH_LIMIT });
@@ -370,13 +431,25 @@ export default function App() {
                     <p className="text-xs text-muted-foreground">Explore mode</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setMode("ai")}
-                  className="text-xs rounded-md border border-border px-2 py-1 text-muted-foreground hover:bg-muted"
-                >
-                  AI Mode
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleModeSwitch("ai")}
+                    className="flex items-center gap-1 text-xs rounded-md border border-border px-2 py-1 text-muted-foreground hover:bg-muted"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    AI Mode
+                  </button>
+                  {authUser ? (
+                    <button type="button" onClick={handleLogout} title="Sign out" className="text-muted-foreground hover:text-foreground">
+                      <LogOut className="h-3.5 w-3.5" />
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => setShowAuthModal(true)} title="Sign in" className="text-muted-foreground hover:text-foreground">
+                      <LogIn className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
               </header>
               <Separator />
               <FilterPanel filters={filters} onChange={setFilters} />
@@ -455,6 +528,21 @@ export default function App() {
   // ── AI mode — 3-column layout ─────────────────────────────────────────
   return (
     <div className="flex h-full bg-background">
+      {/* Auth modals */}
+      {showAuthModal && (
+        <AuthModal
+          onSuccess={(user) => { setAuthUser(user); setShowAuthModal(false); }}
+          onClose={() => setShowAuthModal(false)}
+        />
+      )}
+      {showUpgradeModal && (
+        <UpgradeModal
+          isLoggedIn={!!authUser}
+          onClose={() => setShowUpgradeModal(false)}
+          onLoginRequired={() => setShowAuthModal(true)}
+        />
+      )}
+
       {/* Left: Cases */}
       <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-card overflow-hidden">
         <header className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -467,13 +555,35 @@ export default function App() {
               <p className="text-xs text-muted-foreground">HomeOS Agent</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setMode("explore")}
-            className="text-[10px] rounded px-2 py-1 text-muted-foreground hover:bg-muted border border-border"
-          >
-            Explore
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("explore")}
+              className="text-[10px] rounded px-2 py-1 text-muted-foreground hover:bg-muted border border-border"
+            >
+              Explore
+            </button>
+            {authUser ? (
+              <button
+                type="button"
+                onClick={handleLogout}
+                title={`Signed in as ${authUser.email}`}
+                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <LogOut className="h-3 w-3" />
+                Sign out
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(true)}
+                className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+              >
+                <LogIn className="h-3 w-3" />
+                Sign in
+              </button>
+            )}
+          </div>
         </header>
         <div className="flex-1 overflow-hidden">
           <CasesPanel
@@ -483,10 +593,12 @@ export default function App() {
             streamingEvents={streamingEvents}
             chatChunks={chatChunks}
             isStreaming={isStreaming}
+            isAuthenticated={!!authUser}
             onNewCase={handleNewCase}
             onSelectCase={handleSelectCase}
             onSendMessage={handleSendMessage}
             onRefine={handleRefine}
+            onSignInRequired={() => setShowAuthModal(true)}
           />
         </div>
       </aside>

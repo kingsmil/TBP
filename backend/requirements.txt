@@ -30,6 +30,11 @@ requests==2.32.3
 # AWS SDK
 boto3==1.35.0
 
+# Auth + payments
+bcrypt==4.2.1
+python-jose[cryptography]==3.3.0
+stripe==11.6.0
+
 # Dev / test
 pytest==8.3.4
 httpx==0.28.1

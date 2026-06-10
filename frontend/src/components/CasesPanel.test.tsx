@@ -18,10 +18,12 @@ const baseProps = {
   streamingEvents: [],
   chatChunks: "",
   isStreaming: false,
+  isAuthenticated: true,
   onNewCase: vi.fn(),
   onSelectCase: vi.fn(),
   onSendMessage: vi.fn(),
   onRefine: vi.fn(),
+  onSignInRequired: vi.fn(),
 };
 
 describe("CasesPanel", () => {

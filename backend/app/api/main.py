@@ -18,6 +18,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.deps import get_commute_provider, get_engine_or_none, get_repository
+from app.api.auth import router as auth_router, require_subscribed
 import json
 
 from fastapi.responses import StreamingResponse
@@ -83,6 +84,8 @@ app = FastAPI(title="HDB Match API", version="0.1.0",
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 
 @app.get("/health")
@@ -253,7 +256,8 @@ def comparison_estates(
 
 @app.post("/homeos/investigate")
 def homeos_investigate(req: HomeOSInvestigationRequest,
-                       repo: Repository = Depends(get_repository)):
+                       repo: Repository = Depends(get_repository),
+                       _user=Depends(require_subscribed)):
     return investigate_homeos_profile(repo, req.profile_text, req.limit)
 
 
@@ -272,7 +276,8 @@ def homeos_case_file(block_id: int, req: HomeOSCaseFileRequest,
 
 @app.post("/homeos/schedule-viewing")
 def homeos_schedule_viewing(req: HomeOSScheduleViewingRequest,
-                            repo: Repository = Depends(get_repository)):
+                            repo: Repository = Depends(get_repository),
+                            _user=Depends(require_subscribed)):
     try:
         return schedule_homeos_viewing(
             repo,
@@ -291,6 +296,7 @@ def homeos_schedule_viewing(req: HomeOSScheduleViewingRequest,
 async def homeos_investigate_stream(
     req: HomeOSStreamRequest,
     repo: Repository = Depends(get_repository),
+    _user=Depends(require_subscribed),
 ):
     async def event_gen():
         async for event in investigate_stream(repo, req.profile_text, req.limit):
@@ -304,7 +310,7 @@ async def homeos_investigate_stream(
 
 
 @app.get("/homeos/cases")
-def homeos_list_cases():
+def homeos_list_cases(_user=Depends(require_subscribed)):
     cases = homeos_case_store.list_cases()
     return [
         {
@@ -319,7 +325,7 @@ def homeos_list_cases():
 
 
 @app.get("/homeos/cases/{case_id}")
-def homeos_get_case(case_id: str):
+def homeos_get_case(case_id: str, _user=Depends(require_subscribed)):
     case = homeos_case_store.get_case(case_id)
     if case is None:
         raise HTTPException(status_code=404, detail="case not found")
@@ -327,7 +333,8 @@ def homeos_get_case(case_id: str):
 
 
 @app.post("/homeos/cases/{case_id}/chat")
-async def homeos_chat(case_id: str, req: HomeOSChatRequest):
+async def homeos_chat(case_id: str, req: HomeOSChatRequest,
+                      _user=Depends(require_subscribed)):
     if homeos_case_store.get_case(case_id) is None:
         raise HTTPException(status_code=404, detail="case not found")
 
@@ -348,6 +355,7 @@ async def homeos_refine(
     case_id: str,
     req: HomeOSRefineRequest,
     repo: Repository = Depends(get_repository),
+    _user=Depends(require_subscribed),
 ):
     case = homeos_case_store.get_case(case_id)
     if case is None:

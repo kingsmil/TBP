@@ -22,6 +22,7 @@ from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
 from app.homeos.models.avatar import HomeOSAvatar
+from app.homeos.models.outreach import OutreachMessage
 from app.homeos.models.evidence import (
     AgentQuestions,
     LocationEvidence,
@@ -136,5 +137,20 @@ questions_agent: Agent[None, AgentQuestions] = Agent(
         "Given the evidence from market, location, and risk agents, generate 4-6 due-diligence "
         "questions the buyer should ask the real-estate agent before viewing. "
         "Write a one-sentence narrative summarising why these questions matter."
+    ),
+)
+
+
+outreach_agent: Agent[None, OutreachMessage] = Agent(
+    get_model(),
+    output_type=OutreachMessage,
+    system_prompt=(
+        "You write a concise, polite WhatsApp message from a prospective HDB buyer "
+        "to the seller/agent of a specific resale flat. At most 90 words, plain text "
+        "suitable for WhatsApp (no markdown, no emoji spam). Warm, specific, not pushy. "
+        "Reference the exact unit (block, street, flat type). Include 2-3 genuine "
+        "due-diligence questions grounded in the provided evidence (lease, storey, "
+        "renovation, viewing). End with the buyer's one-line profile and availability "
+        "if given. Also return the questions you used in the questions list."
     ),
 )

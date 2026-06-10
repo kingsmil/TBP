@@ -8,9 +8,9 @@ matches each to one of our blocks (one Block -> 0..N ActiveListings):
   3. tiered match to a block: postal exact, then normalized block+street
   4. repo.add_active_listings(matched)  -> idempotent upsert by listing_id
 
-Agent contact fields (name/phone/email/agency) are usually null in the public
-detail payload — the portal gates seller contact behind login. We store them
-when present and leave them None otherwise.
+Agent contact fields (name/phone/email/agency) are exposed by the portal for
+agent-managed listings and stored as-is — it is public information served by
+the official public API. Owner-listed units carry no contact (None).
 
 CLI: python -m app.data.hdb_listings [--limit N]
 """
@@ -52,6 +52,7 @@ _ROAD_ABBREV = {
     "CRESCENT": "CRES", "CLOSE": "CL", "PLACE": "PL", "TERRACE": "TER",
     "GARDENS": "GDNS", "HEIGHTS": "HTS", "NORTH": "NTH", "SOUTH": "STH",
     "CENTRAL": "CTRL", "UPPER": "UPP", "COMMONWEALTH": "C'WEALTH",
+    "PARK": "PK", "LANE": "LN",
 }
 
 

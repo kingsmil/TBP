@@ -7,11 +7,12 @@ import type { BlockSummary, HomeOSCaseFile, HomeOSScheduleViewingResponse } from
 interface Props {
   block: BlockSummary | null;
   profileText?: string;
+  caseId?: string;
   onClose: () => void;
   onBack?: () => void;
 }
 
-export default function HomeOSDetailPanel({ block, profileText, onClose, onBack }: Props) {
+export default function HomeOSDetailPanel({ block, profileText, caseId, onClose, onBack }: Props) {
   const [caseFile, setCaseFile] = useState<HomeOSCaseFile | null>(null);
   const [caseFileLoading, setCaseFileLoading] = useState(false);
   const [contactName, setContactName] = useState("");
@@ -108,7 +109,7 @@ export default function HomeOSDetailPanel({ block, profileText, onClose, onBack 
         <Row label="Transactions" value={String(block.txn_count)} />
       </div>
 
-      <ActiveListingsSection blockId={block.block_id} />
+      <ActiveListingsSection blockId={block.block_id} caseId={caseId} />
 
       {/* HomeOS evidence */}
       {profileText && (

@@ -196,22 +196,41 @@ class TestHomeOSStream(unittest.TestCase):
             "'proceed' must reach deep analysis (case_done)",
         )
 
-    def test_small_candidate_set_skips_questions(self):
-        """<=5 candidates → straight to analysis, no clarifying questions."""
-        async def run():
+    def test_small_set_asks_to_confirm_then_proceeds(self):
+        """<=5 candidates → one 'ready_to_proceed' confirm prompt, not auto-run.
+
+        Clicking the Proceed chip (sends 'proceed') then runs deep analysis.
+        """
+        async def investigate():
             events = []
             async for e in investigate_stream(
                 self.repo, "Family 4 room 800k schools.", limit=2):
                 events.append(e)
             return events
-        events = asyncio.run(run())
+        events = asyncio.run(investigate())
+        qs = [e for e in events if e["event"] == "clarifying_question"]
+        self.assertEqual(len(qs), 1, "small set should emit exactly one confirm prompt")
+        self.assertEqual(qs[0]["field"], "ready_to_proceed")
         self.assertEqual(
-            [e for e in events if e["event"] == "clarifying_question"], [],
-            "a result set of <=5 must not trigger any clarifying questions",
+            [e for e in events if e["event"] == "case_done"], [],
+            "must wait for the user to proceed, not auto-run analysis",
+        )
+
+        case_id = qs[0]["case_id"]
+
+        async def proceed():
+            ev = []
+            async for e in refine_stream(self.repo, case_id, "proceed"):
+                ev.append(e)
+            return ev
+        proceed_events = asyncio.run(proceed())
+        self.assertEqual(
+            [e for e in proceed_events if e["event"] == "clarifying_question"], [],
+            "'proceed' from the confirm prompt must not ask anything more",
         )
         self.assertTrue(
-            [e for e in events if e["event"] == "case_done"],
-            "small result set must proceed to deep analysis (case_done)",
+            [e for e in proceed_events if e["event"] == "case_done"],
+            "clicking Proceed must run deep analysis (case_done)",
         )
 
 

@@ -164,6 +164,7 @@ const CHIP_OPTIONS: Record<string, { label: string; value: string }[]> = {
     { label: "5-room", value: "5 room" },
     { label: "Executive", value: "executive" },
   ],
+  ready_to_proceed: [{ label: "Proceed", value: "proceed" }],
 };
 
 const DEFAULT_PROFILE =

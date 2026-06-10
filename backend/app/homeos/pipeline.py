@@ -514,6 +514,19 @@ def _is_proceed_intent(message: str) -> bool:
     return m in _PROCEED_PHRASES or m.startswith("proceed")
 
 
+def _ready_to_proceed_question(count: int) -> str:
+    """Confirm prompt shown once a result set is small enough to analyse.
+
+    Surfaced with a single 'Proceed' quick-reply chip on the frontend
+    (field='ready_to_proceed'); the user can also keep refining instead.
+    """
+    blocks = "block" if count == 1 else "blocks"
+    return (
+        f"Ready to analyse {count} {blocks}? "
+        "Tap Proceed to start, or keep refining."
+    )
+
+
 def _clarifying_question(
     prefs: dict, count: int, pipeline: list[dict] | None = None
 ) -> tuple[str | None, str | None]:
@@ -814,6 +827,16 @@ async def investigate_stream(
             yield proceed_evt
             homeos_case_store.append_event(case_id, proceed_evt)
 
+        # Small result set: confirm before analysing (user taps Proceed chip).
+        if len(all_candidates) <= _ANALYSIS_THRESHOLD:
+            homeos_case_store.set_status(case_id, "refining")
+            q_evt = {"event": "clarifying_question", "case_id": case_id,
+                     "question": _ready_to_proceed_question(len(all_candidates)),
+                     "field": "ready_to_proceed"}
+            yield q_evt
+            homeos_case_store.append_event(case_id, q_evt)
+            return
+
         # ── Phase 3: Deep analysis ──────────────────────────────────────────
         async for evt in _deep_analysis_stream(repo, case_id, ranked, prefs):
             yield evt
@@ -934,6 +957,17 @@ async def refine_stream(
             }
             yield proceed_evt
             homeos_case_store.append_event(case_id, proceed_evt)
+
+        # Small result set: confirm before analysing (user taps Proceed chip),
+        # unless they already asked to proceed.
+        if not force_proceed and len(all_candidates) <= _ANALYSIS_THRESHOLD:
+            homeos_case_store.set_status(case_id, "refining")
+            q_evt = {"event": "clarifying_question", "case_id": case_id,
+                     "question": _ready_to_proceed_question(len(all_candidates)),
+                     "field": "ready_to_proceed"}
+            yield q_evt
+            homeos_case_store.append_event(case_id, q_evt)
+            return
 
         async for evt in _deep_analysis_stream(repo, case_id, ranked, prefs):
             yield evt

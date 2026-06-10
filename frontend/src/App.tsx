@@ -35,6 +35,7 @@ import UpgradeModal from "./components/UpgradeModal";
 import { Separator } from "./components/ui/separator";
 import {
   chatInCase,
+  getCases,
   getEstateAnalytics,
   getEstateComparison,
   investigateStream,
@@ -134,6 +135,15 @@ export default function App() {
       }).catch(() => {});
     }
   }, []);
+
+  // Load this user's persisted cases into the sidebar on mount.
+  useEffect(() => {
+    if (!authUser?.is_subscribed) return;
+    getCases()
+      .then((loaded) => setCases(loaded))
+      .catch(() => {/* unauthenticated / 402 — leave sidebar empty */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser?.is_subscribed]);
 
   const isSubscribed = authUser?.is_subscribed ?? false;
 

@@ -21,6 +21,10 @@ class LocationEvidence(BaseModel):
 
 
 class RiskEvidence(BaseModel):
+    appreciation: dict[str, Any] = Field(default_factory=dict)
+    future_mrt: dict[str, Any] = Field(default_factory=dict)
+    future_supply: dict[str, Any] = Field(default_factory=dict)
+    accessibility: dict[str, Any] = Field(default_factory=dict)
     watchouts: list[str] = Field(default_factory=list)
     score_adjustment: float = 0.0
     narrative: str = ""

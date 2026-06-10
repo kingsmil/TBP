@@ -6,8 +6,39 @@ core, services, and in-memory repository depend on nothing external.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 
 from app.core.geo import Point
+
+
+class HDBTown(str, Enum):
+    """Singapore HDB towns (official town names in CAPS)."""
+    ANG_MO_KIO = "ANG MO KIO"
+    BEDOK = "BEDOK"
+    BISHAN = "BISHAN"
+    BUKIT_BATOK = "BUKIT BATOK"
+    BUKIT_MERAH = "BUKIT MERAH"
+    BUKIT_PANJANG = "BUKIT PANJANG"
+    BUKIT_TIMAH = "BUKIT TIMAH"
+    CENTRAL_AREA = "CENTRAL AREA"
+    CHOA_CHU_KANG = "CHOA CHU KANG"
+    CLEMENTI = "CLEMENTI"
+    GEYLANG = "GEYLANG"
+    HOUGANG = "HOUGANG"
+    JURONG_EAST = "JURONG EAST"
+    JURONG_WEST = "JURONG WEST"
+    KALLANG_WHAMPOA = "KALLANG/WHAMPOA"
+    MARINE_PARADE = "MARINE PARADE"
+    PASIR_RIS = "PASIR RIS"
+    PUNGGOL = "PUNGGOL"
+    QUEENSTOWN = "QUEENSTOWN"
+    SEMBAWANG = "SEMBAWANG"
+    SENGKANG = "SENGKANG"
+    SERANGOON = "SERANGOON"
+    TAMPINES = "TAMPINES"
+    TOA_PAYOH = "TOA PAYOH"
+    WOODLANDS = "WOODLANDS"
+    YISHUN = "YISHUN"
 
 
 @dataclass(frozen=True)
@@ -136,7 +167,7 @@ class BlockProximity:
 class SearchQuery:
     """Filter inputs for /properties/search. Unset fields are ignored."""
     bbox: tuple[float, float, float, float] | None = None  # minx,miny,maxx,maxy (lon/lat)
-    town: str | None = None
+    town: HDBTown | None = None
     planning_area_id: int | None = None
     flat_type: str | None = None
     min_floor_area: float | None = None

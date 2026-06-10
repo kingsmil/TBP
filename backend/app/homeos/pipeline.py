@@ -137,19 +137,63 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
 # ── Registry-backed agent runner ──────────────────────────────────────────────
 
 async def _run_profile_agent(prompt: str):
-    """Run the profile agent via the tool repository. Returns (HomeOSAvatar, {})."""
+    """Run the profile agent via the tool repository. Returns (HomeOSAvatar, {}, result)."""
     from app.homeos.wiring import tool_repository
     agent, prefetched = tool_repository.build_agent("profile", repo=None, block_id=None, prefs={})
     result = await agent.run(prompt)
-    return result.output, prefetched
+    return result.output, prefetched, result
 
 
 async def _run_block_agent(name: str, repo: Repository, block_id: int, prefs: dict, prompt: str):
-    """Run a named block-level agent. Returns (output_model, prefetched_dict)."""
+    """Run a named block-level agent. Returns (output_model, prefetched_dict, result)."""
     from app.homeos.wiring import tool_repository
     agent, prefetched = tool_repository.build_agent(name, repo=repo, block_id=block_id, prefs=prefs)
     result = await agent.run(prompt)
-    return result.output, prefetched
+    return result.output, prefetched, result
+
+
+def _extract_tool_calls(result) -> list[dict]:
+    """Extract tool calls from pydantic-ai result.all_messages().
+
+    Filters out pydantic-ai's internal 'final_result' tool which is used
+    for structured output, not an actual user-defined tool.
+    """
+    from pydantic_ai.messages import ModelRequest, ModelResponse, ToolCallPart, ToolReturnPart
+
+    tool_calls = []
+    tool_returns = {}
+
+    try:
+        for msg in result.all_messages():
+            # Look for ToolCallPart in ModelResponse
+            if isinstance(msg, ModelResponse):
+                for part in msg.parts:
+                    if isinstance(part, ToolCallPart):
+                        # Skip pydantic-ai's internal final_result tool
+                        if part.tool_name == "final_result":
+                            continue
+                        tool_calls.append({
+                            "tool_name": part.tool_name,
+                            "args": part.args,
+                            "tool_call_id": part.tool_call_id,
+                        })
+
+            # Look for ToolReturnPart in ModelRequest
+            elif isinstance(msg, ModelRequest):
+                for part in msg.parts:
+                    if isinstance(part, ToolReturnPart):
+                        tool_returns[part.tool_call_id] = part.content
+
+        # Match tool calls with their returns
+        for call in tool_calls:
+            call_id = call.pop("tool_call_id", None)
+            if call_id and call_id in tool_returns:
+                call["result"] = tool_returns[call_id]
+
+    except Exception as e:
+        logger.warning("Failed to extract tool calls: %s", e)
+
+    return tool_calls
 
 
 # ── Deep analysis ─────────────────────────────────────────────────────────────
@@ -179,22 +223,29 @@ async def _deep_analysis_stream(
                 await asyncio.sleep(mock_delay_seconds())
 
             from app.homeos.wiring import tool_repository
-            _, prefetched_market = tool_repository.build_agent("market", repo=repo, block_id=block_id, prefs=prefs)
-            txn_data = prefetched_market.get("transactions", {})
             if mock:
+                # In mock mode, prefetch data and use mock narrative
+                _, prefetched_market = tool_repository.build_agent("market", repo=repo, block_id=block_id, prefs=prefs)
+                txn_data = prefetched_market.get("transactions", {})
                 market_narrative = mock_market_narrative(txn_data, prefs)
+                market_evidence = {**txn_data, "narrative": market_narrative}
             else:
-                output, _ = await _run_block_agent(
+                # In AI mode, let agent call tools and return complete evidence
+                output, _, result = await _run_block_agent(
                     "market", repo, block_id, prefs,
-                    "Summarise the market evidence for this block.",
+                    "Analyze market evidence for this block using the available tools.",
                 )
-                market_narrative = output.narrative
-            market_evidence = {**txn_data, "narrative": market_narrative}
+                market_evidence = output.model_dump()
+                tool_calls = _extract_tool_calls(result)
+                if tool_calls:
+                    tool_evt = {"event": "tool_calls", "agent": "market", "block_id": block_id, "tool_calls": tool_calls}
+                    yield tool_evt
+                    homeos_case_store.append_event(case_id, tool_evt)
 
             yield {"event": "agent_data", "agent": "market", "block_id": block_id, "data": market_evidence}
             homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "market", "block_id": block_id, "data": market_evidence})
-            yield {"event": "agent_summary", "agent": "market", "block_id": block_id, "narrative": market_narrative}
-            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "market", "block_id": block_id, "narrative": market_narrative})
+            yield {"event": "agent_summary", "agent": "market", "block_id": block_id, "narrative": market_evidence.get("narrative", "")}
+            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "market", "block_id": block_id, "narrative": market_evidence.get("narrative", "")})
             yield {"event": "agent_done", "agent": "market", "block_id": block_id}
             homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "market", "block_id": block_id})
 
@@ -205,28 +256,30 @@ async def _deep_analysis_stream(
             if mock:
                 await asyncio.sleep(mock_delay_seconds())
 
-            _, prefetched_loc = tool_repository.build_agent("location", repo=repo, block_id=block_id, prefs=prefs)
-            prox_data = prefetched_loc.get("proximity", {})
-            connections = prox_data.get("connections", [])
             if mock:
+                # In mock mode, prefetch data and use mock narrative
+                _, prefetched_loc = tool_repository.build_agent("location", repo=repo, block_id=block_id, prefs=prefs)
+                prox_data = prefetched_loc.get("proximity", {})
+                connections = prox_data.get("connections", [])
                 location_narrative = mock_location_narrative(connections)
+                location_evidence = {**prox_data, "narrative": location_narrative}
             else:
-                output, _ = await _run_block_agent(
+                # In AI mode, let agent call tools and return complete evidence
+                output, _, result = await _run_block_agent(
                     "location", repo, block_id, prefs,
-                    "Summarise the location evidence for this block.",
+                    "Analyze location and connectivity for this block using the available tools.",
                 )
-                location_narrative = output.narrative
-            location_evidence = {
-                **prox_data,
-                "commute": prefetched_loc.get("commute", {}),
-                "bus_routes": prefetched_loc.get("bus_routes", {}),
-                "narrative": location_narrative,
-            }
+                location_evidence = output.model_dump()
+                tool_calls = _extract_tool_calls(result)
+                if tool_calls:
+                    tool_evt = {"event": "tool_calls", "agent": "location", "block_id": block_id, "tool_calls": tool_calls}
+                    yield tool_evt
+                    homeos_case_store.append_event(case_id, tool_evt)
 
             yield {"event": "agent_data", "agent": "location", "block_id": block_id, "data": location_evidence}
             homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "location", "block_id": block_id, "data": location_evidence})
-            yield {"event": "agent_summary", "agent": "location", "block_id": block_id, "narrative": location_narrative}
-            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "location", "block_id": block_id, "narrative": location_narrative})
+            yield {"event": "agent_summary", "agent": "location", "block_id": block_id, "narrative": location_evidence.get("narrative", "")}
+            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "location", "block_id": block_id, "narrative": location_evidence.get("narrative", "")})
             yield {"event": "agent_done", "agent": "location", "block_id": block_id}
             homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "location", "block_id": block_id})
 
@@ -237,44 +290,51 @@ async def _deep_analysis_stream(
             if mock:
                 await asyncio.sleep(mock_delay_seconds())
 
-            _, prefetched_risk = tool_repository.build_agent("risk", repo=repo, block_id=block_id, prefs=prefs)
-            app_data = prefetched_risk.get("appreciation", {})
-            future_dev_data = prefetched_risk.get("future_dev", {})
-            future_supply_data = future_dev_data.get("future_supply", {})
-            watchouts: list[str] = []
-            score_adjustment = 0.0
-            if app_data.get("appreciation_score") is not None:
-                score_adjustment += min(12.0, app_data["appreciation_score"] / 10)
-            if app_data.get("risk_level") == "high" and prefs.get("risk_tolerance") == "low":
-                watchouts.append("Appreciation model flags elevated risk for a low-risk buyer.")
-                score_adjustment -= 8.0
-            if future_supply_data.get("supply_risk_level") == "high":
-                watchouts.append("Nearby future supply may weigh on appreciation.")
-                score_adjustment -= 4.0
             if mock:
+                # In mock mode, prefetch data and compute manually
+                _, prefetched_risk = tool_repository.build_agent("risk", repo=repo, block_id=block_id, prefs=prefs)
+                app_data = prefetched_risk.get("appreciation", {})
+                future_dev_data = prefetched_risk.get("future_dev", {})
+                future_supply_data = future_dev_data.get("future_supply", {})
+                watchouts: list[str] = []
+                score_adjustment = 0.0
+                if app_data.get("appreciation_score") is not None:
+                    score_adjustment += min(12.0, app_data["appreciation_score"] / 10)
+                if app_data.get("risk_level") == "high" and prefs.get("risk_tolerance") == "low":
+                    watchouts.append("Appreciation model flags elevated risk for a low-risk buyer.")
+                    score_adjustment -= 8.0
+                if future_supply_data.get("supply_risk_level") == "high":
+                    watchouts.append("Nearby future supply may weigh on appreciation.")
+                    score_adjustment -= 4.0
                 risk_narrative = mock_risk_narrative({
                     "watchouts": watchouts,
                     "score_adjustment": score_adjustment,
                 })
+                risk_evidence = {
+                    "appreciation": app_data,
+                    "future_mrt": future_dev_data.get("future_mrt"),
+                    "future_supply": future_supply_data,
+                    "watchouts": watchouts,
+                    "score_adjustment": score_adjustment,
+                    "narrative": risk_narrative,
+                }
             else:
-                output, _ = await _run_block_agent(
+                # In AI mode, let agent call tools, compute watchouts and score_adjustment
+                output, _, result = await _run_block_agent(
                     "risk", repo, block_id, prefs,
-                    "Identify risks and compute score adjustment for this block.",
+                    f"Analyze risk factors for this block. Buyer risk_tolerance: {prefs.get('risk_tolerance', 'low')}",
                 )
-                risk_narrative = output.narrative
-            risk_evidence = {
-                "appreciation": app_data,
-                "future_mrt": future_dev_data.get("future_mrt"),
-                "future_supply": future_supply_data,
-                "watchouts": watchouts,
-                "score_adjustment": score_adjustment,
-                "narrative": risk_narrative,
-            }
+                risk_evidence = output.model_dump()
+                tool_calls = _extract_tool_calls(result)
+                if tool_calls:
+                    tool_evt = {"event": "tool_calls", "agent": "risk", "block_id": block_id, "tool_calls": tool_calls}
+                    yield tool_evt
+                    homeos_case_store.append_event(case_id, tool_evt)
 
             yield {"event": "agent_data", "agent": "risk", "block_id": block_id, "data": risk_evidence}
             homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "risk", "block_id": block_id, "data": risk_evidence})
-            yield {"event": "agent_summary", "agent": "risk", "block_id": block_id, "narrative": risk_narrative}
-            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "risk", "block_id": block_id, "narrative": risk_narrative})
+            yield {"event": "agent_summary", "agent": "risk", "block_id": block_id, "narrative": risk_evidence.get("narrative", "")}
+            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "risk", "block_id": block_id, "narrative": risk_evidence.get("narrative", "")})
             yield {"event": "agent_done", "agent": "risk", "block_id": block_id}
             homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "risk", "block_id": block_id})
 
@@ -528,11 +588,27 @@ def _direct_answer_overrides(user_message: str, pipeline: list[dict]) -> dict:
         elif any(w in lower_a for w in ("low", "no", "not", "don't", "doesn't")):
             updates["school_priority"] = "low"
     elif "town" in lower_q or "estate" in lower_q:
-        town_candidate = user_message.upper().strip()
-        for filler in ("I PREFER ", "PREFER ", "MAYBE ", "PERHAPS ", "IN ", "AROUND ", "NEAR "):
-            town_candidate = town_candidate.replace(filler, "").strip()
-        if town_candidate:
-            updates["town"] = town_candidate
+        # Extract town name from natural language using fuzzy matching
+        from app.core.models import HDBTown
+        from app.homeos.tools.search import _fuzzy_match_town
+
+        # Try to find any HDB town mentioned in the message
+        words = user_message.upper().split()
+        town_enum = None
+
+        # Check each word and phrase for a town match
+        for i in range(len(words)):
+            for length in range(1, min(4, len(words) - i + 1)):  # Try 1-3 word phrases
+                phrase = " ".join(words[i:i+length])
+                matched = _fuzzy_match_town(phrase)
+                if matched:
+                    town_enum = matched
+                    break
+            if town_enum:
+                break
+
+        if town_enum:
+            updates["town"] = town_enum.value
     return updates
 
 
@@ -584,8 +660,10 @@ async def investigate_stream(
 
         if is_mock_mode():
             avatar = mock_profile_avatar(profile_text, parse_homeos_profile(profile_text))
+            tool_calls = []
         else:
-            avatar, _ = await _run_profile_agent(profile_text)
+            avatar, _, result = await _run_profile_agent(profile_text)
+            tool_calls = _extract_tool_calls(result)
 
         avatar_dict = avatar.model_dump()
         homeos_case_store.set_avatar(case_id, avatar_dict)
@@ -594,6 +672,11 @@ async def investigate_stream(
             "[case:%s] profile done  buyer_type=%s flat_type=%s max_price=%s",
             case_id[:8], avatar_dict.get("buyer_type"), prefs.get("flat_type"), prefs.get("max_price"),
         )
+
+        if tool_calls:
+            tool_evt = {"event": "tool_calls", "agent": "profile", "block_id": None, "tool_calls": tool_calls}
+            yield tool_evt
+            homeos_case_store.append_event(case_id, tool_evt)
 
         profile_summary = {
             "event": "agent_summary", "agent": "profile", "block_id": None,
@@ -703,7 +786,7 @@ async def refine_stream(
         if is_mock_mode():
             avatar = mock_profile_avatar(refinement_prompt, parse_homeos_profile(refinement_prompt))
         else:
-            avatar, _ = await _run_profile_agent(refinement_prompt)
+            avatar, _, _ = await _run_profile_agent(refinement_prompt)
 
         avatar_dict = avatar.model_dump()
         prefs_from_ai = {k: v for k, v in avatar_dict.get("preferences", {}).items() if v is not None}

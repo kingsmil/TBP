@@ -37,6 +37,7 @@ from app.api.schemas import (
     RecommendationRequest,
     DirectTransitRequest,
 )
+from app.core.models import HDBTown, SearchQuery
 from app.homeos import case_store as homeos_case_store
 from app.homeos.pipeline import (
     build_homeos_case_file,
@@ -47,7 +48,6 @@ from app.homeos.pipeline import (
     schedule_homeos_viewing,
 )
 from app.api.tiles import LAYERS, build_tile
-from app.core.models import SearchQuery
 from app.repositories.base import Repository
 from app.services import accessibility as access_svc
 from app.services import analytics as analytics_svc
@@ -95,7 +95,7 @@ def health():
 def properties_search(
     minx: float | None = None, miny: float | None = None,
     maxx: float | None = None, maxy: float | None = None,
-    town: str | None = None,
+    town: HDBTown | None = None,
     planning_area_id: int | None = None,
     flat_type: str | None = None,
     min_floor_area: float | None = None,

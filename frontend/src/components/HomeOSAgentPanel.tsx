@@ -151,10 +151,10 @@ export default function HomeOSAgentPanel({
 
           <div className="space-y-0.5">
             {row.top_reasons.map((r) => (
-              <p key={r} className="text-xs text-muted-foreground">✓ {r}</p>
+              <p key={r.text} className="text-xs text-muted-foreground">✓ {r.text}</p>
             ))}
             {row.top_watchouts[0] && (
-              <p className="text-xs text-amber-600">⚠ {row.top_watchouts[0]}</p>
+              <p className="text-xs text-amber-600">⚠ {row.top_watchouts[0].text}</p>
             )}
           </div>
 

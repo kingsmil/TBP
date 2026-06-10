@@ -30,8 +30,11 @@ const mockCase: HomeOSCase = {
       worth_viewing_score: 81.2,
       verdict: "Worth viewing",
       confidence: "high",
-      top_reasons: ["Budget fits.", "Schools nearby."],
-      top_watchouts: ["MRT is moderate."],
+      top_reasons: [
+        { text: "Budget fits.", source: "market" },
+        { text: "Schools nearby.", source: "location" },
+      ],
+      top_watchouts: [{ text: "MRT is moderate.", source: "location" }],
     },
     {
       block_id: 2,
@@ -41,7 +44,7 @@ const mockCase: HomeOSCase = {
       worth_viewing_score: 76.4,
       verdict: "Worth viewing",
       confidence: "medium",
-      top_reasons: ["Good comparables."],
+      top_reasons: [{ text: "Good comparables.", source: "market" }],
       top_watchouts: [],
     },
   ],

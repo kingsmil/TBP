@@ -44,6 +44,17 @@ class TestHomeOSStream(unittest.TestCase):
             return events
         return asyncio.run(run())
 
+    def test_investigate_stream_tags_case_with_user(self):
+        async def run():
+            async for _event in investigate_stream(
+                self.repo, "Family wanting 4 room near MRT.", limit=1, user_id=555
+            ):
+                pass
+        asyncio.run(run())
+        # The created case must carry the caller's user_id.
+        case = next(iter(homeos_case_store._cases.values()))
+        self.assertEqual(case["user_id"], 555)
+
     def test_stream_starts_with_profile_agent_start(self):
         events = self._collect_stream("Family 4 room 800k schools.", limit=1)
         first = events[0]

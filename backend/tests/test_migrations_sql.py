@@ -36,6 +36,17 @@ class TestMigrationsSql(unittest.TestCase):
     def test_postgis_extension_enabled(self):
         self.assertRegex(self.sql, r"CREATE EXTENSION IF NOT EXISTS postgis")
 
+    def test_homeos_cases_table_created(self):
+        self.assertRegex(
+            self.sql,
+            r"CREATE TABLE IF NOT EXISTS homeos_cases\s*\(",
+            "missing CREATE TABLE homeos_cases",
+        )
+        # Must be user-scoped and JSONB-backed.
+        block = self.sql[self.sql.index("homeos_cases"):]
+        self.assertRegex(block, r"user_id\s+INTEGER", "homeos_cases needs user_id INTEGER")
+        self.assertRegex(block, r"data\s+JSONB", "homeos_cases needs data JSONB")
+
     def test_every_spatial_table_created(self):
         for t in SPATIAL_TABLES:
             self.assertRegex(self.sql, r"CREATE TABLE " + re.escape(t.name) + r"\s*\(",

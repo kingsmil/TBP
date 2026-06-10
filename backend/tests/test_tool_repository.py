@@ -211,5 +211,42 @@ class TestToolRepository(unittest.TestCase):
         self.assertIn("tools", agents[0])
 
 
+class TestExistingToolSpecs(unittest.TestCase):
+    def _all_tool_classes(self):
+        from app.homeos.tools.transactions import TransactionsTool
+        from app.homeos.tools.proximity import ProximityTool
+        from app.homeos.tools.appreciation import AppreciationTool
+        from app.homeos.tools.future_dev import FutureDevTool
+        from app.homeos.tools.accessibility import AccessibilityTool
+        from app.homeos.tools.search import SearchTool
+        return [
+            TransactionsTool, ProximityTool, AppreciationTool,
+            FutureDevTool, AccessibilityTool, SearchTool,
+        ]
+
+    def test_all_tools_have_spec(self):
+        from app.homeos.framework.spec import ToolSpec
+        for cls in self._all_tool_classes():
+            with self.subTest(cls=cls.__name__):
+                self.assertIsInstance(cls.spec, ToolSpec)
+
+    def test_all_tools_have_non_empty_use_case(self):
+        for cls in self._all_tool_classes():
+            with self.subTest(cls=cls.__name__):
+                self.assertTrue(
+                    cls.spec.use_case,
+                    f"{cls.__name__}.spec.use_case is empty"
+                )
+
+    def test_all_tools_have_basemodel_output_type(self):
+        from pydantic import BaseModel
+        for cls in self._all_tool_classes():
+            with self.subTest(cls=cls.__name__):
+                self.assertTrue(
+                    issubclass(cls.spec.output_type, BaseModel),
+                    f"{cls.__name__}.spec.output_type is not a BaseModel subclass"
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

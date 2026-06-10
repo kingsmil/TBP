@@ -12,8 +12,8 @@ SAMPLE_ROW = {
     "flat_type": "2-Room", "floor_area_sqm": "43.00", "storey_range": "6 to 10",
     "remaining_lease": "40 years ", "bedroom": "1", "bathroom": "1",
     "description": "Fully Renovated Unit.", "photo_path": "rf/36066/x.jpg",
-    "agent_name": "BENJAMIN POH JING JIE", "agent_phone": "86688550",
-    "agent_email": "benjaminpoh@era.com.sg", "agency_name": "ERA REALTY NETWORK PTE LTD",
+    "agent_name": "JOHN DOE", "agent_phone": "91234567",
+    "agent_email": "john.doe@example.com", "agency_name": "TBP PTE LTD",
     "managed_by_agent": "t", "last_updated": "2026-03-03 15:45:56.5",
 }
 
@@ -67,7 +67,7 @@ class SeedListingsTest(unittest.TestCase):
         self.assertEqual((seeded, unmatched), (1, 1))
         stored = repo.active_listings_for_block(7)
         self.assertEqual(stored[0].listing_id, 36066)
-        self.assertEqual(stored[0].agent_phone, "86688550")
+        self.assertEqual(stored[0].agent_phone, "91234567")
 
     def test_bundled_snapshot_exists_and_parses(self):
         from app.data.seed_listings import SNAPSHOT, row_to_fields

@@ -9,8 +9,8 @@ def _bidadari_block(block_id=164):
                       street="BIDADARI PK DR", postal="")
 
 
-def _agent_listing(listing_id, phone, name="ONG LAY KENG",
-                   agency="HUTTONS ASIA PTE. LTD.", **kw):
+def _agent_listing(listing_id, phone, name="JOHN DOE",
+                   agency="TBP PTE LTD", **kw):
     return make_listing(listing_id=listing_id, agent_phone=phone,
                         agent_name=name, agency_name=agency,
                         managed_by_agent=True, **kw)
@@ -46,10 +46,10 @@ class FindBlockAgentsTest(unittest.TestCase):
         repo = InMemoryRepository()
         repo.add_blocks([_bidadari_block()])
         repo.add_active_listings([
-            _agent_listing(1, "91112487", block_id=164, price=500000.0),
-            _agent_listing(2, "91112487", block_id=164, price=700000.0),
-            _agent_listing(3, "86688550", name="BENJAMIN POH",
-                           agency="ERA REALTY NETWORK PTE LTD",
+            _agent_listing(1, "91234567", block_id=164, price=500000.0),
+            _agent_listing(2, "91234567", block_id=164, price=700000.0),
+            _agent_listing(3, "98765432", name="JANE DOE",
+                           agency="TBP PTE LTD",
                            block_id=164, price=600000.0),
             make_listing(listing_id=4, block_id=164, price=550000.0),  # owner-listed
         ])
@@ -61,8 +61,8 @@ class FindBlockAgentsTest(unittest.TestCase):
         self.assertEqual(data["block"]["block_id"], 164)
         self.assertEqual(data["listing_count"], 4)
         agents = {a["agent_phone"]: a for a in data["agents"]}
-        self.assertEqual(set(agents), {"91112487", "86688550"})
-        self.assertEqual([l["listing_id"] for l in agents["91112487"]["listings"]],
+        self.assertEqual(set(agents), {"91234567", "98765432"})
+        self.assertEqual([l["listing_id"] for l in agents["91234567"]["listings"]],
                          [1, 2])
         self.assertEqual(len(data["owner_listings"]), 1)
         self.assertEqual(data["owner_listings"][0]["listing_id"], 4)
@@ -89,9 +89,9 @@ class BlockAgentsApiTest(unittest.TestCase):
         repo = InMemoryRepository()
         repo.add_blocks([_bidadari_block()])
         repo.add_active_listings([
-            _agent_listing(1, "91112487", block_id=164, price=500000.0),
-            _agent_listing(2, "86688550", name="BENJAMIN POH",
-                           agency="ERA REALTY NETWORK PTE LTD",
+            _agent_listing(1, "91234567", block_id=164, price=500000.0),
+            _agent_listing(2, "98765432", name="JANE DOE",
+                           agency="TBP PTE LTD",
                            block_id=164, price=600000.0),
         ])
         app.dependency_overrides[deps.get_repository] = lambda: repo
@@ -111,7 +111,7 @@ class BlockAgentsApiTest(unittest.TestCase):
         self.assertEqual(body["block"]["block_number"], "104A")
         self.assertEqual(len(body["agents"]), 2)
         phones = {a["agent_phone"] for a in body["agents"]}
-        self.assertEqual(phones, {"91112487", "86688550"})
+        self.assertEqual(phones, {"91234567", "98765432"})
 
     def test_404_for_unknown_address(self):
         resp = self.client.get("/blocks/agents",

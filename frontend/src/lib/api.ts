@@ -5,6 +5,7 @@ import type {
   AccessibilityScores,
   BlockAgentsResponse,
   BlockListingsResponse,
+  OutreachMessageResponse,
   AppreciationResult,
   CommuteHeatmapResponse,
   CommuteOptimizeResponse,
@@ -244,6 +245,18 @@ export function getBlockAgents(address: string): Promise<BlockAgentsResponse> {
   return getJSON<BlockAgentsResponse>(
     `/blocks/agents?address=${encodeURIComponent(address)}`,
   );
+}
+
+export function prepareOutreachMessage(
+  listingId: number,
+  body: {
+    case_id?: string;
+    contact_name?: string;
+    availability?: string[];
+    note?: string;
+  },
+): Promise<OutreachMessageResponse> {
+  return postJSON<OutreachMessageResponse>(`/listings/${listingId}/outreach-message`, body);
 }
 
 export function getCases(): Promise<HomeOSCaseSummary[]> {

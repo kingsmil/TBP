@@ -399,6 +399,15 @@ export interface BlockListingsResponse {
   listings: ActiveListing[];
 }
 
+export interface OutreachMessageResponse {
+  listing_id: number;
+  message: string;
+  questions: string[];
+  whatsapp_url?: string;
+  email_url?: string;
+  agent_name?: string;
+}
+
 export interface ListingSummary {
   listing_id: number;
   price: number;

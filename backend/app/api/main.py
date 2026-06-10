@@ -36,8 +36,8 @@ from app.api.schemas import (
     RecommendationRequest,
     DirectTransitRequest,
 )
-from app.services import homeos_case_store
-from app.services.homeos import (
+from app.homeos import case_store as homeos_case_store
+from app.homeos.pipeline import (
     build_homeos_case_file,
     chat_in_case,
     investigate_homeos_profile,
@@ -62,8 +62,19 @@ from app.services.recommendation import recommend
 from app.services.search import search_blocks
 from app.services.undervalued import detect_undervalued
 
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def _lifespan(application):
+    from app.homeos.wiring import setup as homeos_setup
+    homeos_setup()
+    yield
+
+
 app = FastAPI(title="HDB Match API", version="0.1.0",
-              description="Geospatial analytics platform for Singapore HDB.")
+              description="Geospatial analytics platform for Singapore HDB.",
+              lifespan=_lifespan)
 
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],

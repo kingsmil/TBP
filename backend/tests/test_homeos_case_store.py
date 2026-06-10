@@ -1,6 +1,6 @@
 import unittest
 
-from app.services.homeos_case_store import (
+from app.homeos.case_store import (
     append_event,
     append_message,
     create_case,
@@ -11,8 +11,8 @@ from app.services.homeos_case_store import (
 
 class TestHomeOSCaseStore(unittest.TestCase):
     def setUp(self):
-        from app.services import homeos_case_store
-        homeos_case_store._cases.clear()
+        from app.homeos import case_store
+        case_store._cases.clear()
 
     def test_create_case_returns_case_with_id(self):
         case = create_case("Family looking for 4 room under 800k.")

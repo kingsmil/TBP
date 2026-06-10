@@ -86,6 +86,7 @@ class HomeOSInvestigationRequest(BaseModel):
 
 class HomeOSCaseFileRequest(BaseModel):
     profile_text: str = Field(..., min_length=10)
+    case_id: str | None = None
 
 
 class HomeOSScheduleViewingRequest(BaseModel):

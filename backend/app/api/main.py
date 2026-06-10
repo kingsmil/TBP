@@ -40,6 +40,7 @@ from app.api.schemas import (
 )
 from app.core.models import HDBTown, SearchQuery
 from app.homeos import case_store as homeos_case_store
+from app.homeos.case_assembler import assemble_case_file_from_case
 from app.homeos.pipeline import (
     build_homeos_case_file,
     chat_in_case,
@@ -262,8 +263,11 @@ def homeos_investigate(req: HomeOSInvestigationRequest,
 
 @app.post("/homeos/case-file/{block_id}")
 def homeos_case_file(block_id: int, req: HomeOSCaseFileRequest,
-                     repo: Repository = Depends(get_repository),
-                     _user=Depends(require_subscribed)):
+                     repo: Repository = Depends(get_repository)):
+    if req.case_id:
+        assembled = assemble_case_file_from_case(req.case_id, block_id)
+        if assembled is not None:
+            return assembled
     try:
         return build_homeos_case_file(repo, req.profile_text, block_id)
     except ValueError as exc:

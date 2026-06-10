@@ -42,8 +42,8 @@ function ListingRow({
 
       <p className="mt-3 text-xs font-medium text-foreground">{row.verdict}</p>
       {row.top_reasons.slice(0, 2).map((reason) => (
-        <p key={reason} className="mt-1 text-xs leading-snug text-muted-foreground">
-          {reason}
+        <p key={reason.text} className="mt-1 text-xs leading-snug text-muted-foreground">
+          {reason.text}
         </p>
       ))}
     </button>

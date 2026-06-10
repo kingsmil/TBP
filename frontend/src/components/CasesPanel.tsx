@@ -197,6 +197,7 @@ export default function CasesPanel({
 
   const isRefining = activeStatus === "refining";
   const isRunning = activeStatus === "running" || isStreaming;
+  const isDeepAnalysis = isRunning && streamingEvents.some((e) => e.block_id != null);
   const isDone = activeStatus === "done";
 
   const profileText =
@@ -341,7 +342,9 @@ export default function CasesPanel({
               <div className="flex justify-start">
                 <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-muted px-3 py-2">
                   <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">HomeOS is working…</span>
+                  <span className="text-xs text-muted-foreground">
+                    HomeOS is working…{isDeepAnalysis && " (This may take a few minutes)"}
+                  </span>
                 </div>
               </div>
             )}

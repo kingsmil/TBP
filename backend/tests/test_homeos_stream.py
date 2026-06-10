@@ -98,7 +98,8 @@ class TestHomeOSStream(unittest.TestCase):
         self.assertEqual(case["conversation"][-1]["role"], "assistant")
 
     def test_stream_asks_pref_dims_before_analysis(self):
-        events = self._collect_stream("Family 4 room 800k schools.", limit=1)
+        # "4 room" alone matches >5 blocks, so the gate must ask before analysing.
+        events = self._collect_stream("4 room", limit=1)
         q_events = [e for e in events if e["event"] == "clarifying_question"]
         self.assertTrue(q_events, "expected at least one clarifying question before deep analysis")
         for q in q_events:
@@ -169,6 +170,49 @@ class TestHomeOSStream(unittest.TestCase):
         case = homeos_case_store.get_case(case_id)
         pipeline_agents = [e.get("agent") for e in case["pipeline"]]
         self.assertIn("lifestyle", pipeline_agents)
+
+    # ── Proceed command + small-set auto-analysis ────────────────────────────
+
+    def test_proceed_command_skips_remaining_questions(self):
+        """Saying 'proceed' must go straight to deep analysis, not ask more."""
+        async def run():
+            events = []
+            async for e in investigate_stream(self.repo, "4 room", limit=2):
+                events.append(e)
+            # 12 candidates (>5) → investigate should ask at least one question
+            self.assertEqual(events[-1]["event"], "clarifying_question", events[-1])
+            case_id = events[-1]["case_id"]
+            refine_events = []
+            async for e in refine_stream(self.repo, case_id, "proceed"):
+                refine_events.append(e)
+            return refine_events
+        refine_events = asyncio.run(run())
+        self.assertEqual(
+            [e for e in refine_events if e["event"] == "clarifying_question"], [],
+            "'proceed' must not produce any further clarifying questions",
+        )
+        self.assertTrue(
+            [e for e in refine_events if e["event"] == "case_done"],
+            "'proceed' must reach deep analysis (case_done)",
+        )
+
+    def test_small_candidate_set_skips_questions(self):
+        """<=5 candidates → straight to analysis, no clarifying questions."""
+        async def run():
+            events = []
+            async for e in investigate_stream(
+                self.repo, "Family 4 room 800k schools.", limit=2):
+                events.append(e)
+            return events
+        events = asyncio.run(run())
+        self.assertEqual(
+            [e for e in events if e["event"] == "clarifying_question"], [],
+            "a result set of <=5 must not trigger any clarifying questions",
+        )
+        self.assertTrue(
+            [e for e in events if e["event"] == "case_done"],
+            "small result set must proceed to deep analysis (case_done)",
+        )
 
 
 if __name__ == "__main__":

@@ -14,5 +14,5 @@ market_definition = AgentSpec(
     ),
     output_type=MarketEvidence,
     tool_names=["transactions"],
-    prefetch=[],
+    prefetch=["transactions"],
 )

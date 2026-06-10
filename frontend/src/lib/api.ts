@@ -293,7 +293,7 @@ export async function* investigateStream(
 ): AsyncGenerator<AgentEvent> {
   const res = await fetch(`${BASE}/homeos/investigate-stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ profile_text: profileText, limit }),
   });
   if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
@@ -326,7 +326,7 @@ export async function* refineStream(
 ): AsyncGenerator<AgentEvent> {
   const res = await fetch(`${BASE}/homeos/cases/${caseId}/refine`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ message }),
   });
   if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
@@ -359,7 +359,7 @@ export async function* chatInCase(
 ): AsyncGenerator<string> {
   const res = await fetch(`${BASE}/homeos/cases/${caseId}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ message }),
   });
   if (!res.ok || !res.body) throw new Error(`API ${res.status}`);

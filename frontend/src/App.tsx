@@ -14,6 +14,7 @@ import EstateComparison from "./components/EstateComparison";
 import FilterPanel from "./components/FilterPanel";
 import HomeOSDetailPanel from "./components/HomeOSDetailPanel";
 import MapView from "./components/MapView";
+import { MAP_SEARCH_LIMIT } from "./lib/mapConfig";
 import PipelinePanel from "./components/PipelinePanel";
 import PsfTrendChart from "./components/PsfTrendChart";
 import StatCard from "./components/StatCard";
@@ -68,7 +69,7 @@ export default function App() {
   const [mode, setMode] = useState<Mode>("ai");
 
   // Shared
-  const [filters, setFilters] = useState<SearchFilters>({ limit: 500 });
+  const [filters, setFilters] = useState<SearchFilters>({ limit: MAP_SEARCH_LIMIT });
   const [directTransit, setDirectTransit] = useState<DirectTransitResponse | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null);
   const [shortlistIds, setShortlistIds] = useState<number[]>([]);

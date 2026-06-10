@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { SearchFilters } from "../types";
+import { MAP_SEARCH_LIMIT } from "../lib/mapConfig";
 
 const FLAT_TYPES = ["2 ROOM", "3 ROOM", "4 ROOM", "5 ROOM", "EXECUTIVE"];
 
@@ -18,7 +19,7 @@ interface Props {
   onChange: (next: SearchFilters) => void;
 }
 
-const DEFAULT_FILTERS: SearchFilters = { limit: 500 };
+const DEFAULT_FILTERS: SearchFilters = { limit: MAP_SEARCH_LIMIT };
 const ANY = "__any__";
 
 export default function FilterPanel({ filters, onChange }: Props) {

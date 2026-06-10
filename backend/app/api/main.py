@@ -106,7 +106,7 @@ def properties_search(
     max_mrt_distance_m: float | None = None,
     max_bus_distance_m: float | None = None,
     min_schools_within_1km: int | None = None,
-    limit: int = Query(500, ge=1, le=5000),
+    limit: int = Query(500, ge=1, le=20_000),
     repo: Repository = Depends(get_repository),
 ):
     bbox = None

@@ -67,7 +67,14 @@ def mock_commute_data(block_id: int, prefs: dict) -> dict[str, Any]:
 
 
 def mock_bus_routes_data(block_id: int) -> dict[str, Any]:
-    return {"available": True, "nearest_stop_code": "00000", "services": ["12", "38"], "destination_examples": []}
+    return {
+        "available": True,
+        "nearest_stop": {"code": "00000", "distance_m": 120.0},
+        "services": [
+            {"service_no": "12", "stops_reachable": 8},
+            {"service_no": "38", "stops_reachable": 6},
+        ],
+    }
 
 
 def mock_search_data(prefs: dict, limit: int) -> list[dict[str, Any]]:

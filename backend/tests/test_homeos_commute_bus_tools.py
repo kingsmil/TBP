@@ -2,7 +2,7 @@
 import unittest
 
 from app.core.geo import Point
-from app.core.models import Block, BusStop, MrtStation
+from app.core.models import Block, BlockProximity, BusStop, MrtStation
 from pydantic import BaseModel
 
 from app.homeos.framework.spec import AgentSpec, PrefDimension, ToolSpec
@@ -159,6 +159,60 @@ class TestInMemoryBusStopReach(unittest.TestCase):
         reach = repo.bus_stop_reach("02001")
         self.assertEqual(reach["services"], [])
         self.assertEqual(reach["service_count"], 0)
+
+
+def _bus_repo(with_routes: bool = True) -> InMemoryRepository:
+    repo = InMemoryRepository()
+    repo.add_bus_stops([
+        BusStop("01001", "Stop A", Point(103.93, 1.32)),
+        BusStop("01002", "Stop B", Point(103.94, 1.32)),
+    ])
+    repo.set_proximity([BlockProximity(
+        block_id=1, nearest_bus_stop_code="01001", nearest_bus_distance_m=150.0)])
+    if with_routes:
+        repo.add_bus_routes([
+            {"service_no": "12", "direction": 1, "stop_sequence": 1, "bus_stop_code": "01001"},
+            {"service_no": "12", "direction": 1, "stop_sequence": 2, "bus_stop_code": "01002"},
+            {"service_no": "12", "direction": 2, "stop_sequence": 9, "bus_stop_code": "01001"},
+        ])
+    return repo
+
+
+class TestBusRoutesTool(unittest.TestCase):
+    def _fetch(self, repo, block_id=1):
+        from app.homeos.tools.bus_routes import BusRoutesTool
+        return BusRoutesTool().fetch(repo, block_id, {})
+
+    def test_no_proximity_row_is_unavailable(self):
+        result = self._fetch(InMemoryRepository(), block_id=42)
+        self.assertEqual(result, {"available": False, "nearest_stop": None, "services": []})
+
+    def test_empty_routes_is_unavailable_but_keeps_nearest_stop(self):
+        result = self._fetch(_bus_repo(with_routes=False))
+        self.assertFalse(result["available"])
+        self.assertEqual(result["nearest_stop"], {"code": "01001", "distance_m": 150.0})
+        self.assertEqual(result["services"], [])
+
+    def test_services_aggregated_by_service_no(self):
+        from app.homeos.tools.bus_routes import BusRoutesOutput
+        result = self._fetch(_bus_repo())
+        output = BusRoutesOutput.model_validate(result)
+        self.assertTrue(output.available)
+        self.assertEqual(len(output.services), 1)  # directions collapsed
+        self.assertEqual(output.services[0].service_no, "12")
+        self.assertEqual(output.services[0].stops_reachable, 1)  # best direction reaches Stop B
+
+    def test_spec_declares_activating_pref_with_default(self):
+        from app.homeos.tools.bus_routes import BusRoutesTool
+        prefs = BusRoutesTool.spec.activating_prefs
+        self.assertEqual(prefs[0].field, "bus_reliance")
+        self.assertEqual(prefs[0].default, "low")
+
+    def test_mock_mode_validates(self):
+        from app.homeos.tools.bus_routes import BusRoutesOutput, BusRoutesTool
+        out = BusRoutesOutput.model_validate(
+            BusRoutesTool(mock=True).fetch(InMemoryRepository(), 1, {}))
+        self.assertTrue(out.available)
 
 
 if __name__ == "__main__":

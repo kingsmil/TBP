@@ -6,11 +6,22 @@ from pydantic import BaseModel
 
 
 @dataclass
+class PrefDimension:
+    """A buyer-preference dimension that unlocks a tool/agent. Consumed by the
+    Spec 1 preference-review gate; declared here so tools can self-describe."""
+    field: str            # key in HomeOSPreferences / prefs dict
+    prompt: str           # bullet shown to the buyer
+    query_key: str | None = None  # SearchQuery key whose absence == "not stated"
+    default: str | None = None    # for non-search dims: value meaning "never stated"
+
+
+@dataclass
 class ToolSpec:
     name: str
     description: str
     use_case: str
     output_type: type[BaseModel]
+    activating_prefs: list[PrefDimension] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not (isinstance(self.output_type, type) and issubclass(self.output_type, BaseModel)):
@@ -27,3 +38,4 @@ class AgentSpec:
     output_type: type[BaseModel]
     tool_names: list[str] = field(default_factory=list)
     prefetch: list[str] = field(default_factory=list)
+    activating_prefs: list[PrefDimension] = field(default_factory=list)

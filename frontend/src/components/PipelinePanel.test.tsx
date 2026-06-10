@@ -124,7 +124,7 @@ describe("PipelinePanel", () => {
     createElement.mockRestore();
   });
 
-  it("shows running state from streaming events", () => {
+  it("shows agent progress rows from streaming events", () => {
     const streaming: AgentEvent[] = [
       { event: "agent_start", agent: "location", block_id: 2 },
     ];
@@ -138,6 +138,29 @@ describe("PipelinePanel", () => {
       />,
     );
 
-    expect(screen.getByText(/Finding the best matching listings/i)).toBeInTheDocument();
+    expect(screen.getByText("Market")).toBeInTheDocument();
+    expect(screen.getByText("Location")).toBeInTheDocument();
+    expect(screen.getByText("Lifestyle")).toBeInTheDocument();
+    expect(screen.getByText("Risk")).toBeInTheDocument();
+  });
+
+  it("expands a listing row to show agent narratives", () => {
+    const narratives: Map<number, Map<string, string>> = new Map([
+      [1, new Map([["market", "Prices are affordable."], ["location", "MRT nearby."]])],
+    ]);
+
+    render(
+      <PipelinePanel
+        activeCase={mockCase}
+        streamingEvents={[]}
+        onSelectBlock={vi.fn()}
+        onSendMessage={vi.fn()}
+        blockNarratives={narratives as any}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Expand block 1 agent logs"));
+    expect(screen.getByText(/Prices are affordable/)).toBeInTheDocument();
+    expect(screen.getByText(/MRT nearby/)).toBeInTheDocument();
   });
 });

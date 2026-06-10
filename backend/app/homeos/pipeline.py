@@ -568,6 +568,7 @@ def _preference_review(
         if e.get("event") == "clarifying_question" and e.get("field")
     }
 
+    missing: list[str] = []
     for dim in tool_repository.review_dimensions():
         if dim.field in asked:
             continue

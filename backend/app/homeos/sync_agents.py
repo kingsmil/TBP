@@ -156,6 +156,42 @@ def risk_value_agent(
     return evidence
 
 
+def lifestyle_analysis_agent(
+    repo: Repository,
+    block_id: int,
+    provider: Any | None,
+    destinations: list[Any] | None,
+) -> dict[str, Any]:
+    """Synchronous lifestyle / commute analysis for the case-file endpoint."""
+    from app.homeos.mock.agents import mock_lifestyle_narrative
+
+    evidence: dict[str, Any] = {
+        "lifestyle_score": None,
+        "commute_band": None,
+        "couple_fairness": None,
+        "factors": {},
+        "watchouts": [],
+        "destinations": [],
+    }
+
+    if provider is not None and destinations:
+        try:
+            from app.services.lifestyle import lifestyle_score
+            result = lifestyle_score(repo, block_id, provider, destinations)
+            evidence.update(result)
+        except Exception:
+            pass
+
+    if is_mock_mode():
+        evidence["narrative"] = mock_lifestyle_narrative(evidence)
+    else:
+        evidence["narrative"] = (
+            f"Commute band: {evidence.get('commute_band') or 'unavailable'}."
+        )
+
+    return evidence
+
+
 def base_viewing_questions(evidence: dict[str, Any]) -> list[str]:
     """Deterministic due-diligence questions — no LLM, no mock dependency."""
     questions = [

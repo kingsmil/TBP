@@ -38,6 +38,7 @@ def worth_viewing_score(
     location: dict,
     risk: dict,
     prefs: dict,
+    lifestyle: dict | None = None,
 ) -> tuple[float, list[EvidenceItem], list[EvidenceItem]]:
     score = 0.0
     reasons: list[EvidenceItem] = []
@@ -91,24 +92,28 @@ def worth_viewing_score(
         if resolved:
             worst_dest = max(resolved, key=lambda d: d["travel_min"])
             if worst > 60:
-                watchouts.append(
-                    f"Long commute to {worst_dest['name']} (~{worst_dest['travel_min']:.0f} min)."
-                )
+                watchouts.append(_item(
+                    f"Long commute to {worst_dest['name']} (~{worst_dest['travel_min']:.0f} min).",
+                    "location",
+                ))
             elif worst <= 30:
                 score += 8
-                reasons.append(f"Short commute to {worst_dest['name']} (~{worst_dest['travel_min']:.0f} min).")
+                reasons.append(_item(
+                    f"Short commute to {worst_dest['name']} (~{worst_dest['travel_min']:.0f} min).",
+                    "location",
+                ))
 
     bus_routes = location.get("bus_routes") or {}
     if bus_routes.get("available") and prefs.get("bus_reliance") == "high":
         service_count = len(bus_routes.get("services", []))
         if service_count >= 8:
             score += 8
-            reasons.append(f"Excellent bus coverage ({service_count} services from nearest stop).")
+            reasons.append(_item(f"Excellent bus coverage ({service_count} services from nearest stop).", "location"))
         elif service_count >= 4:
             score += 4
-            reasons.append(f"Good bus coverage ({service_count} services from nearest stop).")
+            reasons.append(_item(f"Good bus coverage ({service_count} services from nearest stop).", "location"))
         elif service_count < 3:
-            watchouts.append(f"Limited bus coverage ({service_count} services from nearest stop).")
+            watchouts.append(_item(f"Limited bus coverage ({service_count} services from nearest stop).", "location"))
 
     score += risk.get("score_adjustment") or 0.0
     return round(max(0.0, min(score, 100.0)), 1), reasons[:4], watchouts[:4]

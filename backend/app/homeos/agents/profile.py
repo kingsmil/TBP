@@ -1,8 +1,9 @@
-from app.homeos.framework.agent import AgentDefinition
+from app.homeos.framework.spec import AgentSpec
 from app.homeos.models.avatar import HomeOSAvatar
 
-profile_definition = AgentDefinition(
+profile_definition = AgentSpec(
     name="profile",
+    description="Parses a free-text household description into structured buyer preferences.",
     system_prompt=(
         "You are a Singapore HDB buyer advisor. "
         "Parse the household description into structured buyer preferences. "

@@ -1,8 +1,9 @@
-from app.homeos.framework.agent import AgentDefinition
+from app.homeos.framework.spec import AgentSpec
 from app.homeos.models.evidence import RiskEvidence
 
-risk_definition = AgentDefinition(
+risk_definition = AgentSpec(
     name="risk",
+    description="Identifies appreciation potential, supply risk, and accessibility to compute a risk-adjusted score.",
     system_prompt=(
         "You are an HDB risk analyst. "
         "Given appreciation score, future supply, and accessibility data (in pre-fetched context), "

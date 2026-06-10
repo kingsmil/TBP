@@ -1,17 +1,16 @@
-"""Registers all ToolAdapters and AgentDefinitions into module-level singletons.
+"""Registers all tool adapters and agent specs into the module-level ToolRepository singleton.
 Call setup() once at app startup.
 """
 from __future__ import annotations
 
-from app.homeos.framework.registry import AgentRegistry, ToolRegistry
 from app.homeos.mock.tools import is_mock_mode
+from app.homeos.tool_repository import ToolRepository
 
-tool_registry: ToolRegistry
-agent_registry: AgentRegistry
+tool_repository: ToolRepository
 
 
 def setup() -> None:
-    global tool_registry, agent_registry
+    global tool_repository
 
     mock = is_mock_mode()
 
@@ -22,9 +21,10 @@ def setup() -> None:
     from app.homeos.tools.accessibility import AccessibilityTool
     from app.homeos.tools.search import SearchTool
 
-    tool_registry = ToolRegistry(mock=mock)
-    for adapter_cls in (TransactionsTool, ProximityTool, AppreciationTool, FutureDevTool, AccessibilityTool, SearchTool):
-        tool_registry.register(adapter_cls(mock=mock))
+    tool_repository = ToolRepository(mock=mock)
+    for cls in (TransactionsTool, ProximityTool, AppreciationTool,
+                FutureDevTool, AccessibilityTool, SearchTool):
+        tool_repository.register_tool(cls(mock=mock))
 
     from app.homeos.agents.profile import profile_definition
     from app.homeos.agents.market import market_definition
@@ -32,6 +32,6 @@ def setup() -> None:
     from app.homeos.agents.risk import risk_definition
     from app.homeos.agents.questions import questions_definition
 
-    agent_registry = AgentRegistry(tool_registry)
-    for defn in (profile_definition, market_definition, location_definition, risk_definition, questions_definition):
-        agent_registry.register(defn)
+    for spec in (profile_definition, market_definition, location_definition,
+                 risk_definition, questions_definition):
+        tool_repository.register_agent(spec)

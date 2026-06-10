@@ -1,8 +1,9 @@
-from app.homeos.framework.agent import AgentDefinition
+from app.homeos.framework.spec import AgentSpec
 from app.homeos.models.evidence import AgentQuestions
 
-questions_definition = AgentDefinition(
+questions_definition = AgentSpec(
     name="questions",
+    description="Generates 4–6 due-diligence questions a buyer should ask before viewing a block.",
     system_prompt=(
         "You are an HDB buyer advocate. "
         "Given the evidence from market, location, and risk agents, generate 4-6 due-diligence "

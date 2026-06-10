@@ -75,6 +75,20 @@ def _extract_budget(text: str) -> float | None:
     return None
 
 
+def _extract_work_locations(text: str) -> list[str]:
+    locations: list[str] = []
+    pattern = re.compile(
+        r"\b(?:work|works|working|office)\s+(?:at|in|near)\s+"
+        r"([A-Za-z][A-Za-z0-9 .'-]*?)(?=\s+(?:and|with|but|because|while|plus)\b|[.,;]|$)",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(text):
+        loc = " ".join(match.group(1).split()).strip(" .,-")
+        if loc and loc.casefold() not in {x.casefold() for x in locations}:
+            locations.append(loc)
+    return locations
+
+
 def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
     buyer_type = "family" if _has_any(profile_text, ("family", "kids", "children", "child", "primary school", "schools")) else "single"
     if _has_any(profile_text, ("must be close to mrt", "near mrt", "close to mrt", "commute", "mrt access", "within 600")):
@@ -88,6 +102,12 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
     school_priority = "high" if _has_any(profile_text, ("primary school", "schools", "kids", "children", "family")) else "low"
     risk_tolerance = "medium" if _has_any(profile_text, ("some risk", "appreciation risk", "growth", "invest")) else "low"
     appreciation_priority = "high" if _has_any(profile_text, ("growth", "appreciation", "investment", "undervalued")) else "medium"
+    work_locations = _extract_work_locations(profile_text)
+    bus_reliance = "high" if _has_any(
+        profile_text,
+        ("no car", "without a car", "don't drive", "doesn't drive", "depend on bus", "depends on bus",
+         "depend on buses", "depends on buses", "rely on bus", "rely on buses", "bus dependent"),
+    ) else "low"
     if buyer_type == "family":
         label = "Family HomeOS Agent"
         summary = "Family buyer prioritizing schools, budget fit, and lower-risk viewing choices."
@@ -108,6 +128,8 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
             "school_priority": school_priority,
             "risk_tolerance": risk_tolerance,
             "appreciation_priority": appreciation_priority,
+            "work_locations": work_locations,
+            "bus_reliance": bus_reliance,
         },
     }
 
@@ -194,7 +216,12 @@ async def _deep_analysis_stream(
                     "Summarise the location evidence for this block.",
                 )
                 location_narrative = output.narrative
-            location_evidence = {**prox_data, "narrative": location_narrative}
+            location_evidence = {
+                **prox_data,
+                "commute": prefetched_loc.get("commute", {}),
+                "bus_routes": prefetched_loc.get("bus_routes", {}),
+                "narrative": location_narrative,
+            }
 
             yield {"event": "agent_data", "agent": "location", "block_id": block_id, "data": location_evidence}
             homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "location", "block_id": block_id, "data": location_evidence})

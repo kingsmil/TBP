@@ -65,5 +65,18 @@ def worth_viewing_score(
             else:
                 watchouts.append("Primary school access is weak for this family profile.")
 
+    commute = location.get("commute") or {}
+    worst = commute.get("worst_commute_min")
+    if commute.get("available") and worst is not None and worst > 60:
+        resolved = [
+            d for d in commute.get("destinations", [])
+            if d.get("resolved") and d.get("travel_min") is not None
+        ]
+        if resolved:
+            worst_dest = max(resolved, key=lambda d: d["travel_min"])
+            watchouts.append(
+                f"Long commute to {worst_dest['name']} (~{worst_dest['travel_min']:.0f} min)."
+            )
+
     score += risk.get("score_adjustment") or 0.0
     return round(max(0.0, min(score, 100.0)), 1), reasons[:4], watchouts[:4]

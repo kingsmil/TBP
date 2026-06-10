@@ -63,6 +63,50 @@ class TestToolAdaptersIntegration(unittest.TestCase):
         self.assertGreater(len(output.results), 0)
         self.assertIsInstance(output.results[0].town, str)
 
+    def test_commute_tool_output_validates(self):
+        from app.homeos.tools.commute import CommuteTool, CommuteOutput
+        tool = CommuteTool()
+        result = tool.fetch(self.repo, self.block_id,
+                            {**self.prefs, "work_locations": ["MRT-1", "Nowhere Special"]})
+        output = CommuteOutput.model_validate(result)
+        self.assertTrue(output.available)
+        resolved = {d.name: d.resolved for d in output.destinations}
+        self.assertTrue(resolved["MRT-1"])
+        self.assertFalse(resolved["Nowhere Special"])
+        self.assertIsNotNone(output.worst_commute_min)
+
+    def test_commute_tool_without_work_locations_is_unavailable(self):
+        from app.homeos.tools.commute import CommuteTool, CommuteOutput
+        output = CommuteOutput.model_validate(
+            CommuteTool().fetch(self.repo, self.block_id, self.prefs))
+        self.assertFalse(output.available)
+        self.assertEqual(output.destinations, [])
+
+    def test_bus_routes_tool_with_seeded_routes(self):
+        from app.homeos.tools.bus_routes import BusRoutesTool, BusRoutesOutput
+        prox = self.repo.proximity(self.block_id)
+        code = prox.nearest_bus_stop_code
+        self.assertIsNotNone(code)  # seed generator creates 3 stops/area
+        self.repo.add_bus_routes([
+            {"service_no": "901", "direction": 1, "stop_sequence": 1, "bus_stop_code": code},
+            {"service_no": "901", "direction": 1, "stop_sequence": 2,
+             "bus_stop_code": next(s.bus_stop_code for s in self.repo.bus_stops()
+                                   if s.bus_stop_code != code)},
+        ])
+        output = BusRoutesOutput.model_validate(
+            BusRoutesTool().fetch(self.repo, self.block_id, {}))
+        self.assertTrue(output.available)
+        self.assertEqual(output.services[0].service_no, "901")
+        self.assertGreaterEqual(output.services[0].stops_reachable, 1)
+
+    def test_bus_routes_tool_without_routes_is_honestly_unavailable(self):
+        from app.homeos.tools.bus_routes import BusRoutesTool, BusRoutesOutput
+        repo, _ = build_seeded_repo(seed=7, blocks_per_area=2, months=3)
+        block_id = list(repo.blocks())[0].block_id
+        output = BusRoutesOutput.model_validate(BusRoutesTool().fetch(repo, block_id, {}))
+        self.assertFalse(output.available)
+        self.assertEqual(output.services, [])
+
     def test_all_tool_outputs_parse_via_spec_output_type(self):
         """Each tool's declared output_type must cleanly parse its own fetch() result."""
         from app.homeos.tools.transactions import TransactionsTool
@@ -71,6 +115,8 @@ class TestToolAdaptersIntegration(unittest.TestCase):
         from app.homeos.tools.future_dev import FutureDevTool
         from app.homeos.tools.accessibility import AccessibilityTool
         from app.homeos.tools.search import SearchTool
+        from app.homeos.tools.commute import CommuteTool
+        from app.homeos.tools.bus_routes import BusRoutesTool
 
         pairs = [
             (TransactionsTool, self.block_id),
@@ -79,6 +125,8 @@ class TestToolAdaptersIntegration(unittest.TestCase):
             (FutureDevTool, self.block_id),
             (AccessibilityTool, self.block_id),
             (SearchTool, None),
+            (CommuteTool, self.block_id),
+            (BusRoutesTool, self.block_id),
         ]
         for cls, block_id in pairs:
             with self.subTest(tool=cls.spec.name):

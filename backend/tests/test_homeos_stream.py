@@ -104,6 +104,8 @@ class TestHomeOSStream(unittest.TestCase):
                    and e.get("field") == "preference_review"]
         self.assertEqual(len(reviews), 1, "preference review must fire exactly once")
         self.assertIn("proceed", reviews[0]["question"])
+        self.assertIn("Where do you", reviews[0]["question"])
+        self.assertIn("rely on buses", reviews[0]["question"])
         review_idx = events.index(reviews[0])
         deep_idx = [i for i, e in enumerate(events)
                     if e.get("agent") in ("market", "location", "risk")]
@@ -119,6 +121,19 @@ class TestHomeOSStream(unittest.TestCase):
         for r in reviews:
             self.assertNotIn("budget ceiling", r["question"])
             self.assertNotIn("Flat type", r["question"])
+
+    def test_profile_with_work_and_no_car_skips_new_tool_questions(self):
+        events = self._collect_stream(
+            "4 room in TAMPINES max 800k near MRT 2 primary schools. "
+            "I work at Raffles Place and have no car.",
+            limit=1,
+        )
+        reviews = [e for e in events
+                   if e["event"] == "clarifying_question"
+                   and e.get("field") == "preference_review"]
+        for r in reviews:
+            self.assertNotIn("Where do you", r["question"])
+            self.assertNotIn("rely on buses", r["question"])
 
 
 if __name__ == "__main__":

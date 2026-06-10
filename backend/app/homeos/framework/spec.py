@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -19,7 +20,7 @@ class PrefDimension:
     field: str
     prompt: str
     query_key: str | None = None
-    default: str | None = None
+    default: Any | None = None
 
 
 @dataclass

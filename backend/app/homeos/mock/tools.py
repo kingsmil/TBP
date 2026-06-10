@@ -55,5 +55,27 @@ def mock_accessibility_data(block_id: int) -> dict[str, Any]:
     return {"bus_stops_within_500m": 3, "nearest_bus_distance_m": 120}
 
 
+def mock_commute_data(block_id: int, prefs: dict) -> dict[str, Any]:
+    workplaces = prefs.get("work_locations") or []
+    if not workplaces:
+        return {"available": False, "destinations": [], "worst_commute_min": None}
+    destinations = [
+        {"name": name, "resolved": True, "travel_min": 35.0, "transfers": 0, "mode": "pt"}
+        for name in workplaces
+    ]
+    return {"available": True, "destinations": destinations, "worst_commute_min": 35.0}
+
+
+def mock_bus_routes_data(block_id: int) -> dict[str, Any]:
+    return {
+        "available": True,
+        "nearest_stop": {"code": "00000", "distance_m": 120.0},
+        "services": [
+            {"service_no": "12", "stops_reachable": 8},
+            {"service_no": "38", "stops_reachable": 6},
+        ],
+    }
+
+
 def mock_search_data(prefs: dict, limit: int) -> list[dict[str, Any]]:
     return []

@@ -52,6 +52,16 @@ class TestAgentsIntegration(unittest.TestCase):
         self.assertIsInstance(output, LocationEvidence)
         self.assertIn("proximity", prefetched)
 
+    def test_location_agent_prefetches_commute_and_bus_routes(self):
+        spec = self.tr.get_agent("location")
+        self.assertEqual(set(spec.tool_names), {"proximity", "commute", "bus_routes"})
+        self.assertEqual(set(spec.prefetch), {"proximity", "commute", "bus_routes"})
+        _, prefetched = self.tr.build_agent(
+            "location", self.repo, self.block_id, self.prefs)
+        self.assertEqual(set(prefetched), {"proximity", "commute", "bus_routes"})
+        # no work_locations in prefs -> commute must be honestly unavailable
+        self.assertFalse(prefetched["commute"]["available"])
+
     def test_risk_agent_returns_risk_evidence_instance(self):
         output, prefetched = self._run(
             "risk", self.block_id, self.prefs,

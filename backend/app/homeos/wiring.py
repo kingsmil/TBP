@@ -20,10 +20,13 @@ def setup() -> None:
     from app.homeos.tools.future_dev import FutureDevTool
     from app.homeos.tools.accessibility import AccessibilityTool
     from app.homeos.tools.search import SearchTool
+    from app.homeos.tools.commute import CommuteTool
+    from app.homeos.tools.bus_routes import BusRoutesTool
 
     tool_repository = ToolRepository(mock=mock)
     for cls in (TransactionsTool, ProximityTool, AppreciationTool,
-                FutureDevTool, AccessibilityTool, SearchTool):
+                FutureDevTool, AccessibilityTool, SearchTool,
+                CommuteTool, BusRoutesTool):
         tool_repository.register_tool(cls(mock=mock))
 
     from app.homeos.agents.profile import profile_definition

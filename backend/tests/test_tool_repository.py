@@ -275,5 +275,42 @@ class TestAgentMigration(unittest.TestCase):
         self.assertIn("future_dev", risk_definition.prefetch)
 
 
+class TestWiring(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from app.homeos.wiring import setup
+        setup()
+        import app.homeos.wiring as wiring_mod
+        cls.tr = wiring_mod.tool_repository
+
+    def test_tool_repository_has_all_six_tools(self):
+        names = {e["name"] for e in self.tr.describe_tools()}
+        self.assertEqual(
+            names,
+            {"transactions", "proximity", "appreciation", "future_dev", "accessibility", "search"}
+        )
+
+    def test_tool_repository_has_all_five_agents(self):
+        names = {a["name"] for a in self.tr.describe_agents()}
+        self.assertEqual(names, {"profile", "market", "location", "risk", "questions"})
+
+    def test_tools_for_market_agent(self):
+        tools = self.tr.tools_for_agent("market")
+        self.assertEqual(len(tools), 1)
+        self.assertEqual(tools[0].spec.name, "transactions")
+
+    def test_agents_using_transactions(self):
+        agents = self.tr.agents_using_tool("transactions")
+        self.assertIn("market", agents)
+        self.assertIn("questions", agents)
+
+    def test_describe_tools_includes_use_case_and_schema(self):
+        for entry in self.tr.describe_tools():
+            with self.subTest(tool=entry["name"]):
+                self.assertIn("use_case", entry)
+                self.assertIn("output_schema", entry)
+                self.assertIsInstance(entry["output_schema"], dict)
+
+
 if __name__ == "__main__":
     unittest.main()

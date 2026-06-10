@@ -113,17 +113,17 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
 # ── Registry-backed agent runner ──────────────────────────────────────────────
 
 async def _run_profile_agent(prompt: str):
-    """Run the profile agent via registry. Returns (HomeOSAvatar, {})."""
-    from app.homeos.wiring import agent_registry
-    agent, prefetched = agent_registry.build("profile", repo=None, block_id=None, prefs={})
+    """Run the profile agent via the tool repository. Returns (HomeOSAvatar, {})."""
+    from app.homeos.wiring import tool_repository
+    agent, prefetched = tool_repository.build_agent("profile", repo=None, block_id=None, prefs={})
     result = await agent.run(prompt)
     return result.output, prefetched
 
 
 async def _run_block_agent(name: str, repo: Repository, block_id: int, prefs: dict, prompt: str):
     """Run a named block-level agent. Returns (output_model, prefetched_dict)."""
-    from app.homeos.wiring import agent_registry
-    agent, prefetched = agent_registry.build(name, repo=repo, block_id=block_id, prefs=prefs)
+    from app.homeos.wiring import tool_repository
+    agent, prefetched = tool_repository.build_agent(name, repo=repo, block_id=block_id, prefs=prefs)
     result = await agent.run(prompt)
     return result.output, prefetched
 
@@ -154,8 +154,8 @@ async def _deep_analysis_stream(
             if mock:
                 await asyncio.sleep(mock_delay_seconds())
 
-            from app.homeos.wiring import agent_registry
-            _, prefetched_market = agent_registry.build("market", repo=repo, block_id=block_id, prefs=prefs)
+            from app.homeos.wiring import tool_repository
+            _, prefetched_market = tool_repository.build_agent("market", repo=repo, block_id=block_id, prefs=prefs)
             txn_data = prefetched_market.get("transactions", {})
             if mock:
                 market_narrative = mock_market_narrative(txn_data, prefs)
@@ -181,7 +181,7 @@ async def _deep_analysis_stream(
             if mock:
                 await asyncio.sleep(mock_delay_seconds())
 
-            _, prefetched_loc = agent_registry.build("location", repo=repo, block_id=block_id, prefs=prefs)
+            _, prefetched_loc = tool_repository.build_agent("location", repo=repo, block_id=block_id, prefs=prefs)
             prox_data = prefetched_loc.get("proximity", {})
             connections = prox_data.get("connections", [])
             if mock:
@@ -208,7 +208,7 @@ async def _deep_analysis_stream(
             if mock:
                 await asyncio.sleep(mock_delay_seconds())
 
-            _, prefetched_risk = agent_registry.build("risk", repo=repo, block_id=block_id, prefs=prefs)
+            _, prefetched_risk = tool_repository.build_agent("risk", repo=repo, block_id=block_id, prefs=prefs)
             app_data = prefetched_risk.get("appreciation", {})
             future_dev_data = prefetched_risk.get("future_dev", {})
             future_supply_data = future_dev_data.get("future_supply", {})

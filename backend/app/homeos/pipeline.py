@@ -491,11 +491,10 @@ def _clarifying_question(
 def _preference_review(
     query_dict: dict, prefs: dict, count: int, pipeline: list[dict] | None = None
 ) -> tuple[str | None, str | None]:
-    """One-shot completeness check before deep analysis.
+    """Ask one missing preference dimension at a time before deep analysis.
 
-    Dimensions come from the tool/agent catalogue (activating_prefs).
-    Search dims are 'done' when their key survived into the executed query
-    (query_dict drops None fields); default-dims use default+never-asked.
+    Replaces the old multi-bullet consolidated gate. Each dimension tracks its
+    own field in the pipeline asked-set, so no "preference_review" sentinel is needed.
     """
     from app.homeos.wiring import tool_repository
 
@@ -504,10 +503,7 @@ def _preference_review(
         for e in (pipeline or [])
         if e.get("event") == "clarifying_question" and e.get("field")
     }
-    if "preference_review" in asked:
-        return (None, None)
 
-    missing: list[str] = []
     for dim in tool_repository.review_dimensions():
         if dim.field in asked:
             continue
@@ -517,21 +513,12 @@ def _preference_review(
         elif dim.default is not None:
             if prefs.get(dim.field, dim.default) != dim.default:
                 continue
-        missing.append(dim.prompt)
 
-    if not missing:
-        return (None, None)
+        q_text = dim.question or dim.prompt
+        preamble = f"I've narrowed it to {count} blocks." if count <= 10 else f"Still {count} options."
+        return (f"{preamble} {q_text}", dim.field)
 
-    set_parts = ", ".join(f"{k}={v}" for k, v in query_dict.items())
-    summary = set_parts if set_parts else "your description"
-    bullets = "\n".join(f"• {m}" for m in missing)
-    question = (
-        f"I've narrowed it to {count} blocks matching {summary}. "
-        "Before I run the deep analysis, you can sharpen it further — you haven't told me:\n"
-        f"{bullets}\n"
-        "Answer any of these, or say 'proceed' and I'll analyse as-is."
-    )
-    return (question, "preference_review")
+    return (None, None)
 
 
 def _build_refinement_prompt(case: dict) -> str:

@@ -14,6 +14,10 @@ profile_definition = AgentSpec(
         "commute_priority: set 'high' if buyer says near MRT/commute is important (600m), "
         "'medium' if they say moderate/1.2km, 'low' if not mentioned (default 'low'), "
         "school_priority (high if schools are important). "
+        "work_locations (list of workplace names exactly as stated, e.g. "
+        "['Raffles Place', 'Jurong East'], when the buyer mentions where they work), "
+        "bus_reliance: set 'high' if the buyer says they have no car or depend on buses, "
+        "else 'low' (default 'low'). "
         "Return a complete HomeOSAvatar with label, buyer_type, summary, and preferences."
     ),
     output_type=HomeOSAvatar,

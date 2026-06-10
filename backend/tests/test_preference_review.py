@@ -10,12 +10,13 @@ class TestCatalogueDimensions(unittest.TestCase):
         import app.homeos.wiring as wiring_mod
         cls.tr = wiring_mod.tool_repository
 
-    def test_catalogue_declares_the_six_dimensions(self):
+    def test_catalogue_declares_the_eight_dimensions(self):
         dims = {d.field: d for d in self.tr.review_dimensions()}
         self.assertEqual(
             set(dims),
             {"flat_type", "max_price", "town",
-             "commute_priority", "school_priority", "risk_tolerance"},
+             "commute_priority", "school_priority", "risk_tolerance",
+             "work_locations", "bus_reliance"},
         )
 
     def test_search_dims_carry_query_keys(self):
@@ -30,6 +31,13 @@ class TestCatalogueDimensions(unittest.TestCase):
         dims = {d.field: d for d in self.tr.review_dimensions()}
         self.assertIsNone(dims["risk_tolerance"].query_key)
         self.assertEqual(dims["risk_tolerance"].default, "low")
+
+    def test_commute_and_bus_dimensions_use_preference_defaults(self):
+        dims = {d.field: d for d in self.tr.review_dimensions()}
+        self.assertIsNone(dims["work_locations"].query_key)
+        self.assertEqual(dims["work_locations"].default, [])
+        self.assertIsNone(dims["bus_reliance"].query_key)
+        self.assertEqual(dims["bus_reliance"].default, "low")
 
 
 def _q(field):
@@ -51,7 +59,10 @@ class TestPreferenceReview(unittest.TestCase):
             "flat_type": "4 ROOM", "max_price": 400000.0, "town": "TAMPINES",
             "max_mrt_distance_m": 600.0, "min_schools_within_1km": 2,
         }
-        q, field = self._review(query_dict, {"risk_tolerance": "medium"})
+        q, field = self._review(
+            query_dict,
+            {"risk_tolerance": "medium", "work_locations": ["Raffles Place"], "bus_reliance": "high"},
+        )
         self.assertIsNone(q)
         self.assertIsNone(field)
 

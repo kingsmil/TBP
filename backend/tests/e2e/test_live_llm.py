@@ -78,7 +78,7 @@ class TestLiveModelToolCalls(unittest.TestCase):
     def test_market_agent_calls_transactions(self):
         self._assert_agent_calls_its_spec_tools("market")
 
-    def test_location_agent_calls_proximity(self):
+    def test_location_agent_calls_location_tools(self):
         self._assert_agent_calls_its_spec_tools("location")
 
     def test_risk_agent_calls_appreciation_future_dev_accessibility(self):

@@ -22,8 +22,11 @@ def _in_bbox(b: Block, bbox) -> bool:
 
 
 def _passes_block_attrs(b: Block, q: SearchQuery) -> bool:
-    if q.town is not None and b.town != q.town:
-        return False
+    if q.town is not None:
+        # Compare with enum value (q.town is HDBTown enum, b.town is string)
+        town_str = q.town.value if hasattr(q.town, 'value') else str(q.town)
+        if b.town != town_str:
+            return False
     if q.planning_area_id is not None and b.planning_area_id != q.planning_area_id:
         return False
     if q.min_lease_year is not None and b.lease_commencement_year < q.min_lease_year:

@@ -6,12 +6,12 @@ location_definition = AgentSpec(
     description="Evaluates MRT distance and school proximity to score location suitability for a buyer.",
     system_prompt=(
         "You are an HDB location analyst. "
-        "Given MRT distance and school proximity data (in pre-fetched context), "
-        "summarise the location evidence. "
+        "Use the get_proximity() tool to fetch MRT distance and school proximity data. "
+        "Analyze the location's connectivity and accessibility. "
         "Write a one-sentence narrative (max 30 words) describing the connectivity for this buyer. "
-        "Copy the connections list directly from pre-fetched context."
+        "Return the connections list and narrative."
     ),
     output_type=LocationEvidence,
     tool_names=["proximity"],
-    prefetch=["proximity"],
+    prefetch=[],
 )

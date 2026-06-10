@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.models import HDBTown
+
 _FLAT_TYPE_MAP = {
     "2room": "2 ROOM", "2-room": "2 ROOM", "2 room": "2 ROOM",
     "3room": "3 ROOM", "3-room": "3 ROOM", "3 room": "3 ROOM",
@@ -16,7 +18,7 @@ _FLAT_TYPE_MAP = {
 class HomeOSPreferences(BaseModel):
     flat_type: str | None = None
     max_price: float | None = None
-    town: str | None = None
+    town: HDBTown | None = None
     min_schools_within_1km: int | None = None
     commute_priority: Literal["low", "medium", "high"] = "low"
     school_priority: Literal["low", "medium", "high"] = "low"
@@ -33,8 +35,15 @@ class HomeOSPreferences(BaseModel):
 
     @field_validator("town", mode="before")
     @classmethod
-    def normalise_town(cls, v: str | None) -> str | None:
-        return v.upper().strip() if v else None
+    def normalise_town(cls, v: str | None) -> HDBTown | None:
+        if v is None or v == "":
+            return None
+
+        # Import fuzzy matcher
+        from app.homeos.tools.search import _fuzzy_match_town
+
+        # Use the same fuzzy matching logic as the search tool
+        return _fuzzy_match_town(v)
 
 
 class HomeOSAvatar(BaseModel):

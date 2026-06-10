@@ -6,13 +6,13 @@ market_definition = AgentSpec(
     description="Summarises recent transaction data to assess budget fit and market activity for a block.",
     system_prompt=(
         "You are an HDB market analyst. "
-        "Given recent transaction data and a buyer's budget (in pre-fetched context), "
-        "summarise the market evidence. "
+        "Use the get_transactions() tool to fetch recent transaction data for the block. "
+        "Analyze the data against the buyer's budget to determine market fit. "
         "Write a one-sentence narrative (max 30 words) describing what the data means for this buyer. "
-        "Copy structured fields (transaction_count, median_price, median_psf, window_months, "
-        "budget_signal, confidence) directly from the pre-fetched context."
+        "Return all fields: transaction_count, median_price, median_psf, window_months, "
+        "budget_signal, confidence, and narrative."
     ),
     output_type=MarketEvidence,
     tool_names=["transactions"],
-    prefetch=["transactions"],
+    prefetch=[],
 )

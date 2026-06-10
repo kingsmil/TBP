@@ -4,6 +4,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from app.core.geo import Point
+from app.core.models import HDBTown
 from app.services.commute.models import Destination, Person
 
 
@@ -37,7 +38,7 @@ class DirectTransitRequest(BaseModel):
     destinations: list[DirectTransitDestinationIn] = Field(..., min_length=1, max_length=5)
     max_walk_minutes: float = Field(6.0, gt=0, le=30)
     modes: list[str] = ["bus", "mrt"]
-    town: str | None = None
+    town: HDBTown | None = None
     planning_area_id: int | None = None
     flat_type: str | None = None
     min_price: float | None = None

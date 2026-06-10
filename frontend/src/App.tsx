@@ -316,6 +316,9 @@ export default function App() {
   );
 
   const selectedBlock = blocks.find((b) => b.block_id === selectedBlockId) ?? null;
+  const selectedRecommendation = activeCaseFull?.shortlist.find(
+    (row) => row.block_id === aiSelectedBlockId,
+  ) ?? null;
   const aiMapBlocks = useMemo(() => {
     if (!hasAiMapFilter) return blocks;
     const visibleIds = new Set(shortlistIds);
@@ -541,6 +544,7 @@ export default function App() {
               block={selectedBlock}
               profileText={activeProfileText}
               caseId={activeCaseId ?? undefined}
+              recommendation={selectedRecommendation}
               onClose={clearSelectedBlock}
               onBack={clearSelectedBlock}
             />

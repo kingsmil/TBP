@@ -60,4 +60,30 @@ describe("HomeOSDetailPanel", () => {
 
     expect(await screen.findByRole("button", { name: /download case/i })).toBeInTheDocument();
   });
+
+  it("uses the active recommendation score instead of a recalculated case-file score", async () => {
+    render(
+      <HomeOSDetailPanel
+        block={block}
+        profileText="Family looking for 4 room under 800k."
+        caseId="case-1"
+        recommendation={{
+          block_id: 1,
+          block_number: "117",
+          street_name: "BISHAN ST 3",
+          town: "BISHAN",
+          verdict: "Worth viewing",
+          worth_viewing_score: 91.5,
+          confidence: "high",
+          top_reasons: ["Matches the refined requirements."],
+          top_watchouts: [],
+        }}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Worth viewing · 91\.5/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /download case/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Worth viewing · 82/)).not.toBeInTheDocument();
+  });
 });

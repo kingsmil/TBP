@@ -18,8 +18,6 @@ const mockCase: HomeOSCase = {
       school_priority: "high",
       risk_tolerance: "low",
       appreciation_priority: "medium",
-      work_locations: [],
-      bus_reliance: "low",
     },
   },
   pipeline: [],

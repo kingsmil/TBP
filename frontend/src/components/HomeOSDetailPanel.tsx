@@ -3,17 +3,18 @@ import { Download } from "lucide-react";
 import ActiveListingsSection from "./ActiveListingsSection";
 import { getHomeOSCaseFile, scheduleHomeOSViewing } from "../lib/api";
 import { formatDistance, formatPsf, formatSGD } from "../lib/format";
-import type { BlockSummary, HomeOSCaseFile, HomeOSScheduleViewingResponse } from "../types";
+import type { BlockSummary, HomeOSCaseFile, HomeOSScheduleViewingResponse, HomeOSShortlistRow } from "../types";
 
 interface Props {
   block: BlockSummary | null;
   profileText?: string;
   caseId?: string;
+  recommendation?: HomeOSShortlistRow | null;
   onClose: () => void;
   onBack?: () => void;
 }
 
-export default function HomeOSDetailPanel({ block, profileText, caseId, onClose, onBack }: Props) {
+export default function HomeOSDetailPanel({ block, profileText, caseId, recommendation, onClose, onBack }: Props) {
   const [caseFile, setCaseFile] = useState<HomeOSCaseFile | null>(null);
   const [caseFileLoading, setCaseFileLoading] = useState(false);
   const [contactName, setContactName] = useState("");
@@ -70,10 +71,14 @@ export default function HomeOSDetailPanel({ block, profileText, caseId, onClose,
 
   if (!block) return null;
 
+  const displayedVerdict = recommendation?.verdict ?? caseFile?.verdict;
+  const displayedScore = recommendation?.worth_viewing_score ?? caseFile?.worth_viewing_score;
+  const displayedReasons = recommendation?.top_reasons ?? caseFile?.top_reasons ?? [];
+  const displayedWatchouts = recommendation?.top_watchouts ?? caseFile?.top_watchouts ?? [];
   const verdictColor =
-    caseFile?.verdict === "Worth viewing"
+    displayedVerdict === "Worth viewing"
       ? "bg-emerald-100 text-emerald-700"
-      : caseFile?.verdict === "Maybe view"
+      : displayedVerdict === "Maybe view"
         ? "bg-amber-100 text-amber-700"
         : "bg-muted text-muted-foreground";
 
@@ -86,9 +91,9 @@ export default function HomeOSDetailPanel({ block, profileText, caseId, onClose,
             Blk {block.block_number} {block.street_name}
           </p>
           <p className="text-xs text-muted-foreground">{block.town}</p>
-          {caseFile && (
+          {displayedVerdict && displayedScore != null && (
             <span className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-semibold ${verdictColor}`}>
-              {caseFile.verdict} · {caseFile.worth_viewing_score}
+              {displayedVerdict} · {displayedScore}
             </span>
           )}
         </div>
@@ -154,19 +159,19 @@ export default function HomeOSDetailPanel({ block, profileText, caseId, onClose,
                 <p className="text-xs text-muted-foreground">{caseFile.evidence.recent_sales.summary}</p>
               </div>
 
-              {caseFile.top_reasons.length > 0 && (
+              {displayedReasons.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-emerald-700">Why it fits</p>
-                  {caseFile.top_reasons.map((r) => (
+                  {displayedReasons.map((r) => (
                     <p key={r} className="text-xs text-muted-foreground">✓ {r}</p>
                   ))}
                 </div>
               )}
 
-              {caseFile.top_watchouts.length > 0 && (
+              {displayedWatchouts.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-amber-600">Watchouts</p>
-                  {caseFile.top_watchouts.map((w) => (
+                  {displayedWatchouts.map((w) => (
                     <p key={w} className="text-xs text-muted-foreground">⚠ {w}</p>
                   ))}
                 </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import ActiveListingsSection from "./ActiveListingsSection";
+import AgentChip from "./AgentChip";
 import { getHomeOSCaseFile, scheduleHomeOSViewing } from "../lib/api";
 import { formatDistance, formatPsf, formatSGD } from "../lib/format";
 import type { BlockSummary, HomeOSCaseFile, HomeOSScheduleViewingResponse, HomeOSShortlistRow } from "../types";
@@ -31,7 +32,7 @@ export default function HomeOSDetailPanel({ block, profileText, caseId, recommen
     setCaseFile(null);
     setOutbox(null);
     setCaseFileLoading(true);
-    getHomeOSCaseFile(block.block_id, profileText)
+    getHomeOSCaseFile(block.block_id, profileText, caseId)
       .then(setCaseFile)
       .catch(() => setCaseFile(null))
       .finally(() => setCaseFileLoading(false));
@@ -163,7 +164,10 @@ export default function HomeOSDetailPanel({ block, profileText, caseId, recommen
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-emerald-700">Why it fits</p>
                   {displayedReasons.map((r) => (
-                    <p key={r} className="text-xs text-muted-foreground">✓ {r}</p>
+                    <p key={r.text} className="text-xs text-muted-foreground">
+                      ✓ {r.text}
+                      <AgentChip source={r.source} />
+                    </p>
                   ))}
                 </div>
               )}
@@ -172,7 +176,10 @@ export default function HomeOSDetailPanel({ block, profileText, caseId, recommen
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-amber-600">Watchouts</p>
                   {displayedWatchouts.map((w) => (
-                    <p key={w} className="text-xs text-muted-foreground">⚠ {w}</p>
+                    <p key={w.text} className="text-xs text-muted-foreground">
+                      ⚠ {w.text}
+                      <AgentChip source={w.source} />
+                    </p>
                   ))}
                 </div>
               )}
@@ -180,6 +187,9 @@ export default function HomeOSDetailPanel({ block, profileText, caseId, recommen
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">
                   Questions for agent
+                  <span className="ml-1 text-[10px] font-normal text-muted-foreground/70">
+                    · synthesised from all agents
+                  </span>
                 </p>
                 <ul className="space-y-1">
                   {caseFile.evidence.agent_questions.map((q) => (

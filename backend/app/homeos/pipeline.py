@@ -523,7 +523,20 @@ def _preference_review(
         return (None, None)
 
     set_parts = ", ".join(f"{k}={v}" for k, v in query_dict.items())
-    summary = set_parts if set_parts else "your description"
+
+    # Add non-search preferences that were captured
+    extra_prefs = []
+    if prefs.get("work_locations"):
+        work_list = ", ".join(prefs["work_locations"])
+        extra_prefs.append(f"commute to {work_list}")
+    if prefs.get("bus_reliance") == "high":
+        extra_prefs.append("bus-dependent")
+
+    summary_parts = [set_parts] if set_parts else []
+    if extra_prefs:
+        summary_parts.append(" + ".join(extra_prefs))
+    summary = ", ".join(summary_parts) if summary_parts else "your description"
+
     bullets = "\n".join(f"• {m}" for m in missing)
     question = (
         f"I've narrowed it to {count} blocks matching {summary}. "
@@ -609,6 +622,17 @@ def _direct_answer_overrides(user_message: str, pipeline: list[dict]) -> dict:
 
         if town_enum:
             updates["town"] = town_enum.value
+    elif "work" in lower_q or "workplace" in lower_q or "commute" in lower_q:
+        # Extract work locations from the answer
+        work_locs = _extract_work_locations(user_message)
+        if work_locs:
+            updates["work_locations"] = work_locs
+    elif "bus" in lower_q or "car" in lower_q:
+        # Check if they rely on buses
+        if any(w in lower_a for w in ("yes", "high", "no car", "rely", "depend", "bus")):
+            updates["bus_reliance"] = "high"
+        elif any(w in lower_a for w in ("no", "low", "have car", "drive", "car owner")):
+            updates["bus_reliance"] = "low"
     return updates
 
 

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Bus } from "lucide-react";
 import { Circle, CircleMarker, MapContainer, Pane, Polyline, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
@@ -301,6 +301,30 @@ function NearbyBusRouteFitter({
   return null;
 }
 
+function SelectionViewRestorer({ selectedBlock }: { selectedBlock: BlockSummary | null }) {
+  const map = useMap();
+  const previousBlockId = useRef<number | null>(null);
+  const propertyView = useRef<{ center: [number, number]; zoom: number } | null>(null);
+
+  useEffect(() => {
+    if (selectedBlock && previousBlockId.current == null) {
+      propertyView.current = {
+        center: [selectedBlock.lat, selectedBlock.lon],
+        zoom: map.getZoom(),
+      };
+    } else if (!selectedBlock && previousBlockId.current != null && propertyView.current) {
+      map.flyTo(propertyView.current.center, propertyView.current.zoom, {
+        animate: true,
+        duration: 0.5,
+      });
+      propertyView.current = null;
+    }
+    previousBlockId.current = selectedBlock?.block_id ?? null;
+  }, [map, selectedBlock]);
+
+  return null;
+}
+
 interface Props {
   blocks: BlockSummary[];
   shortlistIds?: number[];
@@ -426,6 +450,7 @@ export default function MapView({
         className="h-full w-full"
       >
         <MapResizer />
+        <SelectionViewRestorer selectedBlock={selectedBlock} />
         <BusRouteFitter reach={busReach.data} activeService={activeBusService} />
         {!busMode && showNearbyBusRoutes && (
           <NearbyBusRouteFitter

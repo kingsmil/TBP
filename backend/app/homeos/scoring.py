@@ -38,7 +38,6 @@ def worth_viewing_score(
     location: dict,
     risk: dict,
     prefs: dict,
-    lifestyle: dict | None = None,
 ) -> tuple[float, list[EvidenceItem], list[EvidenceItem]]:
     score = 0.0
     reasons: list[EvidenceItem] = []
@@ -62,23 +61,21 @@ def worth_viewing_score(
         watchouts.append(_item("Recent resale evidence is limited.", "market"))
 
     for conn in location.get("connections", []):
-        conn_type = conn.get("type")
-        conn_signal = conn.get("signal", "")
-        if conn_type == "mrt":
-            if conn_signal == "strong":
+        if conn["type"] == "mrt":
+            if conn["signal"] == "strong":
                 score += 18
                 reasons.append(_item("MRT access fits the buyer profile.", "location"))
-            elif conn_signal == "moderate":
+            elif conn["signal"] == "moderate":
                 score += 11
                 watchouts.append(_item("MRT access is moderate rather than excellent.", "location"))
             else:
                 score += 4
                 watchouts.append(_item("MRT access is weak for this profile.", "location"))
-        if conn_type == "primary_school" and prefs.get("school_priority") == "high":
-            if conn_signal == "strong":
+        if conn["type"] == "primary_school" and prefs.get("school_priority") == "high":
+            if conn["signal"] == "strong":
                 score += 18
                 reasons.append(_item("Primary school access fits the family profile.", "location"))
-            elif conn_signal == "moderate":
+            elif conn["signal"] == "moderate":
                 score += 10
                 reasons.append(_item("There is at least one primary school within 1km.", "location"))
             else:
@@ -99,17 +96,4 @@ def worth_viewing_score(
             ))
 
     score += risk.get("score_adjustment") or 0.0
-
-    if lifestyle:
-        ls = lifestyle.get("lifestyle_score")
-        if ls is not None:
-            # Scale 0-100 lifestyle score to a +0..+12 contribution.
-            score += round((ls / 100.0) * 12.0, 1)
-            if ls >= 70:
-                reasons.append(_item(f"Strong lifestyle fit (score {ls:.0f}/100).", "lifestyle"))
-            elif ls < 40:
-                watchouts.append(_item(f"Lifestyle fit is below average (score {ls:.0f}/100).", "lifestyle"))
-        for w in lifestyle.get("watchouts", []):
-            watchouts.append(_item(w, "lifestyle"))
-
     return round(max(0.0, min(score, 100.0)), 1), reasons[:4], watchouts[:4]

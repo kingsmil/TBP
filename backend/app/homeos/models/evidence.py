@@ -41,12 +41,3 @@ class WorthViewingResult(BaseModel):
     confidence: Literal["high", "medium", "low"] = "low"
     top_reasons: list[str] = Field(default_factory=list)
     top_watchouts: list[str] = Field(default_factory=list)
-
-
-class LifestyleEvidence(BaseModel):
-    lifestyle_score: float | None = None
-    commute_band: str | None = None  # "green" | "yellow" | "red"
-    couple_fairness: float | None = None  # 0-100 if couple mode active
-    factors: dict[str, Any] = Field(default_factory=dict)
-    watchouts: list[str] = Field(default_factory=list)
-    narrative: str = ""

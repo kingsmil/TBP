@@ -448,11 +448,17 @@ def _prefs_to_search_query(prefs: dict, candidate_limit: int = 100):
         max_mrt_distance_m = 1200.0
     else:
         max_mrt_distance_m = None
+
+    # Filter by bus stop distance when buyer is bus-dependent
+    bus_reliance = prefs.get("bus_reliance", "low")
+    max_bus_distance_m = 400.0 if bus_reliance == "high" else None
+
     return SearchQuery(
         flat_type=prefs.get("flat_type"),
         max_price=prefs.get("max_price"),
         town=prefs.get("town"),
         max_mrt_distance_m=max_mrt_distance_m,
+        max_bus_distance_m=max_bus_distance_m,
         min_schools_within_1km=min_schools,
         limit=candidate_limit,
     )
@@ -571,12 +577,34 @@ def _preference_review(
         elif dim.default is not None:
             if prefs.get(dim.field, dim.default) != dim.default:
                 continue
+        missing.append(dim.prompt)
 
-        q_text = dim.question or dim.prompt
-        preamble = f"I've narrowed it to {count} {'block' if count == 1 else 'blocks'}." if count <= 10 else f"Still {count} options."
-        return (f"{preamble} {q_text}", dim.field)
+    if not missing:
+        return (None, None)
 
-    return (None, None)
+    set_parts = ", ".join(f"{k}={v}" for k, v in query_dict.items())
+
+    # Add non-search preferences that were captured
+    extra_prefs = []
+    if prefs.get("work_locations"):
+        work_list = ", ".join(prefs["work_locations"])
+        extra_prefs.append(f"commute to {work_list}")
+    if prefs.get("bus_reliance") == "high":
+        extra_prefs.append("bus-dependent")
+
+    summary_parts = [set_parts] if set_parts else []
+    if extra_prefs:
+        summary_parts.append(" + ".join(extra_prefs))
+    summary = ", ".join(summary_parts) if summary_parts else "your description"
+
+    bullets = "\n".join(f"• {m}" for m in missing)
+    question = (
+        f"I've narrowed it to {count} blocks matching {summary}. "
+        "Before I run the deep analysis, you can sharpen it further — you haven't told me:\n"
+        f"{bullets}\n"
+        "Answer any of these, or say 'proceed' and I'll analyse as-is."
+    )
+    return (question, "preference_review")
 
 
 def _build_refinement_prompt(case: dict) -> str:
@@ -654,6 +682,17 @@ def _direct_answer_overrides(user_message: str, pipeline: list[dict]) -> dict:
 
         if town_enum:
             updates["town"] = town_enum.value
+    elif "work" in lower_q or "workplace" in lower_q or "commute" in lower_q:
+        # Extract work locations from the answer
+        work_locs = _extract_work_locations(user_message)
+        if work_locs:
+            updates["work_locations"] = work_locs
+    elif "bus" in lower_q or "car" in lower_q:
+        # Check if they rely on buses
+        if any(w in lower_a for w in ("yes", "high", "no car", "rely", "depend", "bus")):
+            updates["bus_reliance"] = "high"
+        elif any(w in lower_a for w in ("no", "low", "have car", "drive", "car owner")):
+            updates["bus_reliance"] = "low"
     return updates
 
 

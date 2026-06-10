@@ -55,6 +55,14 @@ def mock_risk_narrative(evidence: dict[str, Any]) -> str:
     return f"Mock risk: no major watchouts surfaced; score adjustment is {adjustment:.1f}."
 
 
+def mock_lifestyle_narrative(evidence: dict[str, Any]) -> str:
+    score = evidence.get("lifestyle_score")
+    band = evidence.get("commute_band", "unknown")
+    if score is not None:
+        return f"Mock lifestyle: overall score {score}, commute band {band}."
+    return f"Mock lifestyle: commute band {band}; detailed scoring not available in mock mode."
+
+
 def mock_questions(evidence: dict[str, Any]) -> list[str]:
     market = evidence.get("market", {})
     location = evidence.get("location", {})

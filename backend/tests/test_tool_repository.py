@@ -248,5 +248,32 @@ class TestExistingToolSpecs(unittest.TestCase):
                 )
 
 
+class TestAgentMigration(unittest.TestCase):
+    def test_all_agent_definitions_are_agentspec(self):
+        from app.homeos.framework.spec import AgentSpec
+        from app.homeos.agents.profile import profile_definition
+        from app.homeos.agents.market import market_definition
+        from app.homeos.agents.location import location_definition
+        from app.homeos.agents.risk import risk_definition
+        from app.homeos.agents.questions import questions_definition
+        for defn in (profile_definition, market_definition, location_definition,
+                     risk_definition, questions_definition):
+            with self.subTest(name=defn.name):
+                self.assertIsInstance(defn, AgentSpec)
+                self.assertTrue(defn.description, f"{defn.name} has empty description")
+
+    def test_market_agent_has_correct_tools(self):
+        from app.homeos.agents.market import market_definition
+        self.assertIn("transactions", market_definition.tool_names)
+        self.assertIn("transactions", market_definition.prefetch)
+
+    def test_risk_agent_has_correct_tools(self):
+        from app.homeos.agents.risk import risk_definition
+        for t in ("appreciation", "future_dev", "accessibility"):
+            self.assertIn(t, risk_definition.tool_names)
+        self.assertIn("appreciation", risk_definition.prefetch)
+        self.assertIn("future_dev", risk_definition.prefetch)
+
+
 if __name__ == "__main__":
     unittest.main()

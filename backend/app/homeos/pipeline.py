@@ -370,9 +370,9 @@ async def _deep_analysis_stream(
             if mock:
                 await asyncio.sleep(mock_delay_seconds())
 
-            from app.homeos.sync_agents import lifestyle_analysis_agent
-            provider, destinations = _build_lifestyle_inputs(repo, prefs)
             if mock:
+                from app.homeos.sync_agents import lifestyle_analysis_agent
+                provider, destinations = _build_lifestyle_inputs(repo, prefs)
                 ls_data = {
                     "lifestyle_score": None,
                     "commute_band": None,
@@ -383,9 +383,16 @@ async def _deep_analysis_stream(
                 ls_data["narrative"] = mock_lifestyle_narrative(ls_data)
                 lifestyle_evidence = ls_data
             else:
-                lifestyle_evidence = await asyncio.to_thread(
-                    lifestyle_analysis_agent, repo, block_id, provider, destinations
+                output, _, result = await _run_block_agent(
+                    "lifestyle", repo, block_id, prefs,
+                    "Analyze lifestyle fit for this block using the available tools.",
                 )
+                lifestyle_evidence = output.model_dump()
+                tool_calls = _extract_tool_calls(result)
+                if tool_calls:
+                    tool_evt = {"event": "tool_calls", "agent": "lifestyle", "block_id": block_id, "tool_calls": tool_calls}
+                    yield tool_evt
+                    homeos_case_store.append_event(case_id, tool_evt)
 
             yield {"event": "agent_data", "agent": "lifestyle", "block_id": block_id, "data": lifestyle_evidence}
             homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "lifestyle", "block_id": block_id, "data": lifestyle_evidence})

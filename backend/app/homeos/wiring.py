@@ -22,11 +22,12 @@ def setup() -> None:
     from app.homeos.tools.search import SearchTool
     from app.homeos.tools.commute import CommuteTool
     from app.homeos.tools.bus_routes import BusRoutesTool
+    from app.homeos.tools.lifestyle_score import LifestyleScoreTool
 
     tool_repository = ToolRepository(mock=mock)
     for cls in (TransactionsTool, ProximityTool, AppreciationTool,
                 FutureDevTool, AccessibilityTool, SearchTool,
-                CommuteTool, BusRoutesTool):
+                CommuteTool, BusRoutesTool, LifestyleScoreTool):
         tool_repository.register_tool(cls(mock=mock))
 
     from app.homeos.agents.profile import profile_definition
@@ -34,7 +35,8 @@ def setup() -> None:
     from app.homeos.agents.location import location_definition
     from app.homeos.agents.risk import risk_definition
     from app.homeos.agents.questions import questions_definition
+    from app.homeos.agents.lifestyle import lifestyle_definition
 
     for spec in (profile_definition, market_definition, location_definition,
-                 risk_definition, questions_definition):
+                 risk_definition, questions_definition, lifestyle_definition):
         tool_repository.register_agent(spec)

@@ -4,7 +4,7 @@ import { Bus } from "lucide-react";
 import { Circle, CircleMarker, MapContainer, Marker, Pane, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { divIcon, type LatLngBoundsExpression } from "leaflet";
 import useSupercluster from "use-supercluster";
-import type { BlockSummary } from "../types";
+import type { BlockSummary, DirectTransitDestination } from "../types";
 import { ACCESS_COLORS, formatDistance, formatPsf, formatSGD, mrtAccessClass } from "../lib/format";
 import { getBusStopReach, getReferenceLayer } from "../lib/api";
 import type { BusReachResponse } from "../lib/api";
@@ -355,6 +355,44 @@ function RecommendedBlocks({
   );
 }
 
+function DestinationMarkers({ destinations }: { destinations: DirectTransitDestination[] }) {
+  return (
+    <Pane name="destinations" style={{ zIndex: 650 }}>
+      {destinations.map((destination, index) => {
+        const icon = divIcon({
+          className: "destination-marker-wrapper",
+          html: `<div class="destination-marker"><span>${index + 1}</span></div>`,
+          iconSize: [34, 42],
+          iconAnchor: [17, 42],
+          popupAnchor: [0, -38],
+        });
+        return (
+          <Marker
+            key={`${destination.name}-${destination.lat}-${destination.lon}-${index}`}
+            position={[destination.lat, destination.lon]}
+            pane="destinations"
+            icon={icon}
+          >
+            <Tooltip direction="top" offset={[0, -36]} opacity={0.95}>
+              <strong>{destination.name}</strong>
+              {destination.address && <><br />{destination.address}</>}
+            </Tooltip>
+            <Popup>
+              <div className="text-sm">
+                <div className="font-semibold">Destination {index + 1}</div>
+                <div className="mt-1">{destination.name}</div>
+                {destination.address && (
+                  <div className="mt-1 text-xs text-gray-500">{destination.address}</div>
+                )}
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </Pane>
+  );
+}
+
 function NearbyBusRouteFitter({
   selectedBlock,
   routes,
@@ -420,6 +458,7 @@ interface Props {
   onViewChange?: (view: MapViewState) => void;
   fitRecommendations?: boolean;
   onRecommendationsFitted?: () => void;
+  destinations?: DirectTransitDestination[];
 }
 
 export default function MapView({
@@ -433,6 +472,7 @@ export default function MapView({
   onViewChange,
   fitRecommendations = false,
   onRecommendationsFitted,
+  destinations = [],
 }: Props) {
   const showNearbyBusRoutes = nearbyBusRadiusM > 0;
   const shortlistSet = useMemo(() => new Set(shortlistIds), [shortlistIds]);
@@ -582,6 +622,8 @@ export default function MapView({
           maxZoom={18}
           keepBuffer={4}
         />
+
+        {destinations.length > 0 && <DestinationMarkers destinations={destinations} />}
 
         {!busMode && !nearbyRouteFocus && !recommendationsOnly && (
           <ClusteredBlocks

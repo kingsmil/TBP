@@ -32,6 +32,7 @@ import {
 import { formatPsf, formatSGD } from "./lib/format";
 import type {
   AgentEvent,
+  DirectTransitDestination,
   DirectTransitResponse,
   HomeOSCase,
   HomeOSCaseSummary,
@@ -73,6 +74,7 @@ export default function App() {
   // Shared
   const [filters, setFilters] = useState<SearchFilters>({ limit: MAP_SEARCH_LIMIT });
   const [directTransit, setDirectTransit] = useState<DirectTransitResponse | null>(null);
+  const [directTransitDestinations, setDirectTransitDestinations] = useState<DirectTransitDestination[]>([]);
   const [aiSelectedBlockId, setAiSelectedBlockId] = useState<number | null>(null);
   const [exploreSelectedBlockId, setExploreSelectedBlockId] = useState<number | null>(null);
   const [shortlistIds, setShortlistIds] = useState<number[]>([]);
@@ -353,7 +355,11 @@ export default function App() {
               <Separator />
               <FilterPanel filters={filters} onChange={setFilters} />
               <Separator />
-              <DirectTransitFilter filters={filters} onResults={setDirectTransit} />
+              <DirectTransitFilter
+                filters={filters}
+                onResults={setDirectTransit}
+                onDestinationsChange={setDirectTransitDestinations}
+              />
               <Separator />
               <DisplayPanel
                 nearbyBusRadiusM={nearbyBusRadiusM}
@@ -406,6 +412,7 @@ export default function App() {
             selectedBlockId={exploreSelectedBlockId}
             onSelectBlock={setExploreSelectedBlockId}
             nearbyBusRadiusM={nearbyBusRadiusM}
+            destinations={directTransitDestinations}
             initialView={exploreMapView}
             onViewChange={setExploreMapView}
           />

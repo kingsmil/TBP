@@ -33,6 +33,7 @@ export interface BlockSummary {
 
 export interface DirectTransitDestination {
   name: string;
+  address?: string;
   lat: number;
   lon: number;
 }

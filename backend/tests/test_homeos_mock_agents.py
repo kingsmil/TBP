@@ -5,7 +5,12 @@ from unittest.mock import patch
 
 from app.data.seed import build_seeded_repo
 from app.homeos import case_store as homeos_case_store
-from app.homeos.pipeline import chat_in_case, investigate_homeos_profile, investigate_stream
+from app.homeos.pipeline import (
+    chat_in_case,
+    investigate_homeos_profile,
+    investigate_stream,
+    refine_stream,
+)
 from app.homeos.mock.tools import mock_delay_seconds
 
 
@@ -19,7 +24,9 @@ class TestHomeOSMockAgents(unittest.TestCase):
     def setUp(self):
         homeos_case_store._cases.clear()
 
-    def _collect_mock_stream(self, profile_text: str, limit: int = 1) -> list[dict]:
+    def _collect_mock_stream(
+        self, profile_text: str, limit: int = 1, max_rounds: int = 8
+    ) -> list[dict]:
         async def run():
             events = []
             with patch.dict(
@@ -28,6 +35,12 @@ class TestHomeOSMockAgents(unittest.TestCase):
             ):
                 async for event in investigate_stream(self.repo, profile_text, limit=limit):
                     events.append(event)
+                for _ in range(max_rounds):
+                    if not events or events[-1]["event"] != "clarifying_question":
+                        break
+                    case_id = events[-1]["case_id"]
+                    async for event in refine_stream(self.repo, case_id, "proceed"):
+                        events.append(event)
             return events
 
         return asyncio.run(run())

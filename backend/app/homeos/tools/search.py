@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from app.homeos.framework.spec import ToolSpec
+from app.homeos.framework.spec import PrefDimension, ToolSpec
 from app.homeos.framework.tool import ToolAdapter
 from app.homeos.mock.tools import mock_search_data
 
@@ -43,6 +43,17 @@ class SearchTool(ToolAdapter):
             "Do not call during per-block deep analysis — use block-specific tools instead."
         ),
         output_type=SearchOutput,
+        activating_prefs=[
+            PrefDimension(field="flat_type",
+                          prompt="Flat type (2/3/4/5-room or Executive)",
+                          query_key="flat_type"),
+            PrefDimension(field="max_price",
+                          prompt="Your budget ceiling — drives the budget-fit verdict",
+                          query_key="max_price"),
+            PrefDimension(field="town",
+                          prompt="A preferred town or estate (optional)",
+                          query_key="town"),
+        ],
     )
 
     def fetch(self, repo: "Repository", block_id: int | None, prefs: dict) -> dict[str, Any]:

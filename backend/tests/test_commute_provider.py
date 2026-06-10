@@ -1,5 +1,7 @@
 """Tests for commute providers (heuristic behaviour + OneMap parsing)."""
+import os
 import unittest
+from unittest.mock import patch
 
 from app.core.geo import Point
 from app.data.seed import build_seeded_repo
@@ -62,8 +64,12 @@ class TestOneMapParsing(unittest.TestCase):
                                          Point(0, 0), Point(0, 0), "pt")
 
     def test_requires_token(self):
-        with self.assertRaises(RuntimeError):
-            OneMapCommuteProvider(token="")
+        # Ensure ONEMAP_TOKEN is absent from the environment so the constructor
+        # cannot fall back to it, regardless of test ordering.
+        env_without_token = {k: v for k, v in os.environ.items() if k != "ONEMAP_TOKEN"}
+        with patch.dict(os.environ, env_without_token, clear=True):
+            with self.assertRaises(RuntimeError):
+                OneMapCommuteProvider(token="")
 
 
 if __name__ == "__main__":

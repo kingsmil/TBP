@@ -20,6 +20,7 @@ import FilterPanel from "./components/FilterPanel";
 import HomeOSDetailPanel from "./components/HomeOSDetailPanel";
 import MapView, { type MapViewState } from "./components/MapView";
 import { MAP_SEARCH_LIMIT } from "./lib/mapConfig";
+import NewsPanel from "./components/NewsPanel";
 import PipelinePanel from "./components/PipelinePanel";
 import PsfTrendChart from "./components/PsfTrendChart";
 import StatCard from "./components/StatCard";
@@ -152,6 +153,7 @@ export default function App() {
   const [streamingEvents, setStreamingEvents] = useState<AgentEvent[]>([]);
   const [chatChunks, setChatChunks] = useState("");
   const [rightPanel, setRightPanel] = useState<RightPanel>("pipeline");
+  const [rightTab, setRightTab] = useState<"display" | "news">("display");
   const [isStreaming, setIsStreaming] = useState(false);
   const [framedCaseId, setFramedCaseId] = useState<string | null>(null);
 
@@ -634,34 +636,56 @@ export default function App() {
         />
       </main>
 
-      {/* Right: Pipeline or Block Detail */}
+      {/* Right: Display/News tabs + Pipeline or Block Detail */}
       <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card overflow-hidden">
-        <DisplayPanel
-          nearbyBusRadiusM={nearbyBusRadiusM}
-          onNearbyBusRadiusChange={setNearbyBusRadiusM}
-          hasSelectedProperty={selectedBlock != null}
-        />
-        <Separator />
-        <div className="min-h-0 flex-1 overflow-hidden">
-          {rightPanel === "pipeline" ? (
-            <PipelinePanel
-              activeCase={activeCaseFull}
-              streamingEvents={streamingEvents}
-              onSelectBlock={handleSelectBlock}
-              onSendMessage={handleSendMessage}
-              chatChunks={chatChunks}
-            />
-          ) : (
-            <HomeOSDetailPanel
-              block={selectedBlock}
-              profileText={activeProfileText}
-              caseId={activeCaseId ?? undefined}
-              recommendation={selectedRecommendation}
-              onClose={clearSelectedBlock}
-              onBack={clearSelectedBlock}
-            />
-          )}
+        <div className="flex shrink-0 border-b border-border">
+          {(["display", "news"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setRightTab(tab)}
+              className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${
+                rightTab === tab
+                  ? "border-b-2 border-primary text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab === "display" ? "Display" : "News"}
+            </button>
+          ))}
         </div>
+        {rightTab === "display" ? (
+          <>
+            <DisplayPanel
+              nearbyBusRadiusM={nearbyBusRadiusM}
+              onNearbyBusRadiusChange={setNearbyBusRadiusM}
+              hasSelectedProperty={selectedBlock != null}
+            />
+            <Separator />
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {rightPanel === "pipeline" ? (
+                <PipelinePanel
+                  activeCase={activeCaseFull}
+                  streamingEvents={streamingEvents}
+                  onSelectBlock={handleSelectBlock}
+                  onSendMessage={handleSendMessage}
+                  chatChunks={chatChunks}
+                />
+              ) : (
+                <HomeOSDetailPanel
+                  block={selectedBlock}
+                  profileText={activeProfileText}
+                  caseId={activeCaseId ?? undefined}
+                  recommendation={selectedRecommendation}
+                  onClose={clearSelectedBlock}
+                  onBack={clearSelectedBlock}
+                />
+              )}
+            </div>
+          </>
+        ) : (
+          <NewsPanel />
+        )}
       </aside>
     </div>
   );

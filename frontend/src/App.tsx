@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   PanelLeftClose,
@@ -78,6 +78,7 @@ export default function App() {
   const [aiSelectedBlockId, setAiSelectedBlockId] = useState<number | null>(null);
   const [exploreSelectedBlockId, setExploreSelectedBlockId] = useState<number | null>(null);
   const [shortlistIds, setShortlistIds] = useState<number[]>([]);
+  const [hasAiMapFilter, setHasAiMapFilter] = useState(false);
   const [aiMapView, setAiMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
   const [exploreMapView, setExploreMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
   const [sidebarOpen, setSidebarOpen] = useState(true); // explore mode only
@@ -130,6 +131,15 @@ export default function App() {
         accumulated.push(event);
         setStreamingEvents([...accumulated]);
 
+        if (event.event === "agent_summary" && event.agent === "search" && event.data) {
+          const candidateIds = (event.data as Record<string, unknown>)["candidate_ids"];
+          if (Array.isArray(candidateIds)) {
+            const filteredIds = candidateIds.filter((id): id is number => typeof id === "number");
+            setShortlistIds(filteredIds);
+            setHasAiMapFilter(true);
+          }
+        }
+
         if (event.event === "clarifying_question") {
           finalCaseId = event.case_id ?? caseId;
           finalStatus = "refining";
@@ -147,6 +157,7 @@ export default function App() {
           finalStatus = "done";
           const shortlist = event.shortlist ?? [];
           setShortlistIds(shortlist.map((r) => r.block_id));
+          setHasAiMapFilter(true);
           setCases((prev) =>
             prev.map((c) =>
               c.case_id === tempId || c.case_id === caseId
@@ -201,6 +212,7 @@ export default function App() {
     setStreamingEvents([]);
     setActiveCaseFull(null);
     setShortlistIds([]);
+    setHasAiMapFilter(false);
     setAiSelectedBlockId(null);
     setFramedCaseId(null);
     setRightPanel("pipeline");
@@ -304,6 +316,17 @@ export default function App() {
   );
 
   const selectedBlock = blocks.find((b) => b.block_id === selectedBlockId) ?? null;
+  const aiMapBlocks = useMemo(() => {
+    if (!hasAiMapFilter) return blocks;
+    const visibleIds = new Set(shortlistIds);
+    return blocks.filter((block) => visibleIds.has(block.block_id));
+  }, [blocks, hasAiMapFilter, shortlistIds]);
+
+  useEffect(() => {
+    if (!hasAiMapFilter || aiSelectedBlockId == null || shortlistIds.includes(aiSelectedBlockId)) return;
+    setAiSelectedBlockId(null);
+    setRightPanel("pipeline");
+  }, [aiSelectedBlockId, hasAiMapFilter, shortlistIds]);
   const activeProfileText =
     activeCaseFull?.profile_text ??
     cases.find((c) => c.case_id === activeCaseId)?.profile_text ??
@@ -478,8 +501,8 @@ export default function App() {
           </div>
         )}
         <MapView
-          blocks={blocks}
-          shortlistIds={shortlistIds}
+          blocks={aiMapBlocks}
+          shortlistIds={activeCaseFull?.status === "done" ? shortlistIds : []}
           selectedBlockId={aiSelectedBlockId}
           onSelectBlock={handleSelectBlock}
           profileText={activeProfileText}

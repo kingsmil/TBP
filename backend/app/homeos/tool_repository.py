@@ -88,18 +88,23 @@ class ToolRepository:
         repo: "Repository",
         block_id: int | None,
         prefs: dict,
+        use_prefetch: bool = True,
     ) -> tuple[Agent[Any, Any], dict[str, Any]]:
         """Pre-fetch tool data, inject as context, attach tool closures.
 
         Returns (Agent, prefetched_context_dict).
         Usage: agent, ctx = tool_repository.build_agent(...); result = await agent.run(prompt)
+
+        use_prefetch=False skips context injection so the agent's declared tools
+        become its only data source (used by live tests to prove tool calling).
         """
         spec = self.get_agent(name)
 
         prefetched: dict[str, Any] = {}
-        for tool_name in spec.prefetch:
-            adapter = self._tools[tool_name]
-            prefetched[tool_name] = adapter.fetch(repo=repo, block_id=block_id, prefs=prefs)
+        if use_prefetch:
+            for tool_name in spec.prefetch:
+                adapter = self._tools[tool_name]
+                prefetched[tool_name] = adapter.fetch(repo=repo, block_id=block_id, prefs=prefs)
 
         context_parts = [
             f"[{k}]\n{json.dumps(v, indent=2)}" for k, v in prefetched.items()

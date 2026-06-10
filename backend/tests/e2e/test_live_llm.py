@@ -1,10 +1,12 @@
-"""Live-LLM happy path: ONE real model call proving the agent actually invokes its tools.
+"""Live-LLM happy path: every agent in the catalogue, tested according to its spec —
+the real model must call each of the agent's declared tools.
 
-Costs real money — opt in explicitly:  python run_e2e.py --live
-(or: LIVE_LLM=1 + provider key in env, then pytest tests/e2e/test_live_llm.py)
+Costs real money (one model call per tool-using agent) — opt in explicitly:
+  python run_e2e.py --live
+(or: LIVE_LLM=1 + AI_GATEWAY_API_KEY in env, then pytest tests/e2e/test_live_llm.py)
 
-Uses the `questions` agent because it has tools but NO prefetch — the only way
-the model can see transaction/proximity data is by calling the tools itself.
+Agents are built with use_prefetch=False, so their declared tools are the ONLY
+way to reach the data — a tool that isn't called is a failed contract.
 """
 import asyncio
 import os
@@ -31,29 +33,61 @@ class TestLiveModelToolCalls(unittest.TestCase):
                 "ORDER BY count(*) DESC LIMIT 1"
             ).fetchone()
         cls.block_id = row[0]
+        cls.prefs = {"max_price": 900_000}
 
-    def test_live_model_calls_tools_and_returns_questions(self):
+    def _expected_call_names(self, spec) -> set[str]:
+        """A tool's call name is its closure's __name__ (what the LLM sees)."""
+        return {
+            self.tr.get_tool(t).as_tool(self.repo, self.block_id, self.prefs).__name__
+            for t in spec.tool_names
+        }
+
+    def _run_and_collect_calls(self, agent_name: str):
         from pydantic_ai.messages import ToolCallPart
-        from app.homeos.models.evidence import AgentQuestions
-
         agent, prefetched = self.tr.build_agent(
-            "questions", self.repo, self.block_id, {"max_price": 900_000})
-        self.assertEqual(prefetched, {})  # no prefetch — tools are the only data source
-
+            agent_name, self.repo, self.block_id, self.prefs, use_prefetch=False)
+        self.assertEqual(prefetched, {})  # tools are the only data source
         result = asyncio.run(agent.run(
-            "Generate due-diligence questions for this block. "
-            "First fetch the transaction and proximity data with your tools."
+            "Analyse this block for the buyer. You MUST call each of your "
+            "available tools to gather the data before answering."
         ))
+        called = {p.tool_name for m in result.all_messages()
+                  for p in m.parts if isinstance(p, ToolCallPart)}
+        return result, called - {"final_result"}
 
-        # Happy path: structured output + at least one real tool call.
-        self.assertIsInstance(result.output, AgentQuestions)
-        self.assertGreaterEqual(len(result.output.questions), 1)
-        calls = [p.tool_name for m in result.all_messages()
-                 for p in m.parts if isinstance(p, ToolCallPart)]
-        data_calls = [c for c in calls if c in ("get_transactions", "get_proximity")]
-        self.assertTrue(data_calls, f"model never called a data tool (calls seen: {calls})")
-        print(f"\n  live model tool calls: {data_calls}")
-        print(f"  first question: {result.output.questions[0]!r}")
+    def _assert_agent_calls_its_spec_tools(self, agent_name: str):
+        spec = self.tr.get_agent(agent_name)
+        expected = self._expected_call_names(spec)
+        result, called = self._run_and_collect_calls(agent_name)
+        self.assertIsInstance(result.output, spec.output_type)
+        missing = expected - called
+        self.assertFalse(
+            missing,
+            f"{agent_name}: declared tools not called: {missing} (called: {called})")
+        print(f"\n  {agent_name}: called {sorted(called)} ✓")
+
+    def test_market_agent_calls_transactions(self):
+        self._assert_agent_calls_its_spec_tools("market")
+
+    def test_location_agent_calls_proximity(self):
+        self._assert_agent_calls_its_spec_tools("location")
+
+    def test_risk_agent_calls_appreciation_future_dev_accessibility(self):
+        self._assert_agent_calls_its_spec_tools("risk")
+
+    def test_questions_agent_calls_transactions_and_proximity(self):
+        self._assert_agent_calls_its_spec_tools("questions")
+
+    def test_profile_agent_declares_no_tools(self):
+        # Per spec: profile is a pure parser — nothing to call.
+        spec = self.tr.get_agent("profile")
+        self.assertEqual(spec.tool_names, [])
+        self.assertEqual(spec.prefetch, [])
+
+    def test_spec_coverage_is_complete(self):
+        """Every tool-using agent in the catalogue has a live test above."""
+        tool_using = {a["name"] for a in self.tr.describe_agents() if a["tools"]}
+        self.assertEqual(tool_using, {"market", "location", "risk", "questions"})
 
 
 if __name__ == "__main__":

@@ -311,6 +311,16 @@ class TestWiring(unittest.TestCase):
                 self.assertIn("output_schema", entry)
                 self.assertIsInstance(entry["output_schema"], dict)
 
+    def test_build_agent_can_skip_prefetch(self):
+        import os
+        from unittest.mock import patch
+        from app.data.seed import build_seeded_repo
+        repo, _ = build_seeded_repo(seed=42, blocks_per_area=2, months=3)
+        block_id = list(repo.blocks())[0].block_id
+        with patch.dict(os.environ, {"LLM_PROVIDER": "test", "AI_GATEWAY_API_KEY": ""}):
+            _, prefetched = self.tr.build_agent("market", repo, block_id, {}, use_prefetch=False)
+        self.assertEqual(prefetched, {})
+
 
 if __name__ == "__main__":
     unittest.main()

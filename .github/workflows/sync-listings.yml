@@ -1,9 +1,6 @@
 name: Sync HDB Active Listings
 
 on:
-  schedule:
-    # Run daily at 2 AM SGT (6 PM UTC previous day)
-    - cron: "0 18 * * *"
   workflow_dispatch:
     inputs:
       limit:

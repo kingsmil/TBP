@@ -46,6 +46,7 @@ class BusRoutesTool(ToolAdapter):
         activating_prefs=[PrefDimension(
             field="bus_reliance",
             prompt="Do you rely on buses / no car? - unlocks bus network analysis",
+            question="Do you rely on buses, or do you have a car? — unlocks bus network analysis",
             default="low",
         )],
     )

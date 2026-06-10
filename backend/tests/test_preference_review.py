@@ -48,6 +48,14 @@ class TestCatalogueDimensions(unittest.TestCase):
         d2 = PrefDimension(field="x", prompt="p")
         self.assertEqual(d2.question, "")
 
+    def test_all_dims_have_question_strings(self):
+        dims = {d.field: d for d in self.tr.review_dimensions()}
+        for field, dim in dims.items():
+            self.assertNotEqual(
+                dim.question, "",
+                f"PrefDimension '{field}' has no question string — add question= to its declaration",
+            )
+
 
 def _q(field):
     return {"event": "clarifying_question", "field": field, "question": "x"}

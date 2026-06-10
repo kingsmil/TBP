@@ -270,7 +270,7 @@ export interface HomeOSAvatar {
   preferences: HomeOSPreferences;
 }
 
-export type AgentSource = "market" | "location" | "risk";
+export type AgentSource = "market" | "location" | "risk" | "lifestyle";
 
 export interface EvidenceItem {
   text: string;

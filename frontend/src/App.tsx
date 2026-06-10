@@ -11,6 +11,12 @@ import {
   LogIn,
   LogOut,
   Sparkles,
+  Moon,
+  Sun,
+  MessageSquare,
+  Compass,
+  Newspaper,
+  MonitorCog,
 } from "lucide-react";
 import CasesPanel from "./components/CasesPanel";
 import DirectTransitFilter from "./components/DirectTransitFilter";
@@ -52,6 +58,7 @@ const DEFAULT_ESTATE = 1;
 
 type Mode = "ai" | "explore";
 type RightPanel = "pipeline" | "block_detail";
+type Theme = "light" | "dark";
 
 function RailIcon({
   icon: Icon,
@@ -78,6 +85,17 @@ function RailIcon({
 
 export default function App() {
   const [mode, setMode] = useState<Mode>("ai");
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = window.localStorage.getItem("hdb-match-theme");
+    if (saved === "light" || saved === "dark") return saved;
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem("hdb-match-theme", theme);
+  }, [theme]);
 
   // ── Auth state ──────────────────────────────────────────────────────────────
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => getStoredUser());
@@ -144,6 +162,7 @@ export default function App() {
   const [aiMapView, setAiMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
   const [exploreMapView, setExploreMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
   const [sidebarOpen, setSidebarOpen] = useState(true); // explore mode only
+  const [aiSidebarOpen, setAiSidebarOpen] = useState(true);
   const [nearbyBusRadiusM, setNearbyBusRadiusM] = useState(200);
 
   // AI mode
@@ -398,10 +417,42 @@ export default function App() {
     cases.find((c) => c.case_id === activeCaseId)?.profile_text ??
     "";
 
+  const authOverlays = (
+    <>
+      {showAuthModal && (
+        <AuthModal
+          onSuccess={(user) => { setAuthUser(user); setShowAuthModal(false); }}
+          onClose={() => setShowAuthModal(false)}
+        />
+      )}
+      {showUpgradeModal && (
+        <UpgradeModal
+          isLoggedIn={!!authUser}
+          onClose={() => setShowUpgradeModal(false)}
+          onLoginRequired={() => setShowAuthModal(true)}
+        />
+      )}
+    </>
+  );
+
+  const themeButton = (
+    <button
+      type="button"
+      onClick={() => setTheme((current) => current === "light" ? "dark" : "light")}
+      title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+      aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+      className="flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-muted/50 px-3 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
+    >
+      {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+      <span>{theme === "light" ? "Dark" : "Light"}</span>
+    </button>
+  );
+
   // ── Explore mode — 2-column (behaviour unchanged) ─────────────────────
   if (mode === "explore") {
     return (
       <div className="flex h-full bg-background">
+        {authOverlays}
         <aside
           style={sidebarOpen ? { width: "clamp(280px, 30%, 480px)" } : undefined}
           className={`flex flex-col border-r border-border bg-card transition-[width] duration-300 ease-in-out overflow-hidden shrink-0 ${
@@ -419,11 +470,16 @@ export default function App() {
               <RailIcon icon={TrendingUp}        label="Stats"             onClick={() => setSidebarOpen(true)} />
               <RailIcon icon={BarChart2}         label="PSF Trend"         onClick={() => setSidebarOpen(true)} />
               <RailIcon icon={Table2}            label="Estate Comparison" onClick={() => setSidebarOpen(true)} />
+              <Separator className="w-7 my-1" />
+              <RailIcon icon={Sparkles} label="AI mode" onClick={() => handleModeSwitch("ai")} />
+              <RailIcon icon={theme === "light" ? Moon : Sun} label={`${theme === "light" ? "Dark" : "Light"} mode`} onClick={() => setTheme((current) => current === "light" ? "dark" : "light")} />
+              <RailIcon icon={authUser ? LogOut : LogIn} label={authUser ? "Sign out" : "Sign in"} onClick={authUser ? handleLogout : () => setShowAuthModal(true)} />
             </div>
           )}
           {sidebarOpen && (
             <div className="flex flex-col overflow-y-auto flex-1 min-h-0">
-              <header className="flex items-center justify-between px-5 py-4">
+              <header className="border-b border-border bg-muted/25 px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold shrink-0">
                     H
@@ -433,27 +489,30 @@ export default function App() {
                     <p className="text-xs text-muted-foreground">Explore mode</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                {themeButton}
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => handleModeSwitch("ai")}
-                    className="flex items-center gap-1 text-xs rounded-md border border-border px-2 py-1 text-muted-foreground hover:bg-muted"
+                    className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted"
                   >
                     <Sparkles className="h-3 w-3" />
                     AI Mode
                   </button>
                   {authUser ? (
-                    <button type="button" onClick={handleLogout} title="Sign out" className="text-muted-foreground hover:text-foreground">
-                      <LogOut className="h-3.5 w-3.5" />
+                    <button type="button" onClick={handleLogout} title={`Signed in as ${authUser.email}`} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted">
+                      <LogOut className="h-4 w-4" />
+                      Sign out
                     </button>
                   ) : (
-                    <button type="button" onClick={() => setShowAuthModal(true)} title="Sign in" className="text-muted-foreground hover:text-foreground">
-                      <LogIn className="h-3.5 w-3.5" />
+                    <button type="button" onClick={() => setShowAuthModal(true)} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90">
+                      <LogIn className="h-4 w-4" />
+                      Sign in
                     </button>
                   )}
                 </div>
               </header>
-              <Separator />
               <FilterPanel filters={filters} onChange={setFilters} />
               <Separator />
               <DirectTransitFilter
@@ -491,12 +550,12 @@ export default function App() {
         <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           <button
             onClick={() => setSidebarOpen((o) => !o)}
-            className="absolute left-[10px] top-[82px] z-[1000] flex h-[34px] w-[34px] items-center justify-center rounded-sm border-2 border-[rgba(0,0,0,0.2)] bg-white shadow-sm hover:bg-gray-100 transition-colors"
+            className="absolute left-[10px] top-[82px] z-[1000] flex h-[34px] w-[34px] items-center justify-center rounded-sm border-2 border-black/20 bg-card text-foreground shadow-sm transition-colors hover:bg-muted"
             aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           >
             {sidebarOpen
-              ? <PanelLeftClose className="h-4 w-4 text-[#333]" />
-              : <PanelLeftOpen  className="h-4 w-4 text-[#333]" />}
+              ? <PanelLeftClose className="h-4 w-4" />
+              : <PanelLeftOpen  className="h-4 w-4" />}
           </button>
           {search.isError && (
             <div className="absolute left-1/2 top-4 z-[1000] -translate-x-1/2 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-2 text-sm text-destructive shadow-sm">
@@ -530,24 +589,28 @@ export default function App() {
   // ── AI mode — 3-column layout ─────────────────────────────────────────
   return (
     <div className="flex h-full bg-background">
-      {/* Auth modals */}
-      {showAuthModal && (
-        <AuthModal
-          onSuccess={(user) => { setAuthUser(user); setShowAuthModal(false); }}
-          onClose={() => setShowAuthModal(false)}
-        />
-      )}
-      {showUpgradeModal && (
-        <UpgradeModal
-          isLoggedIn={!!authUser}
-          onClose={() => setShowUpgradeModal(false)}
-          onLoginRequired={() => setShowAuthModal(true)}
-        />
-      )}
+      {authOverlays}
 
       {/* Left: Cases */}
-      <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-card overflow-hidden">
-        <header className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <aside
+        style={aiSidebarOpen ? { width: "clamp(320px, 28vw, 440px)" } : undefined}
+        className={`flex shrink-0 flex-col overflow-hidden border-r border-border bg-card transition-[width] duration-300 ease-in-out ${
+          aiSidebarOpen ? "" : "w-14"
+        }`}
+      >
+        {!aiSidebarOpen && (
+          <div className="flex flex-col items-center gap-2 px-2 pt-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">H</div>
+            <Separator className="my-1 w-7" />
+            <RailIcon icon={MessageSquare} label="HomeOS cases" onClick={() => setAiSidebarOpen(true)} />
+            <RailIcon icon={Compass} label="Explore mode" onClick={() => setMode("explore")} />
+            <RailIcon icon={theme === "light" ? Moon : Sun} label={`${theme === "light" ? "Dark" : "Light"} mode`} onClick={() => setTheme((current) => current === "light" ? "dark" : "light")} />
+            <RailIcon icon={authUser ? LogOut : LogIn} label={authUser ? "Sign out" : "Sign in"} onClick={authUser ? handleLogout : () => setShowAuthModal(true)} />
+          </div>
+        )}
+        {aiSidebarOpen && <>
+        <header className="border-b border-border bg-muted/25 px-4 py-4">
+          <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold shrink-0">
               H
@@ -557,12 +620,15 @@ export default function App() {
               <p className="text-xs text-muted-foreground">HomeOS Agent</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          {themeButton}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => setMode("explore")}
-              className="text-[10px] rounded px-2 py-1 text-muted-foreground hover:bg-muted border border-border"
+              className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted"
             >
+              <Compass className="h-3.5 w-3.5" />
               Explore
             </button>
             {authUser ? (
@@ -570,7 +636,7 @@ export default function App() {
                 type="button"
                 onClick={handleLogout}
                 title={`Signed in as ${authUser.email}`}
-                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted"
               >
                 <LogOut className="h-3 w-3" />
                 Sign out
@@ -579,7 +645,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setShowAuthModal(true)}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+                className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
               >
                 <LogIn className="h-3 w-3" />
                 Sign in
@@ -603,10 +669,18 @@ export default function App() {
             onSignInRequired={() => setShowAuthModal(true)}
           />
         </div>
+        </>}
       </aside>
 
       {/* Center: Map */}
       <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+        <button
+          onClick={() => setAiSidebarOpen((open) => !open)}
+          className="absolute left-[10px] top-[82px] z-[1000] flex h-[34px] w-[34px] items-center justify-center rounded-sm border-2 border-black/20 bg-card text-foreground shadow-sm transition-colors hover:bg-muted"
+          aria-label={aiSidebarOpen ? "Collapse AI sidebar" : "Expand AI sidebar"}
+        >
+          {aiSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+        </button>
         {search.isError && (
           <div className="absolute left-1/2 top-4 z-[1000] -translate-x-1/2 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-2 text-sm text-destructive shadow-sm">
             Failed to load data — is the API running?
@@ -638,18 +712,21 @@ export default function App() {
 
       {/* Right: Display/News tabs + Pipeline or Block Detail */}
       <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card overflow-hidden">
-        <div className="flex shrink-0 border-b border-border">
+        <div className="grid shrink-0 grid-cols-2 gap-1.5 border-b border-border bg-muted/40 p-2.5">
           {(["display", "news"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
               onClick={() => setRightTab(tab)}
-              className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${
+              className={`flex min-h-11 items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold capitalize transition-all ${
                 rightTab === tab
-                  ? "border-b-2 border-primary text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "border-primary/40 bg-card text-foreground shadow-sm"
+                  : "border-transparent text-muted-foreground hover:border-border hover:bg-card/60 hover:text-foreground"
               }`}
             >
+              {tab === "display"
+                ? <MonitorCog className="h-4 w-4" />
+                : <Newspaper className="h-4 w-4" />}
               {tab === "display" ? "Display" : "News"}
             </button>
           ))}

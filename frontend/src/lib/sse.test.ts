@@ -15,7 +15,7 @@ describe("homeos cases api", () => {
 
     await getCases();
 
-    expect(fetch).toHaveBeenCalledWith("/api/homeos/cases");
+    expect(fetch).toHaveBeenCalledWith("/api/homeos/cases", { headers: {} });
   });
 
   it("getCase calls /homeos/cases/:id", async () => {
@@ -29,7 +29,7 @@ describe("homeos cases api", () => {
 
     await getCase("abc");
 
-    expect(fetch).toHaveBeenCalledWith("/api/homeos/cases/abc");
+    expect(fetch).toHaveBeenCalledWith("/api/homeos/cases/abc", { headers: {} });
   });
 
   it("investigateStream returns an async iterable of events", async () => {

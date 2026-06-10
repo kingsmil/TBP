@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
 vi.mock("./components/MapView", () => ({
@@ -20,6 +20,7 @@ vi.mock("./components/MapView", () => ({
 }));
 
 vi.mock("./lib/api", () => ({
+  apiSubscriptionStatus: vi.fn(async () => ({ email: "pro@example.com", is_subscribed: true })),
   chatInCase: vi.fn(async function* () {}),
   getCase: vi.fn(async () => ({
     case_id: "case-1",
@@ -109,6 +110,11 @@ function renderApp() {
 }
 
 describe("App", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    document.documentElement.classList.remove("dark");
+  });
+
   it("switches from AI mode to Explore mode", async () => {
     renderApp();
 
@@ -139,6 +145,11 @@ describe("App", () => {
   });
 
   it("keeps AI and Explore selections independent", async () => {
+    window.localStorage.setItem("hdb_token", "test-token");
+    window.localStorage.setItem("hdb_user", JSON.stringify({
+      email: "pro@example.com",
+      is_subscribed: true,
+    }));
     renderApp();
 
     fireEvent.click(screen.getByRole("button", { name: "Select block 1" }));
@@ -156,5 +167,35 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^explore$/i }));
     expect(screen.getByTestId("selected-block")).toHaveTextContent("2");
+  });
+
+  it("toggles and persists dark mode", () => {
+    renderApp();
+
+    fireEvent.click(screen.getByRole("button", { name: /switch to dark mode/i }));
+
+    expect(document.documentElement).toHaveClass("dark");
+    expect(window.localStorage.getItem("hdb-match-theme")).toBe("dark");
+    expect(screen.getByRole("button", { name: /switch to light mode/i })).toBeInTheDocument();
+  });
+
+  it("opens the sign-in modal from Explore mode", async () => {
+    renderApp();
+    fireEvent.click(screen.getByRole("button", { name: /^explore$/i }));
+
+    await waitFor(() => screen.getByRole("button", { name: /^sign in$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    expect(screen.getByText("Sign in to your account")).toBeInTheDocument();
+  });
+
+  it("collapses and expands the AI sidebar", () => {
+    renderApp();
+
+    fireEvent.click(screen.getByRole("button", { name: /collapse ai sidebar/i }));
+    expect(screen.getByRole("button", { name: /expand ai sidebar/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /expand ai sidebar/i }));
+    expect(screen.getByRole("button", { name: /collapse ai sidebar/i })).toBeInTheDocument();
   });
 });

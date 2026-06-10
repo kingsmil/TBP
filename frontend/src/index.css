@@ -107,4 +107,38 @@ html, body, #root { height: 100%; margin: 0; }
 
     --radius: 0.5rem;
   }
+
+  .dark {
+    --background: 220 18% 10%;
+    --foreground: 210 20% 92%;
+
+    --card: 220 17% 13%;
+    --card-foreground: 210 20% 92%;
+
+    --popover: 220 17% 13%;
+    --popover-foreground: 210 20% 92%;
+
+    --primary: 214 42% 65%;
+    --primary-foreground: 220 22% 10%;
+
+    --secondary: 216 19% 24%;
+    --secondary-foreground: 210 20% 92%;
+
+    --muted: 220 15% 18%;
+    --muted-foreground: 215 12% 64%;
+
+    --accent: 62 22% 32%;
+    --accent-foreground: 60 30% 90%;
+
+    --destructive: 0 63% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 216 15% 25%;
+    --input: 216 15% 25%;
+    --ring: 214 42% 65%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
 }

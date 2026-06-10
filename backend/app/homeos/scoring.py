@@ -1,5 +1,21 @@
 from __future__ import annotations
 
+from typing import Literal, TypedDict
+
+
+class EvidenceItem(TypedDict):
+    text: str
+    source: Literal["market", "location", "risk"]
+
+
+def _item(text: str, source: str) -> EvidenceItem:
+    return {"text": text, "source": source}
+
+
+def item_texts(items: list[EvidenceItem]) -> list[str]:
+    """Extract plain-text strings from attributed evidence items."""
+    return [it["text"] for it in items]
+
 
 def _verdict(score: float) -> str:
     if score >= 75:
@@ -22,48 +38,48 @@ def worth_viewing_score(
     location: dict,
     risk: dict,
     prefs: dict,
-) -> tuple[float, list[str], list[str]]:
+) -> tuple[float, list[EvidenceItem], list[EvidenceItem]]:
     score = 0.0
-    reasons: list[str] = []
-    watchouts: list[str] = list(risk.get("watchouts", []))
+    reasons: list[EvidenceItem] = []
+    watchouts: list[EvidenceItem] = [_item(w, "risk") for w in risk.get("watchouts", [])]
 
     if market.get("budget_signal") == "within_budget":
         score += 30
-        reasons.append("Recent comparable sales support the budget.")
+        reasons.append(_item("Recent comparable sales support the budget.", "market"))
     elif market.get("budget_signal") == "above_budget":
         score += 10
-        watchouts.append("Recent comparable sales are above the stated budget.")
+        watchouts.append(_item("Recent comparable sales are above the stated budget.", "market"))
     else:
-        watchouts.append("Price confidence is limited by sparse transaction evidence.")
+        watchouts.append(_item("Price confidence is limited by sparse transaction evidence.", "market"))
 
     txn_count = market.get("transaction_count") or 0
     if txn_count >= 4:
         score += 20
-        reasons.append("Recent resale evidence is strong enough for comparison.")
+        reasons.append(_item("Recent resale evidence is strong enough for comparison.", "market"))
     else:
         score += 8
-        watchouts.append("Recent resale evidence is limited.")
+        watchouts.append(_item("Recent resale evidence is limited.", "market"))
 
     for conn in location.get("connections", []):
         if conn["type"] == "mrt":
             if conn["signal"] == "strong":
                 score += 18
-                reasons.append("MRT access fits the buyer profile.")
+                reasons.append(_item("MRT access fits the buyer profile.", "location"))
             elif conn["signal"] == "moderate":
                 score += 11
-                watchouts.append("MRT access is moderate rather than excellent.")
+                watchouts.append(_item("MRT access is moderate rather than excellent.", "location"))
             else:
                 score += 4
-                watchouts.append("MRT access is weak for this profile.")
+                watchouts.append(_item("MRT access is weak for this profile.", "location"))
         if conn["type"] == "primary_school" and prefs.get("school_priority") == "high":
             if conn["signal"] == "strong":
                 score += 18
-                reasons.append("Primary school access fits the family profile.")
+                reasons.append(_item("Primary school access fits the family profile.", "location"))
             elif conn["signal"] == "moderate":
                 score += 10
-                reasons.append("There is at least one primary school within 1km.")
+                reasons.append(_item("There is at least one primary school within 1km.", "location"))
             else:
-                watchouts.append("Primary school access is weak for this family profile.")
+                watchouts.append(_item("Primary school access is weak for this family profile.", "location"))
 
     commute = location.get("commute") or {}
     worst = commute.get("worst_commute_min")
@@ -74,9 +90,10 @@ def worth_viewing_score(
         ]
         if resolved:
             worst_dest = max(resolved, key=lambda d: d["travel_min"])
-            watchouts.append(
-                f"Long commute to {worst_dest['name']} (~{worst_dest['travel_min']:.0f} min)."
-            )
+            watchouts.append(_item(
+                f"Long commute to {worst_dest['name']} (~{worst_dest['travel_min']:.0f} min).",
+                "location",
+            ))
 
     score += risk.get("score_adjustment") or 0.0
     return round(max(0.0, min(score, 100.0)), 1), reasons[:4], watchouts[:4]

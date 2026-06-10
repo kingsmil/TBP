@@ -79,7 +79,9 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
     buyer_type = "family" if _has_any(profile_text, ("family", "kids", "children", "child", "primary school", "schools")) else "single"
     if _has_any(profile_text, ("must be close to mrt", "near mrt", "close to mrt", "commute", "mrt access", "within 600")):
         commute_priority = "high"
-    elif _has_any(profile_text, ("medium commute", "1.2km", "1200", "moderate commute", "within 1.2", "within 1km of mrt")):
+    elif _has_any(profile_text, ("medium commute", "1.2km", "1200", "moderate commute", "within 1.2", "within 1km of mrt",
+                                  "works in", "work in", "office in", "workplace", "cbd", "raffles place", "tanjong pagar",
+                                  "city hall", "marina bay", "one north", "jurong east")):
         commute_priority = "medium"
     else:
         commute_priority = "low"

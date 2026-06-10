@@ -139,3 +139,10 @@ class OutreachRequest(BaseModel):
     contact_name: str | None = None
     availability: list[str] = Field(default_factory=list)
     note: str | None = None
+
+
+class NewsItem(BaseModel):
+    title: str
+    url: str
+    published_date: str | None = None
+    domain: str | None = None

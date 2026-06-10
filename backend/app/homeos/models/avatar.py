@@ -25,6 +25,7 @@ class HomeOSPreferences(BaseModel):
     risk_tolerance: Literal["low", "medium"] = "low"
     appreciation_priority: Literal["medium", "high"] = "medium"
     work_locations: list[str] = Field(default_factory=list)
+    partner_work_locations: list[str] = Field(default_factory=list)
     bus_reliance: Literal["low", "high"] = "low"
 
     @field_validator("flat_type", mode="before")

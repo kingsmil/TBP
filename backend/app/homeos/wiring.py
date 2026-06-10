@@ -23,11 +23,12 @@ def setup() -> None:
     from app.homeos.tools.commute import CommuteTool
     from app.homeos.tools.bus_routes import BusRoutesTool
     from app.homeos.tools.lifestyle_score import LifestyleScoreTool
+    from app.homeos.tools.couple_fairness import CoupleFairnessTool
 
     tool_repository = ToolRepository(mock=mock)
     for cls in (TransactionsTool, ProximityTool, AppreciationTool,
                 FutureDevTool, AccessibilityTool, SearchTool,
-                CommuteTool, BusRoutesTool, LifestyleScoreTool):
+                CommuteTool, BusRoutesTool, LifestyleScoreTool, CoupleFairnessTool):
         tool_repository.register_tool(cls(mock=mock))
 
     from app.homeos.agents.profile import profile_definition

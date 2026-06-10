@@ -90,8 +90,24 @@ def _extract_work_locations(text: str) -> list[str]:
     return locations
 
 
+def _extract_partner_work_locations(text: str) -> list[str]:
+    """Extract workplace locations for the partner/spouse in couple mode."""
+    locations: list[str] = []
+    pattern = re.compile(
+        r"\b(?:partner|wife|husband|spouse|he|she)\s+(?:works?|works?\s+(?:at|in|near)|office)\s+(?:at|in|near)?\s*"
+        r"([A-Za-z][A-Za-z0-9 .'-]*?)(?=\s+(?:and|with|but|because|while|plus)\b|[.,;]|$)",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(text):
+        loc = " ".join(match.group(1).split()).strip(" .,-")
+        if loc and loc.casefold() not in {x.casefold() for x in locations}:
+            locations.append(loc)
+    return locations
+
+
 def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
-    buyer_type = "family" if _has_any(profile_text, ("family", "kids", "children", "child", "primary school", "schools")) else "single"
+    is_couple = _has_any(profile_text, ("partner", "wife", "husband", "spouse", "couple", "together", "both of us", "the two of us"))
+    buyer_type = "family" if _has_any(profile_text, ("family", "kids", "children", "child", "primary school", "schools")) else ("couple" if is_couple else "single")
     if _has_any(profile_text, ("must be close to mrt", "near mrt", "close to mrt", "commute", "mrt access", "within 600")):
         commute_priority = "high"
     elif _has_any(profile_text, ("medium commute", "1.2km", "1200", "moderate commute", "within 1.2", "within 1km of mrt",
@@ -104,6 +120,7 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
     risk_tolerance = "medium" if _has_any(profile_text, ("some risk", "appreciation risk", "growth", "invest")) else "low"
     appreciation_priority = "high" if _has_any(profile_text, ("growth", "appreciation", "investment", "undervalued")) else "medium"
     work_locations = _extract_work_locations(profile_text)
+    partner_work_locations = _extract_partner_work_locations(profile_text) if is_couple else []
     bus_reliance = "high" if _has_any(
         profile_text,
         ("no car", "without a car", "don't drive", "doesn't drive", "depend on bus", "depends on bus",
@@ -112,6 +129,9 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
     if buyer_type == "family":
         label = "Family HomeOS Agent"
         summary = "Family buyer prioritizing schools, budget fit, and lower-risk viewing choices."
+    elif buyer_type == "couple":
+        label = "Couple HomeOS Agent"
+        summary = "Couple buyer balancing commute fairness, affordability, and accessibility."
     elif commute_priority == "high":
         label = "Commute HomeOS Agent"
         summary = "Commute-focused buyer prioritizing MRT access and practical viewing choices."
@@ -130,6 +150,7 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
             "risk_tolerance": risk_tolerance,
             "appreciation_priority": appreciation_priority,
             "work_locations": work_locations,
+            "partner_work_locations": partner_work_locations,
             "bus_reliance": bus_reliance,
         },
     }

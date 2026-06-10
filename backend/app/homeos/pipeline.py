@@ -448,11 +448,17 @@ def _prefs_to_search_query(prefs: dict, candidate_limit: int = 100):
         max_mrt_distance_m = 1200.0
     else:
         max_mrt_distance_m = None
+
+    # Filter by bus stop distance when buyer is bus-dependent
+    bus_reliance = prefs.get("bus_reliance", "low")
+    max_bus_distance_m = 400.0 if bus_reliance == "high" else None
+
     return SearchQuery(
         flat_type=prefs.get("flat_type"),
         max_price=prefs.get("max_price"),
         town=prefs.get("town"),
         max_mrt_distance_m=max_mrt_distance_m,
+        max_bus_distance_m=max_bus_distance_m,
         min_schools_within_1km=min_schools,
         limit=candidate_limit,
     )
@@ -683,6 +689,17 @@ def _direct_answer_overrides(user_message: str, pipeline: list[dict]) -> dict:
 
         if town_enum:
             updates["town"] = town_enum.value
+    elif "work" in lower_q or "workplace" in lower_q or "commute" in lower_q:
+        # Extract work locations from the answer
+        work_locs = _extract_work_locations(user_message)
+        if work_locs:
+            updates["work_locations"] = work_locs
+    elif "bus" in lower_q or "car" in lower_q:
+        # Check if they rely on buses
+        if any(w in lower_a for w in ("yes", "high", "no car", "rely", "depend", "bus")):
+            updates["bus_reliance"] = "high"
+        elif any(w in lower_a for w in ("no", "low", "have car", "drive", "car owner")):
+            updates["bus_reliance"] = "low"
     return updates
 
 

@@ -566,12 +566,23 @@ export default function App() {
               Explore
             </button>
             {authUser ? (
-              <button type="button" onClick={handleLogout} title="Sign out" className="text-muted-foreground hover:text-foreground">
-                <LogOut className="h-3.5 w-3.5" />
+              <button
+                type="button"
+                onClick={handleLogout}
+                title={`Signed in as ${authUser.email}`}
+                className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <LogOut className="h-3 w-3" />
+                Sign out
               </button>
             ) : (
-              <button type="button" onClick={() => setShowAuthModal(true)} title="Sign in" className="text-muted-foreground hover:text-foreground">
-                <LogIn className="h-3.5 w-3.5" />
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(true)}
+                className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+              >
+                <LogIn className="h-3 w-3" />
+                Sign in
               </button>
             )}
           </div>
@@ -584,10 +595,12 @@ export default function App() {
             streamingEvents={streamingEvents}
             chatChunks={chatChunks}
             isStreaming={isStreaming}
+            isAuthenticated={!!authUser}
             onNewCase={handleNewCase}
             onSelectCase={handleSelectCase}
             onSendMessage={handleSendMessage}
             onRefine={handleRefine}
+            onSignInRequired={() => setShowAuthModal(true)}
           />
         </div>
       </aside>

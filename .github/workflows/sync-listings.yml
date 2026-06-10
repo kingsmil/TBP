@@ -1,0 +1,82 @@
+name: Sync HDB Active Listings
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Max listings to fetch (leave blank for all)"
+        required: false
+        default: ""
+
+env:
+  AWS_REGION: us-west-2
+  EC2_INSTANCE_ID: i-0445fc9bb19097618
+
+jobs:
+  sync:
+    name: Fetch listings → EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run listing sync via SSM
+        run: |
+          LIMIT_ARG=""
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            LIMIT_ARG="--limit ${{ github.event.inputs.limit }}"
+          fi
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids $EC2_INSTANCE_ID \
+            --document-name "AWS-RunShellScript" \
+            --parameters "{\"commands\":[\"docker exec hdb-backend python -m app.data.hdb_listings $LIMIT_ARG --delay 0.15\"]}" \
+            --region $AWS_REGION \
+            --query 'Command.CommandId' \
+            --output text)
+          echo "SSM Command ID: $COMMAND_ID"
+
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id $COMMAND_ID \
+              --instance-id $EC2_INSTANCE_ID \
+              --query 'StatusDetails' --output text 2>/dev/null || echo "Pending")
+            echo "[$i/60] $STATUS"
+            if [ "$STATUS" = "Success" ]; then
+              echo "Sync complete!"
+              aws ssm get-command-invocation \
+                --command-id $COMMAND_ID \
+                --instance-id $EC2_INSTANCE_ID \
+                --query 'StandardOutputContent' --output text
+              break
+            elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "TimedOut" ] || [ "$STATUS" = "Cancelled" ]; then
+              echo "Sync failed:"
+              aws ssm get-command-invocation \
+                --command-id $COMMAND_ID \
+                --instance-id $EC2_INSTANCE_ID \
+                --query 'StandardErrorContent' --output text
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Verify listing count
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids $EC2_INSTANCE_ID \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["docker exec hdb-postgres psql -U hdbmatch -d hdbmatch -c \"SELECT COUNT(*) AS active_listings, MAX(created_at) AS last_synced FROM hdb_active_listings;\""]}' \
+            --region $AWS_REGION \
+            --query 'Command.CommandId' \
+            --output text)
+          sleep 8
+          aws ssm get-command-invocation \
+            --command-id $COMMAND_ID \
+            --instance-id $EC2_INSTANCE_ID \
+            --query 'StandardOutputContent' --output text

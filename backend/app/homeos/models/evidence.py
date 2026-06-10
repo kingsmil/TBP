@@ -17,6 +17,8 @@ class MarketEvidence(BaseModel):
 
 class LocationEvidence(BaseModel):
     connections: list[dict[str, Any]] = Field(default_factory=list)
+    commute: dict[str, Any] = Field(default_factory=dict)
+    bus_routes: dict[str, Any] = Field(default_factory=dict)
     narrative: str = ""
 
 

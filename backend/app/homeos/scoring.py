@@ -86,17 +86,36 @@ def worth_viewing_score(
 
     commute = location.get("commute") or {}
     worst = commute.get("worst_commute_min")
-    if commute.get("available") and worst is not None and worst > 60:
+    if commute.get("available") and worst is not None:
         resolved = [
             d for d in commute.get("destinations", [])
             if d.get("resolved") and d.get("travel_min") is not None
         ]
         if resolved:
             worst_dest = max(resolved, key=lambda d: d["travel_min"])
-            watchouts.append(_item(
-                f"Long commute to {worst_dest['name']} (~{worst_dest['travel_min']:.0f} min).",
-                "location",
-            ))
+            if worst > 60:
+                watchouts.append(_item(
+                    f"Long commute to {worst_dest['name']} (~{worst_dest['travel_min']:.0f} min).",
+                    "location",
+                ))
+            elif worst <= 30:
+                score += 8
+                reasons.append(_item(
+                    f"Short commute to {worst_dest['name']} (~{worst_dest['travel_min']:.0f} min).",
+                    "location",
+                ))
+
+    bus_routes = location.get("bus_routes") or {}
+    if bus_routes.get("available") and prefs.get("bus_reliance") == "high":
+        service_count = len(bus_routes.get("services", []))
+        if service_count >= 8:
+            score += 8
+            reasons.append(_item(f"Excellent bus coverage ({service_count} services from nearest stop).", "location"))
+        elif service_count >= 4:
+            score += 4
+            reasons.append(_item(f"Good bus coverage ({service_count} services from nearest stop).", "location"))
+        elif service_count < 3:
+            watchouts.append(_item(f"Limited bus coverage ({service_count} services from nearest stop).", "location"))
 
     score += risk.get("score_adjustment") or 0.0
 

@@ -245,9 +245,11 @@ export function investigateHomeOSProfile(
 export function getHomeOSCaseFile(
   blockId: number,
   profileText: string,
+  caseId?: string,
 ): Promise<HomeOSCaseFile> {
   return postJSON<HomeOSCaseFile>(`/homeos/case-file/${blockId}`, {
     profile_text: profileText,
+    ...(caseId ? { case_id: caseId } : {}),
   });
 }
 

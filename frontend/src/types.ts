@@ -270,6 +270,25 @@ export interface HomeOSAvatar {
   preferences: HomeOSPreferences;
 }
 
+export type AgentSource = "market" | "location" | "risk";
+
+export interface EvidenceItem {
+  text: string;
+  source: AgentSource;
+}
+
+export interface TraceToolCall {
+  tool_name: string;
+  args: unknown;
+  result?: unknown;
+}
+
+export interface AgentTrace {
+  agent: AgentSource;
+  narrative: string;
+  tool_calls: TraceToolCall[];
+}
+
 export interface HomeOSShortlistRow {
   block_id: number;
   block_number: string;
@@ -278,8 +297,8 @@ export interface HomeOSShortlistRow {
   worth_viewing_score: number;
   verdict: "Worth viewing" | "Maybe view" | "Skip for now";
   confidence: "low" | "medium" | "high";
-  top_reasons: string[];
-  top_watchouts: string[];
+  top_reasons: EvidenceItem[];
+  top_watchouts: EvidenceItem[];
 }
 
 export interface HomeOSInvestigationResponse {
@@ -295,8 +314,8 @@ export interface HomeOSCaseFile {
   verdict: string;
   worth_viewing_score: number;
   confidence: "low" | "medium" | "high";
-  top_reasons: string[];
-  top_watchouts: string[];
+  top_reasons: EvidenceItem[];
+  top_watchouts: EvidenceItem[];
   evidence: {
     recent_sales: {
       transaction_count: number;
@@ -310,6 +329,7 @@ export interface HomeOSCaseFile {
     future_signals: Record<string, unknown>;
     agent_questions: string[];
   };
+  trace?: AgentTrace[];
 }
 
 export interface HomeOSScheduleViewingBody {

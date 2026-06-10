@@ -156,8 +156,9 @@ def risk_value_agent(
     return evidence
 
 
-def viewing_questions_agent(evidence: dict[str, Any]) -> list[str]:
-    base_questions = [
+def base_viewing_questions(evidence: dict[str, Any]) -> list[str]:
+    """Deterministic due-diligence questions — no LLM, no mock dependency."""
+    questions = [
         "Which floor range is the unit in?",
         "Is the unit facing a main road or MRT track?",
         "Are recent comparable transactions renovated or original condition?",
@@ -166,9 +167,16 @@ def viewing_questions_agent(evidence: dict[str, Any]) -> list[str]:
     market = evidence.get("market", {})
     location = evidence.get("location", {})
     if market.get("confidence") == "low":
-        base_questions.append("Why is there limited recent resale evidence for this block or flat type?")
+        questions.append("Why is there limited recent resale evidence for this block or flat type?")
     if any(c.get("signal") == "weak" for c in location.get("connections", [])):
-        base_questions.append("What is the realistic walking route and time to the nearest MRT or school?")
+        questions.append("What is the realistic walking route and time to the nearest MRT or school?")
+    return questions
+
+
+def viewing_questions_agent(evidence: dict[str, Any]) -> list[str]:
+    base_questions = base_viewing_questions(evidence)
+    market = evidence.get("market", {})
+    location = evidence.get("location", {})
     if is_mock_mode():
         extra = [q for q in mock_questions(evidence) if q and q not in base_questions]
     else:

@@ -1,5 +1,7 @@
 const MODEL_KEY = "homeos_selected_model";
 
+export const DEFAULT_MODEL = "openai/gpt-5.4-nano";
+
 export function getStoredModel(): string | null {
   try {
     return localStorage.getItem(MODEL_KEY);

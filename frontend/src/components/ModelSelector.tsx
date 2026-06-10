@@ -42,6 +42,9 @@ export default function ModelSelector({ value, onChange }: ModelSelectorProps) {
               </span>
             </SelectItem>
           ))}
+          <div className="border-t border-border mt-1 px-2 py-1.5 text-[10px] leading-snug text-muted-foreground">
+            Explore different models for different opinions.
+          </div>
         </SelectContent>
       </Select>
     </div>

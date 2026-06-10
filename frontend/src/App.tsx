@@ -45,7 +45,7 @@ import {
 } from "./lib/api";
 import { clearAuth, getStoredUser, type AuthUser } from "./lib/auth";
 import { formatPsf, formatSGD } from "./lib/format";
-import { getStoredModel, setStoredModel } from "./lib/modelPreference";
+import { getStoredModel, setStoredModel, DEFAULT_MODEL } from "./lib/modelPreference";
 import type {
   AgentEvent,
   DirectTransitDestination,
@@ -177,7 +177,7 @@ export default function App() {
   const [rightTab, setRightTab] = useState<"display" | "news">("display");
   const [isStreaming, setIsStreaming] = useState(false);
   const [framedCaseId, setFramedCaseId] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>(() => getStoredModel() ?? "");
+  const [selectedModel, setSelectedModel] = useState<string>(() => getStoredModel() ?? DEFAULT_MODEL);
 
   const selectedBlockId = mode === "ai" ? aiSelectedBlockId : exploreSelectedBlockId;
 

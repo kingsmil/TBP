@@ -6,7 +6,8 @@ Boots the compose database if needed, verifies it has seeded data, then runs
 the end-to-end test suite (backend/tests/e2e/) against the REAL PostGIS data.
 
 Usage:
-  python run_e2e.py            # ensure db up, run E2E tests
+  python run_e2e.py            # ensure db up, run E2E tests (offline model)
+  python run_e2e.py --live     # also run the live-LLM happy path (real API call, costs money)
   python run_e2e.py --no-up    # assume db is already running
   python run_e2e.py -k search  # pass extra args through to pytest
 """
@@ -68,12 +69,30 @@ def check_seeded() -> None:
     ok(f"Database seeded ({count} blocks)")
 
 
-def run_tests(extra: list[str]) -> int:
+def load_dotenv(env: dict) -> None:
+    """Merge KEY=VALUE lines from .env (same format setup.py reads)."""
+    env_file = ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, val = line.partition("=")
+                env.setdefault(key.strip(), val.strip())
+
+
+def run_tests(extra: list[str], live: bool) -> int:
     env = os.environ.copy()
     env.setdefault("DATABASE_URL", DEFAULT_DATABASE_URL)
-    # Never make live LLM calls from tests (the suite re-enforces this too).
-    env["LLM_PROVIDER"] = "test"
-    env.pop("AI_GATEWAY_API_KEY", None)
+    if live:
+        load_dotenv(env)  # pick up AI_GATEWAY_API_KEY / LLM_MODEL from .env
+        if not env.get("AI_GATEWAY_API_KEY"):
+            die("--live needs AI_GATEWAY_API_KEY (env or .env)")
+        env["LIVE_LLM"] = "1"
+        info("LIVE mode — the live-LLM happy path will make a real, billed model call")
+    else:
+        # Never make live LLM calls from tests (the suite re-enforces this too).
+        env["LLM_PROVIDER"] = "test"
+        env.pop("AI_GATEWAY_API_KEY", None)
     info(f"Running E2E tests against {env['DATABASE_URL']}")
     cmd = [python_bin(), "-m", "pytest", "tests/e2e/", "-v", *extra]
     return subprocess.run(cmd, cwd=BACKEND, env=env).returncode
@@ -82,12 +101,14 @@ def run_tests(extra: list[str]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run E2E tests against the compose database.")
     parser.add_argument("--no-up", action="store_true", help="skip docker compose up")
+    parser.add_argument("--live", action="store_true",
+                        help="include the live-LLM happy path (real API call, costs money)")
     args, extra = parser.parse_known_args()
 
     if not args.no_up:
         ensure_db_up()
     check_seeded()
-    return run_tests(extra)
+    return run_tests(extra, live=args.live)
 
 
 if __name__ == "__main__":

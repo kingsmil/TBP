@@ -66,6 +66,9 @@ class Repository(ABC):
     def transactions_for_block(self, block_id: int) -> Sequence[Transaction]: ...
     @abstractmethod
     def proximity(self, block_id: int) -> BlockProximity | None: ...
+    @abstractmethod
+    def bus_stop_reach(self, bus_stop_code: str) -> dict | None:
+        """Services boarding at this stop and every stop reachable downstream."""
 
     # --- active listings (HDB Flat Portal) ---
     @abstractmethod

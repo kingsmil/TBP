@@ -38,6 +38,10 @@ profile_definition = AgentSpec(
         "\n"
         "school_priority: 'high' if schools/kids mentioned, 'low' otherwise\n"
         "\n"
+        "work_locations: Extract list of workplace names exactly as stated (e.g. ['Raffles Place', 'Jurong East'])\n"
+        "\n"
+        "bus_reliance: 'high' if buyer says no car or depends on buses, 'low' otherwise (default)\n"
+        "\n"
         "Return a complete HomeOSAvatar with label, buyer_type, summary, and preferences."
     ),
     output_type=HomeOSAvatar,

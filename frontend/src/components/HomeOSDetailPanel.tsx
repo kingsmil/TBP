@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Download } from "lucide-react";
 import ActiveListingsSection from "./ActiveListingsSection";
 import { getHomeOSCaseFile, scheduleHomeOSViewing } from "../lib/api";
 import { formatDistance, formatPsf, formatSGD } from "../lib/format";
@@ -52,6 +53,21 @@ export default function HomeOSDetailPanel({ block, profileText, caseId, onClose,
     }
   }
 
+  function handleDownloadCase() {
+    if (!caseFile) return;
+    const payload = JSON.stringify(caseFile, null, 2);
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const casePart = caseId ? `-${caseId.slice(0, 8)}` : "";
+    anchor.href = url;
+    anchor.download = `homeos-case-${caseFile.block_id}${casePart}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
   if (!block) return null;
 
   const verdictColor =
@@ -77,6 +93,18 @@ export default function HomeOSDetailPanel({ block, profileText, caseId, onClose,
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {caseFile && (
+            <button
+              type="button"
+              onClick={handleDownloadCase}
+              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+              aria-label="Download case"
+              title="Download case"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Download</span>
+            </button>
+          )}
           {onBack && (
             <button
               type="button"

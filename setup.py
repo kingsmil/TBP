@@ -225,6 +225,10 @@ def setup_database():
         run([str(PYTHON), "-m", "app.data.seed"], cwd=BACKEND, env=env)
         ok("Mock data seeded")
 
+    info("Seeding HDB Flat Portal active listings (bundled snapshot)…")
+    run([str(PYTHON), "-m", "app.data.seed_listings"], cwd=BACKEND, env=env)
+    ok("Active listings seeded (refresh anytime with `make listings-load`)")
+
     info("Syncing official bus stops and available route dataâ€¦")
     run([str(PYTHON), "-m", "app.data.sync_bus_network"], cwd=BACKEND, env=env)
     if env.get("LTA_DATAMALL_API_KEY"):

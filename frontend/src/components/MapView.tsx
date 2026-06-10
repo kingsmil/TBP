@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bus } from "lucide-react";
 import { CircleMarker, MapContainer, Pane, Polyline, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
@@ -12,10 +12,16 @@ import type { BusReachResponse } from "../lib/api";
 const ONEMAP_TILES =
   "https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png";
 
-// Bounds around Singapore — map is fitted to these on load and pan is locked to them
+// Max pan bounds — keeps user inside Singapore region
 const SG_BOUNDS: LatLngBoundsExpression = [
   [1.1304, 103.6005], // SW corner
   [1.4784, 104.0120], // NE corner
+];
+
+// Tighter fit bounds — focuses on the main island, less ocean on load
+const SG_FIT_BOUNDS: LatLngBoundsExpression = [
+  [1.2400, 103.6200], // SW — Jurong West
+  [1.4600, 104.0000], // NE — Pasir Ris / Punggol
 ];
 
 const SHORTLIST_COLOR = "#7c3aed";
@@ -197,24 +203,39 @@ function ClusteredBlocks({
   );
 }
 
-/** Fits the map to Singapore bounds on mount so there are no empty tile edges. */
-function MapInitializer() {
-  const map = useMap();
-  useEffect(() => {
-    map.fitBounds(SG_BOUNDS, { padding: [0, 0], animate: false });
-  }, [map]);
-  return null;
-}
-
-/** Watches the map container with ResizeObserver and calls invalidateSize
- *  whenever it changes — handles sidebar open/close reliably. */
+/** Fits the initial bounds after layout and keeps Leaflet synced to container resizes. */
 function MapResizer() {
   const map = useMap();
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = map.getContainer();
-    const observer = new ResizeObserver(() => map.invalidateSize({ animate: false }));
+    let frame = 0;
+    let shouldFitBounds = false;
+
+    const syncSize = (fitBounds = false) => {
+      shouldFitBounds ||= fitBounds;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false, pan: false });
+        if (shouldFitBounds) {
+          map.fitBounds(SG_FIT_BOUNDS, { padding: [20, 20], animate: false });
+          shouldFitBounds = false;
+        }
+      });
+    };
+    const handleWindowResize = () => syncSize();
+
+    map.invalidateSize({ animate: false, pan: false });
+    syncSize(true);
+
+    const observer = new ResizeObserver(() => syncSize());
     observer.observe(container);
-    return () => observer.disconnect();
+    window.addEventListener("resize", handleWindowResize);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", handleWindowResize);
+    };
   }, [map]);
   return null;
 }
@@ -275,10 +296,10 @@ export default function MapView({
   ) ?? [];
 
   return (
-    <div className="relative h-full w-full bg-[#e8e0d8]">
+    <div className="absolute inset-0 overflow-hidden bg-[#aacbdf]">
       <MapContainer
-        bounds={SG_BOUNDS}
-        boundsOptions={{ padding: [0, 0] }}
+        bounds={SG_FIT_BOUNDS}
+        boundsOptions={{ padding: [20, 20] }}
         minZoom={11}
         maxZoom={18}
         maxBounds={SG_BOUNDS}
@@ -286,7 +307,6 @@ export default function MapView({
         preferCanvas
         className="h-full w-full"
       >
-        <MapInitializer />
         <MapResizer />
         <BusRouteFitter reach={busReach.data} activeService={activeBusService} />
 

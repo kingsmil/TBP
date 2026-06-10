@@ -39,6 +39,15 @@ class TestCatalogueDimensions(unittest.TestCase):
         self.assertIsNone(dims["bus_reliance"].query_key)
         self.assertEqual(dims["bus_reliance"].default, "low")
 
+    def test_pref_dimension_has_question_field(self):
+        from app.homeos.framework.spec import PrefDimension
+        # with explicit question
+        d = PrefDimension(field="x", prompt="p", question="Is this right?")
+        self.assertEqual(d.question, "Is this right?")
+        # default is empty string
+        d2 = PrefDimension(field="x", prompt="p")
+        self.assertEqual(d2.question, "")
+
 
 def _q(field):
     return {"event": "clarifying_question", "field": field, "question": "x"}

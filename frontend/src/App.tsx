@@ -345,7 +345,7 @@ export default function App() {
           )}
         </aside>
 
-        <main className="relative flex-1 overflow-hidden">
+        <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           <button
             onClick={() => setSidebarOpen((o) => !o)}
             className="absolute left-[10px] top-[82px] z-[1000] flex h-[34px] w-[34px] items-center justify-center rounded-sm border-2 border-[rgba(0,0,0,0.2)] bg-white shadow-sm hover:bg-gray-100 transition-colors"
@@ -421,7 +421,7 @@ export default function App() {
       </aside>
 
       {/* Center: Map */}
-      <main className="relative flex-1 overflow-hidden">
+      <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         {search.isError && (
           <div className="absolute left-1/2 top-4 z-[1000] -translate-x-1/2 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-2 text-sm text-destructive shadow-sm">
             Failed to load data — is the API running?

@@ -18,11 +18,6 @@ const SG_BOUNDS: LatLngBoundsExpression = [
   [1.4784, 104.0120], // NE corner
 ];
 
-// Tighter fit bounds — focuses on the main island, less ocean on load
-const SG_FIT_BOUNDS: LatLngBoundsExpression = [
-  [1.2400, 103.6200], // SW — Jurong West
-  [1.4600, 104.0000], // NE — Pasir Ris / Punggol
-];
 
 const SHORTLIST_COLOR = "#7c3aed";
 const SELECTED_COLOR = "#dc2626";
@@ -203,29 +198,41 @@ function ClusteredBlocks({
   );
 }
 
-/** Fits the initial bounds after layout and keeps Leaflet synced to container resizes. */
+// Centre of Singapore's main HDB belt
+const SG_CENTER: [number, number] = [1.352, 103.820];
+
+/** Pick an initial zoom that keeps HDB clusters visible regardless of container size. */
+function adaptiveZoom(containerWidth: number, containerHeight: number): number {
+  const minDim = Math.min(containerWidth, containerHeight);
+  if (minDim >= 700) return 12;
+  if (minDim >= 500) return 11;
+  return 11;
+}
+
+/** Syncs Leaflet size and sets an adaptive initial view. Handles sidebar open/close. */
 function MapResizer() {
   const map = useMap();
   useLayoutEffect(() => {
     const container = map.getContainer();
     let frame = 0;
-    let shouldFitBounds = false;
+    let isFirstFit = true;
 
-    const syncSize = (fitBounds = false) => {
-      shouldFitBounds ||= fitBounds;
+    const syncSize = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         map.invalidateSize({ animate: false, pan: false });
-        if (shouldFitBounds) {
-          map.fitBounds(SG_FIT_BOUNDS, { padding: [20, 20], animate: false });
-          shouldFitBounds = false;
+        if (isFirstFit) {
+          const { clientWidth, clientHeight } = container;
+          const z = adaptiveZoom(clientWidth, clientHeight);
+          map.setView(SG_CENTER, z, { animate: false });
+          isFirstFit = false;
         }
       });
     };
     const handleWindowResize = () => syncSize();
 
     map.invalidateSize({ animate: false, pan: false });
-    syncSize(true);
+    syncSize();
 
     const observer = new ResizeObserver(() => syncSize());
     observer.observe(container);
@@ -298,8 +305,8 @@ export default function MapView({
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#aacbdf]">
       <MapContainer
-        bounds={SG_FIT_BOUNDS}
-        boundsOptions={{ padding: [20, 20] }}
+        center={SG_CENTER}
+        zoom={12}
         minZoom={11}
         maxZoom={18}
         maxBounds={SG_BOUNDS}

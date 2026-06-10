@@ -50,6 +50,7 @@ from app.core.models import SearchQuery
 from app.repositories.base import Repository
 from app.services import accessibility as access_svc
 from app.services import analytics as analytics_svc
+from app.services import block_agents as block_agents_svc
 from app.services.appreciation import appreciation as appreciation_svc
 from app.services.comparison import compare_estates
 from app.services.commute.couple import couple_optimize, recommended_estates
@@ -150,6 +151,22 @@ def property_detail(block_id: int, repo: Repository = Depends(get_repository)):
             for t in txns
         ],
     }
+
+
+@app.get("/blocks/agents")
+def block_agents(address: str = Query(..., min_length=3),
+                 repo: Repository = Depends(get_repository)):
+    """Agents marketing units in a block, looked up by address.
+
+    Example: /blocks/agents?address=104A Bidadari Pk Dr
+    """
+    try:
+        data = block_agents_svc.find_block_agents(repo, address)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if data is None:
+        raise HTTPException(status_code=404, detail="block not found for address")
+    return data
 
 
 @app.get("/blocks/{block_id}/listings")

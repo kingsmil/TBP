@@ -3,6 +3,7 @@
 
 import type {
   AccessibilityScores,
+  BlockAgentsResponse,
   BlockListingsResponse,
   AppreciationResult,
   CommuteHeatmapResponse,
@@ -237,6 +238,12 @@ export function scheduleHomeOSViewing(
 
 export function getBlockListings(blockId: number): Promise<BlockListingsResponse> {
   return getJSON<BlockListingsResponse>(`/blocks/${blockId}/listings`);
+}
+
+export function getBlockAgents(address: string): Promise<BlockAgentsResponse> {
+  return getJSON<BlockAgentsResponse>(
+    `/blocks/agents?address=${encodeURIComponent(address)}`,
+  );
 }
 
 export function getCases(): Promise<HomeOSCaseSummary[]> {

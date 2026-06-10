@@ -398,3 +398,34 @@ export interface BlockListingsResponse {
   count: number;
   listings: ActiveListing[];
 }
+
+export interface ListingSummary {
+  listing_id: number;
+  price: number;
+  flat_type: string;
+  floor_area_sqm: number;
+  floor_area_sqft: number;
+  storey_range: string;
+  remaining_lease: string;
+  description?: string;
+}
+
+export interface BlockAgent {
+  agent_name?: string;
+  agent_phone?: string;
+  agent_email?: string;
+  agency_name?: string;
+  listings: ListingSummary[];
+}
+
+export interface BlockAgentsResponse {
+  block: {
+    block_id: number;
+    block_number: string;
+    street_name: string;
+    town: string;
+  };
+  agents: BlockAgent[];
+  owner_listings: ListingSummary[];
+  listing_count: number;
+}

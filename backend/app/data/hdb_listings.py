@@ -52,6 +52,7 @@ _ROAD_ABBREV = {
     "CRESCENT": "CRES", "CLOSE": "CL", "PLACE": "PL", "TERRACE": "TER",
     "GARDENS": "GDNS", "HEIGHTS": "HTS", "NORTH": "NTH", "SOUTH": "STH",
     "CENTRAL": "CTRL", "UPPER": "UPP", "COMMONWEALTH": "C'WEALTH",
+    "PARK": "PK", "LANE": "LN",
 }
 
 

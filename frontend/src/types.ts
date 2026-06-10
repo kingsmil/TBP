@@ -270,7 +270,19 @@ export interface HomeOSAvatar {
   preferences: HomeOSPreferences;
 }
 
-export type AgentSource = "market" | "location" | "risk";
+export type AgentSource = "market" | "location" | "risk" | "lifestyle";
+
+export type AgentKey = "market" | "location" | "lifestyle" | "risk";
+
+export interface AgentProgressEntry {
+  status: "idle" | "running" | "done";
+  blocksDone: number;
+  snippets: { block_id: number; narrative: string }[];
+}
+
+export type AgentProgressMap = Map<AgentKey, AgentProgressEntry>;
+
+export type BlockNarrativeMap = Map<number, Map<AgentKey, string>>;
 
 export interface EvidenceItem {
   text: string;

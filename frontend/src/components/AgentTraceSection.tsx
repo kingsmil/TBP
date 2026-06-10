@@ -75,7 +75,7 @@ function AgentTraceRow({ trace }: { trace: AgentTrace }) {
 }
 
 export default function AgentTraceSection({ trace }: { trace?: AgentTrace[] }) {
-  const withCalls = (trace ?? []).filter((t) => t.tool_calls.length > 0);
+  const withCalls = (trace ?? []).filter((t) => t.tool_calls.length > 0 || !!t.narrative);
   if (withCalls.length === 0) return null;
   return (
     <div className="p-4 border-b border-border space-y-2">

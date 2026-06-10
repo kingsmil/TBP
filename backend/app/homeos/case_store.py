@@ -146,12 +146,16 @@ def get_case(case_id: str) -> dict[str, Any] | None:
 
 
 def list_cases(user_id: int | None = None) -> list[dict[str, Any]]:
-    if _db_enabled() and user_id is not None:
-        return _load_for_user(user_id)
-    cases = list(_cases.values())
+    # In-memory cache is the authoritative live source within this process;
+    # the DB adds cases persisted by earlier runs. Merge both, preferring the
+    # in-memory copy (fresher) on case_id collisions.
+    mem = list(_cases.values())
     if user_id is not None:
-        cases = [c for c in cases if c.get("user_id") == user_id]
-    return sorted(cases, key=lambda c: c["created_at"], reverse=True)
+        mem = [c for c in mem if c.get("user_id") == user_id]
+    if _db_enabled() and user_id is not None:
+        seen = {c["case_id"] for c in mem}
+        mem += [c for c in _load_for_user(user_id) if c["case_id"] not in seen]
+    return sorted(mem, key=lambda c: c["created_at"], reverse=True)
 
 
 def append_event(case_id: str, event: dict[str, Any]) -> None:

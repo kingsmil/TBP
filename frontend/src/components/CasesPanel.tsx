@@ -6,6 +6,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   type?: "profile" | "search" | "question" | "result" | "chat";
+  field?: string;
 }
 
 function buildChatHistory(
@@ -48,7 +49,7 @@ function buildChatHistory(
         type: "search",
       });
     } else if (e.event === "clarifying_question" && e.question) {
-      messages.push({ role: "assistant", content: e.question, type: "question" });
+      messages.push({ role: "assistant", content: e.question, type: "question", field: e.field });
       // Interleave the user's answer immediately after the question
       if (convIdx < conversation.length && conversation[convIdx].role === "user") {
         messages.push({ role: "user", content: conversation[convIdx].content, type: "chat" });

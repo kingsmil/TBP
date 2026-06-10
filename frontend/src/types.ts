@@ -342,6 +342,7 @@ export interface AgentEvent {
   shortlist?: HomeOSShortlistRow[];
   message?: string;
   question?: string;
+  field?: string;
 }
 
 export interface HomeOSCaseSummary {

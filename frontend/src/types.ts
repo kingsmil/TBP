@@ -398,3 +398,12 @@ export interface BlockListingsResponse {
   count: number;
   listings: ActiveListing[];
 }
+
+export interface OutreachMessageResponse {
+  listing_id: number;
+  message: string;
+  questions: string[];
+  whatsapp_url?: string;
+  email_url?: string;
+  agent_name?: string;
+}

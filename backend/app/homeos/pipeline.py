@@ -194,7 +194,12 @@ async def _deep_analysis_stream(
                     "Summarise the location evidence for this block.",
                 )
                 location_narrative = output.narrative
-            location_evidence = {**prox_data, "narrative": location_narrative}
+            location_evidence = {
+                **prox_data,
+                "commute": prefetched_loc.get("commute", {}),
+                "bus_routes": prefetched_loc.get("bus_routes", {}),
+                "narrative": location_narrative,
+            }
 
             yield {"event": "agent_data", "agent": "location", "block_id": block_id, "data": location_evidence}
             homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "location", "block_id": block_id, "data": location_evidence})

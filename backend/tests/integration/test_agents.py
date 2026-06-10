@@ -62,6 +62,21 @@ class TestAgentsIntegration(unittest.TestCase):
         # no work_locations in prefs -> commute must be honestly unavailable
         self.assertFalse(prefetched["commute"]["available"])
 
+    def test_location_evidence_dict_carries_commute_and_bus_keys(self):
+        # Mirrors the pipeline's location_evidence assembly without streaming.
+        _, prefetched = self.tr.build_agent(
+            "location", self.repo, self.block_id,
+            {**self.prefs, "work_locations": ["MRT-1"]})
+        evidence = {
+            **prefetched.get("proximity", {}),
+            "commute": prefetched.get("commute", {}),
+            "bus_routes": prefetched.get("bus_routes", {}),
+            "narrative": "",
+        }
+        self.assertIn("connections", evidence)
+        self.assertTrue(evidence["commute"]["available"])   # MRT-1 is a seeded station name
+        self.assertIn("available", evidence["bus_routes"])
+
     def test_risk_agent_returns_risk_evidence_instance(self):
         output, prefetched = self._run(
             "risk", self.block_id, self.prefs,

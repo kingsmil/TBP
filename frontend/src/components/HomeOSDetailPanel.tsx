@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ActiveListingsSection from "./ActiveListingsSection";
 import { getHomeOSCaseFile, scheduleHomeOSViewing } from "../lib/api";
 import { formatDistance, formatPsf, formatSGD } from "../lib/format";
 import type { BlockSummary, HomeOSCaseFile, HomeOSScheduleViewingResponse } from "../types";
@@ -106,6 +107,8 @@ export default function HomeOSDetailPanel({ block, profileText, onClose, onBack 
         <Row label="Schools (1km)" value={String(block.schools_within_1km ?? "—")} />
         <Row label="Transactions" value={String(block.txn_count)} />
       </div>
+
+      <ActiveListingsSection blockId={block.block_id} />
 
       {/* HomeOS evidence */}
       {profileText && (

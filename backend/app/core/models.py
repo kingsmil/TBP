@@ -83,6 +83,41 @@ class Transaction:
         return self.resale_price / self.floor_area_sqft
 
 
+@dataclass(frozen=True)
+class ActiveListing:
+    """A currently-listed resale flat from the HDB Flat Portal, matched to a Block.
+
+    One Block has 0..N active listings (one per flat/unit on the market).
+    Agent contact fields are usually None: the portal's public API only exposes
+    them for the rare agent-managed listing (contact is login-gated otherwise).
+    """
+    listing_id: int
+    block_id: int
+    block_number: str
+    street_name: str
+    postal_code: str
+    town: str
+    price: float
+    flat_type: str
+    floor_area_sqm: float
+    storey_range: str
+    remaining_lease: str
+    bedroom: int | None
+    bathroom: int | None
+    description: str | None
+    photo_path: str | None
+    agent_name: str | None
+    agent_phone: str | None
+    agent_email: str | None
+    agency_name: str | None
+    managed_by_agent: bool
+    last_updated: str
+
+    @property
+    def floor_area_sqft(self) -> float:
+        return self.floor_area_sqm * 10.7639
+
+
 @dataclass
 class BlockProximity:
     block_id: int

@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Iterable, Sequence
 
 from app.core.models import (
+    ActiveListing,
     Block,
     BlockProximity,
     BtoProject,
@@ -63,3 +64,11 @@ class Repository(ABC):
     def transactions_for_block(self, block_id: int) -> Sequence[Transaction]: ...
     @abstractmethod
     def proximity(self, block_id: int) -> BlockProximity | None: ...
+
+    # --- active listings (HDB Flat Portal) ---
+    @abstractmethod
+    def add_active_listings(self, items: Iterable[ActiveListing]) -> None: ...
+    @abstractmethod
+    def active_listings_for_block(self, block_id: int) -> Sequence[ActiveListing]: ...
+    @abstractmethod
+    def active_listing(self, listing_id: int) -> ActiveListing | None: ...

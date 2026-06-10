@@ -152,6 +152,20 @@ def property_detail(block_id: int, repo: Repository = Depends(get_repository)):
     }
 
 
+@app.get("/blocks/{block_id}/listings")
+def block_listings(block_id: int, repo: Repository = Depends(get_repository)):
+    """Active HDB Flat Portal listings for a block, cheapest first."""
+    if repo.block(block_id) is None:
+        raise HTTPException(status_code=404, detail="block not found")
+    listings = sorted(repo.active_listings_for_block(block_id), key=lambda a: a.price)
+    out = []
+    for a in listings:
+        d = {k: v for k, v in a.__dict__.items() if v is not None}
+        d["floor_area_sqft"] = round(a.floor_area_sqft, 1)
+        out.append(d)
+    return {"count": len(out), "listings": out}
+
+
 @app.get("/analytics/estate/{planning_area_id}")
 def estate_analytics(planning_area_id: int, flat_type: str | None = None,
                      repo: Repository = Depends(get_repository)):

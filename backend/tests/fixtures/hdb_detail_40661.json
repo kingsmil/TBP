@@ -1,0 +1,33 @@
+{
+    "photo": "rf/40661/40661-IMG-1781023872084.jpg",
+    "bedroom": 3,
+    "bathroom": 2,
+    "balcony": "No",
+    "extension": "Yes",
+    "price": 1330000,
+    "block": "126A",
+    "storeyRange": "More than 30",
+    "town": "Bukit Merah",
+    "street": "KIM TIAN RD",
+    "remainingLease": "85 years 8 months",
+    "contra": "Yes",
+    "ethnicEligibility": "Any",
+    "sprEligibility": "Any",
+    "ethnicEligibilityDate": "Jun 2026",
+    "description": [
+        {
+            "description": "Rare 40th Top-Floor Gem at 126A Kim Tian Road! Young lease, superb sunset view, bright, breezy, good privacy, high ceiling. Minutes walk to MRT, Tiong Bahru & CBD. Prime District 3 city-fringe living.",
+            "email": null,
+            "name": null,
+            "number": null,
+            "agencyName": null,
+            "lastUpdated": "2026-06-10 01:07:50.96",
+            "ceaNumber": null,
+            "licenseNo": null
+        }
+    ],
+    "flatType": "4-Room",
+    "postal": "161126",
+    "floorArea": 93.0,
+    "managedByAgent": false
+}

@@ -627,6 +627,19 @@ async def investigate_stream(
             yield proceed_evt
             homeos_case_store.append_event(case_id, proceed_evt)
 
+        # ── Phase 2b: Preference completeness review (one round per case) ────
+        _current_pipeline = homeos_case_store.get_case(case_id).get("pipeline", [])
+        review_q, review_field = _preference_review(
+            query_dict, prefs, len(all_candidates), _current_pipeline)
+        if review_q is not None:
+            logger.info("[case:%s] PREFERENCE REVIEW  count=%d", case_id[:8], len(all_candidates))
+            homeos_case_store.set_status(case_id, "refining")
+            q_evt = {"event": "clarifying_question", "case_id": case_id,
+                     "question": review_q, "field": review_field}
+            yield q_evt
+            homeos_case_store.append_event(case_id, q_evt)
+            return
+
         # ── Phase 3: Deep analysis ──────────────────────────────────────────
         async for evt in _deep_analysis_stream(repo, case_id, ranked, prefs):
             yield evt
@@ -725,6 +738,19 @@ async def refine_stream(
             }
             yield proceed_evt
             homeos_case_store.append_event(case_id, proceed_evt)
+
+        # ── Preference completeness review (one round per case) ──────────────
+        _current_pipeline = homeos_case_store.get_case(case_id).get("pipeline", [])
+        review_q, review_field = _preference_review(
+            query_dict, prefs, len(all_candidates), _current_pipeline)
+        if review_q is not None:
+            logger.info("[case:%s] PREFERENCE REVIEW  count=%d", case_id[:8], len(all_candidates))
+            homeos_case_store.set_status(case_id, "refining")
+            q_evt = {"event": "clarifying_question", "case_id": case_id,
+                     "question": review_q, "field": review_field}
+            yield q_evt
+            homeos_case_store.append_event(case_id, q_evt)
+            return
 
         async for evt in _deep_analysis_stream(repo, case_id, ranked, prefs):
             yield evt

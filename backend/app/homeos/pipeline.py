@@ -241,6 +241,115 @@ def _build_lifestyle_inputs(repo: Repository, prefs: dict):
     return provider, destinations or None
 
 
+# ── Per-agent evidence builders ────────────────────────────────────────────────
+# Each returns (evidence_dict, tool_calls). Pulled out of the stream loop so the
+# four block subagents can run concurrently instead of one-after-another.
+
+async def _compute_market_evidence(repo: Repository, block_id: int, prefs: dict, mock: bool, model_override: str | None):
+    from app.homeos.wiring import tool_repository
+    if mock:
+        # Prefetch data and use the deterministic mock narrative.
+        _, prefetched = tool_repository.build_agent("market", repo=repo, block_id=block_id, prefs=prefs)
+        txn_data = prefetched.get("transactions", {})
+        return {**txn_data, "narrative": mock_market_narrative(txn_data, prefs)}, []
+    output, _, result = await _run_block_agent(
+        "market", repo, block_id, prefs,
+        "Analyze market evidence for this block using the available tools.",
+        model_override,
+    )
+    return output.model_dump(), _extract_tool_calls(result)
+
+
+async def _compute_location_evidence(repo: Repository, block_id: int, prefs: dict, mock: bool, model_override: str | None):
+    from app.homeos.wiring import tool_repository
+    if mock:
+        _, prefetched = tool_repository.build_agent("location", repo=repo, block_id=block_id, prefs=prefs)
+        prox_data = prefetched.get("proximity", {})
+        connections = prox_data.get("connections", [])
+        return {**prox_data, "narrative": mock_location_narrative(connections)}, []
+    output, _, result = await _run_block_agent(
+        "location", repo, block_id, prefs,
+        "Analyze location and connectivity for this block using the available tools.",
+        model_override,
+    )
+    return output.model_dump(), _extract_tool_calls(result)
+
+
+async def _compute_risk_evidence(repo: Repository, block_id: int, prefs: dict, mock: bool, model_override: str | None):
+    from app.homeos.wiring import tool_repository
+    if mock:
+        # Prefetch data and compute watchouts / score adjustment manually.
+        _, prefetched = tool_repository.build_agent("risk", repo=repo, block_id=block_id, prefs=prefs)
+        app_data = prefetched.get("appreciation", {})
+        future_dev_data = prefetched.get("future_dev", {})
+        future_supply_data = future_dev_data.get("future_supply", {})
+        watchouts: list[str] = []
+        score_adjustment = 0.0
+        if app_data.get("appreciation_score") is not None:
+            score_adjustment += min(12.0, app_data["appreciation_score"] / 10)
+        if app_data.get("risk_level") == "high" and prefs.get("risk_tolerance") == "low":
+            watchouts.append("Appreciation model flags elevated risk for a low-risk buyer.")
+            score_adjustment -= 8.0
+        if future_supply_data.get("supply_risk_level") == "high":
+            watchouts.append("Nearby future supply may weigh on appreciation.")
+            score_adjustment -= 4.0
+        return {
+            "appreciation": app_data,
+            "future_mrt": future_dev_data.get("future_mrt"),
+            "future_supply": future_supply_data,
+            "watchouts": watchouts,
+            "score_adjustment": score_adjustment,
+            "narrative": mock_risk_narrative({"watchouts": watchouts, "score_adjustment": score_adjustment}),
+        }, []
+    output, _, result = await _run_block_agent(
+        "risk", repo, block_id, prefs,
+        f"Analyze risk factors for this block. Buyer risk_tolerance: {prefs.get('risk_tolerance', 'low')}",
+        model_override,
+    )
+    return output.model_dump(), _extract_tool_calls(result)
+
+
+async def _compute_lifestyle_evidence(repo: Repository, block_id: int, prefs: dict, mock: bool):
+    if mock:
+        ls_data = {
+            "lifestyle_score": None,
+            "commute_band": None,
+            "couple_fairness": None,
+            "factors": {},
+            "watchouts": [],
+        }
+        ls_data["narrative"] = mock_lifestyle_narrative(ls_data)
+        return ls_data, []
+    output, _, result = await _run_block_agent(
+        "lifestyle", repo, block_id, prefs,
+        "Analyze lifestyle fit for this block using the available tools.",
+    )
+    return output.model_dump(), _extract_tool_calls(result)
+
+
+# Sentinel pushed onto the per-block event queue when one subagent finishes.
+_AGENT_DONE = object()
+
+
+async def _stream_agent(name: str, queue: asyncio.Queue, block_id: int, mock: bool, compute):
+    """Run one block subagent, pushing its SSE events onto `queue`; return its evidence.
+
+    Emits the same event sequence the sequential pipeline did
+    (agent_start → [tool_calls] → agent_data → agent_summary → agent_done) so the
+    frontend, which keys events by (agent, block_id), is unchanged.
+    """
+    await queue.put({"event": "agent_start", "agent": name, "block_id": block_id})
+    if mock:
+        await asyncio.sleep(mock_delay_seconds())
+    evidence, tool_calls = await compute()
+    if tool_calls:
+        await queue.put({"event": "tool_calls", "agent": name, "block_id": block_id, "tool_calls": tool_calls})
+    await queue.put({"event": "agent_data", "agent": name, "block_id": block_id, "data": evidence})
+    await queue.put({"event": "agent_summary", "agent": name, "block_id": block_id, "narrative": evidence.get("narrative", "")})
+    await queue.put({"event": "agent_done", "agent": name, "block_id": block_id})
+    return evidence
+
+
 # ── Deep analysis ─────────────────────────────────────────────────────────────
 
 async def _deep_analysis_stream(
@@ -254,181 +363,53 @@ async def _deep_analysis_stream(
     rows = []
     for candidate in candidates:
         block_id = candidate["block_id"]
-        market_evidence: dict = {}
-        location_evidence: dict = {}
-        risk_evidence: dict = {}
-        lifestyle_evidence: dict = {}
+        mock = is_mock_mode()
 
-        try:
-            mock = is_mock_mode()
+        # The four block subagents are independent, so run them concurrently and
+        # stream their events through a shared queue as each is produced. Blocks
+        # are still processed one at a time, which bounds gateway load.
+        agent_specs = (
+            ("market", lambda: _compute_market_evidence(repo, block_id, prefs, mock, model_override)),
+            ("location", lambda: _compute_location_evidence(repo, block_id, prefs, mock, model_override)),
+            ("risk", lambda: _compute_risk_evidence(repo, block_id, prefs, mock, model_override)),
+            ("lifestyle", lambda: _compute_lifestyle_evidence(repo, block_id, prefs, mock)),
+        )
+        queue: asyncio.Queue = asyncio.Queue()
+        results: dict[str, dict] = {}
+        errors: list[Exception] = []
 
-            # ── Market ────────────────────────────────────────────────────────
-            start_evt = {"event": "agent_start", "agent": "market", "block_id": block_id}
-            yield start_evt
-            homeos_case_store.append_event(case_id, start_evt)
-            if mock:
-                await asyncio.sleep(mock_delay_seconds())
+        async def _worker(agent_name, compute):
+            try:
+                results[agent_name] = await _stream_agent(agent_name, queue, block_id, mock, compute)
+            except Exception as exc:  # one failing agent shouldn't wedge the block
+                errors.append(exc)
+            finally:
+                await queue.put(_AGENT_DONE)
 
-            from app.homeos.wiring import tool_repository
-            if mock:
-                # In mock mode, prefetch data and use mock narrative
-                _, prefetched_market = tool_repository.build_agent("market", repo=repo, block_id=block_id, prefs=prefs)
-                txn_data = prefetched_market.get("transactions", {})
-                market_narrative = mock_market_narrative(txn_data, prefs)
-                market_evidence = {**txn_data, "narrative": market_narrative}
-            else:
-                # In AI mode, let agent call tools and return complete evidence
-                output, _, result = await _run_block_agent(
-                    "market", repo, block_id, prefs,
-                    "Analyze market evidence for this block using the available tools.",
-                    model_override,
-                )
-                market_evidence = output.model_dump()
-                tool_calls = _extract_tool_calls(result)
-                if tool_calls:
-                    tool_evt = {"event": "tool_calls", "agent": "market", "block_id": block_id, "tool_calls": tool_calls}
-                    yield tool_evt
-                    homeos_case_store.append_event(case_id, tool_evt)
+        tasks = [asyncio.create_task(_worker(name, compute)) for name, compute in agent_specs]
 
-            yield {"event": "agent_data", "agent": "market", "block_id": block_id, "data": market_evidence}
-            homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "market", "block_id": block_id, "data": market_evidence})
-            yield {"event": "agent_summary", "agent": "market", "block_id": block_id, "narrative": market_evidence.get("narrative", "")}
-            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "market", "block_id": block_id, "narrative": market_evidence.get("narrative", "")})
-            yield {"event": "agent_done", "agent": "market", "block_id": block_id}
-            homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "market", "block_id": block_id})
+        # Drain events in real time as the concurrent agents emit them. Each
+        # worker pushes exactly one _AGENT_DONE sentinel when it finishes.
+        remaining = len(agent_specs)
+        while remaining:
+            evt = await queue.get()
+            if evt is _AGENT_DONE:
+                remaining -= 1
+                continue
+            yield evt
+            homeos_case_store.append_event(case_id, evt)
 
-            # ── Location ──────────────────────────────────────────────────────
-            start_evt = {"event": "agent_start", "agent": "location", "block_id": block_id}
-            yield start_evt
-            homeos_case_store.append_event(case_id, start_evt)
-            if mock:
-                await asyncio.sleep(mock_delay_seconds())
+        await asyncio.gather(*tasks)
 
-            if mock:
-                # In mock mode, prefetch data and use mock narrative
-                _, prefetched_loc = tool_repository.build_agent("location", repo=repo, block_id=block_id, prefs=prefs)
-                prox_data = prefetched_loc.get("proximity", {})
-                connections = prox_data.get("connections", [])
-                location_narrative = mock_location_narrative(connections)
-                location_evidence = {**prox_data, "narrative": location_narrative}
-            else:
-                # In AI mode, let agent call tools and return complete evidence
-                output, _, result = await _run_block_agent(
-                    "location", repo, block_id, prefs,
-                    "Analyze location and connectivity for this block using the available tools.",
-                    model_override,
-                )
-                location_evidence = output.model_dump()
-                tool_calls = _extract_tool_calls(result)
-                if tool_calls:
-                    tool_evt = {"event": "tool_calls", "agent": "location", "block_id": block_id, "tool_calls": tool_calls}
-                    yield tool_evt
-                    homeos_case_store.append_event(case_id, tool_evt)
-
-            yield {"event": "agent_data", "agent": "location", "block_id": block_id, "data": location_evidence}
-            homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "location", "block_id": block_id, "data": location_evidence})
-            yield {"event": "agent_summary", "agent": "location", "block_id": block_id, "narrative": location_evidence.get("narrative", "")}
-            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "location", "block_id": block_id, "narrative": location_evidence.get("narrative", "")})
-            yield {"event": "agent_done", "agent": "location", "block_id": block_id}
-            homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "location", "block_id": block_id})
-
-            # ── Risk ──────────────────────────────────────────────────────────
-            start_evt = {"event": "agent_start", "agent": "risk", "block_id": block_id}
-            yield start_evt
-            homeos_case_store.append_event(case_id, start_evt)
-            if mock:
-                await asyncio.sleep(mock_delay_seconds())
-
-            if mock:
-                # In mock mode, prefetch data and compute manually
-                _, prefetched_risk = tool_repository.build_agent("risk", repo=repo, block_id=block_id, prefs=prefs)
-                app_data = prefetched_risk.get("appreciation", {})
-                future_dev_data = prefetched_risk.get("future_dev", {})
-                future_supply_data = future_dev_data.get("future_supply", {})
-                watchouts: list[str] = []
-                score_adjustment = 0.0
-                if app_data.get("appreciation_score") is not None:
-                    score_adjustment += min(12.0, app_data["appreciation_score"] / 10)
-                if app_data.get("risk_level") == "high" and prefs.get("risk_tolerance") == "low":
-                    watchouts.append("Appreciation model flags elevated risk for a low-risk buyer.")
-                    score_adjustment -= 8.0
-                if future_supply_data.get("supply_risk_level") == "high":
-                    watchouts.append("Nearby future supply may weigh on appreciation.")
-                    score_adjustment -= 4.0
-                risk_narrative = mock_risk_narrative({
-                    "watchouts": watchouts,
-                    "score_adjustment": score_adjustment,
-                })
-                risk_evidence = {
-                    "appreciation": app_data,
-                    "future_mrt": future_dev_data.get("future_mrt"),
-                    "future_supply": future_supply_data,
-                    "watchouts": watchouts,
-                    "score_adjustment": score_adjustment,
-                    "narrative": risk_narrative,
-                }
-            else:
-                # In AI mode, let agent call tools, compute watchouts and score_adjustment
-                output, _, result = await _run_block_agent(
-                    "risk", repo, block_id, prefs,
-                    f"Analyze risk factors for this block. Buyer risk_tolerance: {prefs.get('risk_tolerance', 'low')}",
-                    model_override,
-                )
-                risk_evidence = output.model_dump()
-                tool_calls = _extract_tool_calls(result)
-                if tool_calls:
-                    tool_evt = {"event": "tool_calls", "agent": "risk", "block_id": block_id, "tool_calls": tool_calls}
-                    yield tool_evt
-                    homeos_case_store.append_event(case_id, tool_evt)
-
-            yield {"event": "agent_data", "agent": "risk", "block_id": block_id, "data": risk_evidence}
-            homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "risk", "block_id": block_id, "data": risk_evidence})
-            yield {"event": "agent_summary", "agent": "risk", "block_id": block_id, "narrative": risk_evidence.get("narrative", "")}
-            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "risk", "block_id": block_id, "narrative": risk_evidence.get("narrative", "")})
-            yield {"event": "agent_done", "agent": "risk", "block_id": block_id}
-            homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "risk", "block_id": block_id})
-
-            # ── Lifestyle ─────────────────────────────────────────────────────
-            start_evt = {"event": "agent_start", "agent": "lifestyle", "block_id": block_id}
-            yield start_evt
-            homeos_case_store.append_event(case_id, start_evt)
-            if mock:
-                await asyncio.sleep(mock_delay_seconds())
-
-            if mock:
-                from app.homeos.sync_agents import lifestyle_analysis_agent
-                provider, destinations = _build_lifestyle_inputs(repo, prefs)
-                ls_data = {
-                    "lifestyle_score": None,
-                    "commute_band": None,
-                    "couple_fairness": None,
-                    "factors": {},
-                    "watchouts": [],
-                }
-                ls_data["narrative"] = mock_lifestyle_narrative(ls_data)
-                lifestyle_evidence = ls_data
-            else:
-                output, _, result = await _run_block_agent(
-                    "lifestyle", repo, block_id, prefs,
-                    "Analyze lifestyle fit for this block using the available tools.",
-                )
-                lifestyle_evidence = output.model_dump()
-                tool_calls = _extract_tool_calls(result)
-                if tool_calls:
-                    tool_evt = {"event": "tool_calls", "agent": "lifestyle", "block_id": block_id, "tool_calls": tool_calls}
-                    yield tool_evt
-                    homeos_case_store.append_event(case_id, tool_evt)
-
-            yield {"event": "agent_data", "agent": "lifestyle", "block_id": block_id, "data": lifestyle_evidence}
-            homeos_case_store.append_event(case_id, {"event": "agent_data", "agent": "lifestyle", "block_id": block_id, "data": lifestyle_evidence})
-            yield {"event": "agent_summary", "agent": "lifestyle", "block_id": block_id, "narrative": lifestyle_evidence.get("narrative", "")}
-            homeos_case_store.append_event(case_id, {"event": "agent_summary", "agent": "lifestyle", "block_id": block_id, "narrative": lifestyle_evidence.get("narrative", "")})
-            yield {"event": "agent_done", "agent": "lifestyle", "block_id": block_id}
-            homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "lifestyle", "block_id": block_id})
-
-        except Exception as exc:
-            logger.warning("[case:%s] agent error for block %d: %s — skipping", case_id[:8], block_id, exc)
+        if errors:
+            # Match the previous behaviour: skip a block whose analysis failed.
+            logger.warning("[case:%s] agent error for block %d: %s — skipping", case_id[:8], block_id, errors[0])
             continue
+
+        market_evidence = results.get("market", {})
+        location_evidence = results.get("location", {})
+        risk_evidence = results.get("risk", {})
+        lifestyle_evidence = results.get("lifestyle", {})
 
         txn_count = market_evidence.get("transaction_count", 0)
         score, reasons, watchouts = worth_viewing_score(market_evidence, location_evidence, risk_evidence, prefs, lifestyle_evidence)

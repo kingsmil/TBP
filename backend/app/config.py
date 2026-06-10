@@ -42,6 +42,7 @@ class Settings:
     # data.gov.sg API key — reduces rate-limit errors when fetching live data.
     datagov_api_key: str | None = os.environ.get("DATAGOV_API_KEY") or None
     lta_datamall_api_key: str | None = os.environ.get("LTA_DATAMALL_API_KEY") or None
+    exa_api_key: str | None = os.environ.get("EXA_API_KEY") or None
 
 
 settings = Settings()

@@ -70,6 +70,17 @@ def mock_questions(evidence: dict[str, Any]) -> list[str]:
     return questions[:6]
 
 
+def mock_lifestyle_narrative(evidence: dict[str, Any]) -> str:
+    score = evidence.get("lifestyle_score")
+    band = evidence.get("commute_band") or "unknown"
+    fairness = evidence.get("couple_fairness")
+    score_text = f"{score:.1f}/100" if score is not None else "unavailable"
+    fairness_text = f"; couple fairness {fairness:.0f}/100" if fairness is not None else ""
+    return (
+        f"Mock lifestyle: score {score_text}, commute band {band}{fairness_text}."
+    )
+
+
 def mock_chat_answer(case: dict[str, Any], message: str) -> str:
     summaries = [
         e.get("narrative", "")

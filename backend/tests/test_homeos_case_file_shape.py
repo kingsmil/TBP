@@ -25,6 +25,25 @@ class TestCaseFileShape(unittest.TestCase):
         for item in cf["top_reasons"] + cf["top_watchouts"]:
             self.assertIn("source", item)
 
+    def test_case_file_evidence_contains_lifestyle(self):
+        with patch.dict(os.environ, {"HOMEOS_AGENT_MODE": "mock"}):
+            cf = build_homeos_case_file(
+                self.repo, "family with kids budget 500k near mrt", self.block_id
+            )
+        self.assertIn("lifestyle", cf["evidence"])
+        ls = cf["evidence"]["lifestyle"]
+        for key in ("lifestyle_score", "commute_band", "couple_fairness", "factors", "watchouts", "narrative"):
+            with self.subTest(key=key):
+                self.assertIn(key, ls)
+
+    def test_case_file_lifestyle_narrative_is_string(self):
+        with patch.dict(os.environ, {"HOMEOS_AGENT_MODE": "mock"}):
+            cf = build_homeos_case_file(
+                self.repo, "family with kids budget 500k near mrt", self.block_id
+            )
+        self.assertIsInstance(cf["evidence"]["lifestyle"]["narrative"], str)
+        self.assertGreater(len(cf["evidence"]["lifestyle"]["narrative"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

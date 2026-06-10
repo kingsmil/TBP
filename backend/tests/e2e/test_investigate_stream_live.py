@@ -18,8 +18,8 @@ PROFILE = (
     "want good primary schools nearby."
 )
 REFINE_ANSWER = "Tampines please"
-MAX_REFINE_ROUNDS = 3  # too-many gate Qs + preference review need headroom
-DEEP_AGENTS = ("market", "location", "risk")
+MAX_REFINE_ROUNDS = 8  # preference review asks one dim at a time; need headroom for all dims
+DEEP_AGENTS = ("market", "location", "risk", "lifestyle")
 
 
 def _collect(agen):
@@ -145,6 +145,8 @@ class TestInvestigateStreamLive(unittest.TestCase):
             self.assertGreaterEqual(row["worth_viewing_score"], 0)
             self.assertLessEqual(row["worth_viewing_score"], 100)
             self.assertTrue(row["verdict"])
+            self.assertIn("lifestyle_score", row)
+            self.assertIn("commute_band", row)
 
         self.assertEqual(case["status"], "done")
         pipeline_events = [e.get("event") for e in case["pipeline"]]

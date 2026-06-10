@@ -132,6 +132,44 @@ class TestHomeOSStream(unittest.TestCase):
         self.assertNotIn("work_locations", q_fields)
         self.assertNotIn("bus_reliance", q_fields)
 
+    def test_stream_emits_lifestyle_agent_events(self):
+        events = self._collect_stream("Family 4 room 800k schools.", limit=1)
+        lifestyle_starts = [e for e in events if e["event"] == "agent_start" and e["agent"] == "lifestyle"]
+        self.assertGreaterEqual(len(lifestyle_starts), 1)
+        self.assertIsNotNone(lifestyle_starts[0]["block_id"])
+
+    def test_stream_lifestyle_runs_after_risk(self):
+        events = self._collect_stream("Family 4 room 800k schools.", limit=1)
+        agent_starts = [e for e in events if e["event"] == "agent_start" and e["agent"] in ("risk", "lifestyle")]
+        agents_in_order = [e["agent"] for e in agent_starts]
+        risk_idx = next((i for i, a in enumerate(agents_in_order) if a == "risk"), None)
+        lifestyle_idx = next((i for i, a in enumerate(agents_in_order) if a == "lifestyle"), None)
+        self.assertIsNotNone(risk_idx)
+        self.assertIsNotNone(lifestyle_idx)
+        self.assertGreater(lifestyle_idx, risk_idx)
+
+    def test_stream_emits_lifestyle_summary_with_narrative(self):
+        events = self._collect_stream("Family 4 room 800k schools.", limit=1)
+        ls_summaries = [e for e in events if e["event"] == "agent_summary" and e["agent"] == "lifestyle"]
+        self.assertGreaterEqual(len(ls_summaries), 1)
+        self.assertIn("narrative", ls_summaries[0])
+        self.assertIsInstance(ls_summaries[0]["narrative"], str)
+
+    def test_shortlist_rows_include_lifestyle_score_and_commute_band(self):
+        events = self._collect_stream("Family 4 room 800k schools.", limit=1)
+        case_done = next(e for e in events if e["event"] == "case_done")
+        for row in case_done["shortlist"]:
+            with self.subTest(block_id=row["block_id"]):
+                self.assertIn("lifestyle_score", row)
+                self.assertIn("commute_band", row)
+
+    def test_stream_lifestyle_events_stored_in_case(self):
+        events = self._collect_stream("Family 4 room 800k schools.", limit=1)
+        case_id = next(e["case_id"] for e in events if e["event"] == "case_done")
+        case = homeos_case_store.get_case(case_id)
+        pipeline_agents = [e.get("agent") for e in case["pipeline"]]
+        self.assertIn("lifestyle", pipeline_agents)
+
 
 if __name__ == "__main__":
     unittest.main()

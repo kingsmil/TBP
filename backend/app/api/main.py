@@ -23,6 +23,7 @@ import json
 from fastapi.responses import StreamingResponse
 
 from app.api.schemas import (
+    OutreachRequest,
     CommuteRequest,
     CoupleRequest,
     DreamHomeRequest,
@@ -50,6 +51,8 @@ from app.core.models import SearchQuery
 from app.repositories.base import Repository
 from app.services import accessibility as access_svc
 from app.services import analytics as analytics_svc
+from app.services import block_agents as block_agents_svc
+from app.services import outreach as outreach_svc
 from app.services.appreciation import appreciation as appreciation_svc
 from app.services.comparison import compare_estates
 from app.services.commute.couple import couple_optimize, recommended_estates
@@ -152,6 +155,22 @@ def property_detail(block_id: int, repo: Repository = Depends(get_repository)):
     }
 
 
+@app.get("/blocks/agents")
+def block_agents(address: str = Query(..., min_length=3),
+                 repo: Repository = Depends(get_repository)):
+    """Agents marketing units in a block, looked up by address.
+
+    Example: /blocks/agents?address=104A Bidadari Pk Dr
+    """
+    try:
+        data = block_agents_svc.find_block_agents(repo, address)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if data is None:
+        raise HTTPException(status_code=404, detail="block not found for address")
+    return data
+
+
 @app.get("/blocks/{block_id}/listings")
 def block_listings(block_id: int, repo: Repository = Depends(get_repository)):
     """Active HDB Flat Portal listings for a block, cheapest first."""
@@ -164,6 +183,21 @@ def block_listings(block_id: int, repo: Repository = Depends(get_repository)):
         d["floor_area_sqft"] = round(a.floor_area_sqft, 1)
         out.append(d)
     return {"count": len(out), "listings": out}
+
+
+@app.post("/listings/{listing_id}/outreach-message")
+def listing_outreach_message(
+    listing_id: int,
+    body: OutreachRequest,
+    repo: Repository = Depends(get_repository),
+):
+    """AI-prepared WhatsApp message for the chosen listing's seller/agent."""
+    try:
+        return outreach_svc.prepare_outreach_message(
+            repo, listing_id, case_id=body.case_id, contact_name=body.contact_name,
+            availability=body.availability, note=body.note)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @app.get("/analytics/estate/{planning_area_id}")

@@ -510,6 +510,7 @@ export default function App() {
             <HomeOSDetailPanel
               block={selectedBlock}
               profileText={activeProfileText}
+              caseId={activeCaseId ?? undefined}
               onClose={clearSelectedBlock}
               onBack={clearSelectedBlock}
             />

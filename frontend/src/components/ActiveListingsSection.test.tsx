@@ -22,9 +22,11 @@ const baseListing: ActiveListing = {
 };
 
 const getBlockListings = vi.fn();
+const prepareOutreachMessage = vi.fn();
 
 vi.mock("../lib/api", () => ({
   getBlockListings: (blockId: number) => getBlockListings(blockId),
+  prepareOutreachMessage: (id: number, body: unknown) => prepareOutreachMessage(id, body),
 }));
 
 describe("ActiveListingsSection", () => {
@@ -64,6 +66,49 @@ describe("ActiveListingsSection", () => {
     render(<ActiveListingsSection blockId={1} />);
     await waitFor(() => expect(screen.getByText(/Jane Tan/)).toBeInTheDocument());
     expect(screen.getByText(/PropNex/)).toBeInTheDocument();
+  });
+
+  it("prepares an outreach message with copy fallback when no phone", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    getBlockListings.mockResolvedValue({ count: 1, listings: [baseListing] });
+    prepareOutreachMessage.mockResolvedValue({
+      listing_id: 40661,
+      message: "Hi! I saw your 4-Room listing at Blk 126A KIM TIAN RD…",
+      questions: [],
+    });
+    render(<ActiveListingsSection blockId={1} />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /prepare message/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /prepare message/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/I saw your 4-Room listing/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: /copy message/i })).toBeInTheDocument();
+    expect(screen.queryByText(/open in whatsapp/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/paste this message/i)).toBeInTheDocument();
+  });
+
+  it("shows the WhatsApp deep-link when the listing has a phone", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    getBlockListings.mockResolvedValue({ count: 1, listings: [baseListing] });
+    prepareOutreachMessage.mockResolvedValue({
+      listing_id: 40661,
+      message: "Hi Jane!",
+      questions: [],
+      whatsapp_url: "https://wa.me/6591234567?text=Hi%20Jane",
+    });
+    render(<ActiveListingsSection blockId={1} />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /prepare message/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /prepare message/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /open in whatsapp/i })).toHaveAttribute(
+        "href",
+        "https://wa.me/6591234567?text=Hi%20Jane",
+      ),
+    );
   });
 
   it("renders nothing when there are no listings", async () => {

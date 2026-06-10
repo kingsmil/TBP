@@ -195,6 +195,11 @@ class PostgisRepository(Repository):
         rows = self._all(self._BLOCK_SELECT + " WHERE block_id = :id", {"id": block_id})
         return self._block_row(rows[0]) if rows else None
 
+    def blocks_by_number(self, block_number: str) -> Sequence[Block]:
+        rows = self._all(self._BLOCK_SELECT + " WHERE upper(block_number) = :bn",
+                         {"bn": block_number.strip().upper()})
+        return [self._block_row(r) for r in rows]
+
     def transactions(self) -> Sequence[Transaction]:
         return [self._txn_row(r) for r in self._all(self._TXN_SELECT)]
 

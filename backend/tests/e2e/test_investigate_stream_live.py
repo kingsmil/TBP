@@ -18,7 +18,7 @@ PROFILE = (
     "want good primary schools nearby."
 )
 REFINE_ANSWER = "Tampines please"
-MAX_REFINE_ROUNDS = 2
+MAX_REFINE_ROUNDS = 3  # too-many gate Qs + preference review need headroom
 DEEP_AGENTS = ("market", "location", "risk")
 
 
@@ -103,6 +103,14 @@ class TestInvestigateStreamLive(unittest.TestCase):
                 f"never reached deep analysis after {MAX_REFINE_ROUNDS} refinement "
                 f"rounds; questions asked: {asked}")
 
+        # ── Preference review must have fired exactly once ────────────────────
+        case = case_store.get_case(case_id)
+        reviews = [e for e in case["pipeline"]
+                   if e.get("event") == "clarifying_question"
+                   and e.get("field") == "preference_review"]
+        self.assertEqual(len(reviews), 1,
+                         f"expected exactly one preference review; got {len(reviews)}")
+
         # ── Step 3: deep-analysis event grammar per (agent, block) ────────────
         deep = [e for e in events if e.get("agent") in DEEP_AGENTS]
         self.assertTrue(deep, f"no deep-analysis events; events: {[e['event'] for e in events]}")
@@ -134,7 +142,6 @@ class TestInvestigateStreamLive(unittest.TestCase):
             self.assertLessEqual(row["worth_viewing_score"], 100)
             self.assertTrue(row["verdict"])
 
-        case = case_store.get_case(case_id)
         self.assertEqual(case["status"], "done")
         pipeline_events = [e.get("event") for e in case["pipeline"]]
         self.assertIn("clarifying_question", pipeline_events)

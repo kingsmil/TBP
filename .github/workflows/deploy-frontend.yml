@@ -40,6 +40,9 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_BASE: http://44.230.151.142:8000
+          # Toggle the entire HomeOS AI experience. Set to "true" to re-enable
+          # AI mode, login/subscription gating, and the upgrade flow.
+          VITE_AI_MODE_ENABLED: "false"
         run: npm run build
 
       - name: Configure AWS credentials

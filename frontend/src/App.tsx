@@ -46,6 +46,7 @@ import {
 import { clearAuth, getStoredUser, type AuthUser } from "./lib/auth";
 import { formatPsf, formatSGD } from "./lib/format";
 import { getStoredModel, setStoredModel, DEFAULT_MODEL } from "./lib/modelPreference";
+import { AI_MODE_ENABLED } from "./lib/featureFlags";
 import type {
   AgentEvent,
   DirectTransitDestination,
@@ -87,7 +88,10 @@ function RailIcon({
 
 export default function App() {
   // Subscribed users land in AI mode; everyone else starts in free Explore mode.
-  const [mode, setMode] = useState<Mode>(() => (getStoredUser()?.is_subscribed ? "ai" : "explore"));
+  // When AI mode is disabled entirely, the app is a pure manual product.
+  const [mode, setMode] = useState<Mode>(() =>
+    AI_MODE_ENABLED && getStoredUser()?.is_subscribed ? "ai" : "explore",
+  );
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = window.localStorage.getItem("hdb-match-theme");
     if (saved === "light" || saved === "dark") return saved;
@@ -140,15 +144,19 @@ export default function App() {
 
   const isSubscribed = authUser?.is_subscribed ?? false;
 
-  // Defense-in-depth: never allow AI mode without an active subscription.
-  // Covers stale state, lapsed subscriptions, and direct state manipulation.
+  // Defense-in-depth: never allow AI mode when it's disabled, or without an
+  // active subscription. Covers stale state, lapsed subscriptions, and the
+  // AI-disabled product configuration.
   useEffect(() => {
-    if (mode === "ai" && !isSubscribed) {
+    if (mode === "ai" && (!AI_MODE_ENABLED || !isSubscribed)) {
       setMode("explore");
     }
   }, [mode, isSubscribed]);
 
   function handleModeSwitch(next: Mode) {
+    if (next === "ai" && !AI_MODE_ENABLED) {
+      return;
+    }
     if (next === "ai" && !isSubscribed) {
       setShowUpgradeModal(true);
       return;
@@ -440,7 +448,7 @@ export default function App() {
     cases.find((c) => c.case_id === activeCaseId)?.profile_text ??
     "";
 
-  const authOverlays = (
+  const authOverlays = !AI_MODE_ENABLED ? null : (
     <>
       {showAuthModal && (
         <AuthModal
@@ -494,9 +502,13 @@ export default function App() {
               <RailIcon icon={BarChart2}         label="PSF Trend"         onClick={() => setSidebarOpen(true)} />
               <RailIcon icon={Table2}            label="Estate Comparison" onClick={() => setSidebarOpen(true)} />
               <Separator className="w-7 my-1" />
-              <RailIcon icon={Sparkles} label="AI mode" onClick={() => handleModeSwitch("ai")} />
+              {AI_MODE_ENABLED && (
+                <RailIcon icon={Sparkles} label="AI mode" onClick={() => handleModeSwitch("ai")} />
+              )}
               <RailIcon icon={theme === "light" ? Moon : Sun} label={`${theme === "light" ? "Dark" : "Light"} mode`} onClick={() => setTheme((current) => current === "light" ? "dark" : "light")} />
-              <RailIcon icon={authUser ? LogOut : LogIn} label={authUser ? "Sign out" : "Sign in"} onClick={authUser ? handleLogout : () => setShowAuthModal(true)} />
+              {AI_MODE_ENABLED && (
+                <RailIcon icon={authUser ? LogOut : LogIn} label={authUser ? "Sign out" : "Sign in"} onClick={authUser ? handleLogout : () => setShowAuthModal(true)} />
+              )}
             </div>
           )}
           {sidebarOpen && (
@@ -514,27 +526,29 @@ export default function App() {
                 </div>
                 {themeButton}
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleModeSwitch("ai")}
-                    className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    AI Mode
-                  </button>
-                  {authUser ? (
-                    <button type="button" onClick={handleLogout} title={`Signed in as ${authUser.email}`} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted">
-                      <LogOut className="h-4 w-4" />
-                      Sign out
+                {AI_MODE_ENABLED && (
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleModeSwitch("ai")}
+                      className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      AI Mode
                     </button>
-                  ) : (
-                    <button type="button" onClick={() => setShowAuthModal(true)} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90">
-                      <LogIn className="h-4 w-4" />
-                      Sign in
-                    </button>
-                  )}
-                </div>
+                    {authUser ? (
+                      <button type="button" onClick={handleLogout} title={`Signed in as ${authUser.email}`} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted">
+                        <LogOut className="h-4 w-4" />
+                        Sign out
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => setShowAuthModal(true)} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90">
+                        <LogIn className="h-4 w-4" />
+                        Sign in
+                      </button>
+                    )}
+                  </div>
+                )}
               </header>
               <FilterPanel filters={filters} onChange={setFilters} />
               <Separator />

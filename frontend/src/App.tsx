@@ -524,9 +524,9 @@ export default function App() {
                     <p className="text-xs text-muted-foreground">Explore mode</p>
                   </div>
                 </div>
-                {themeButton}
+                {AI_MODE_ENABLED && themeButton}
                 </div>
-                {AI_MODE_ENABLED && (
+                {AI_MODE_ENABLED ? (
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -548,6 +548,15 @@ export default function App() {
                       </button>
                     )}
                   </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setTheme((current) => current === "light" ? "dark" : "light")}
+                    className="mt-4 flex w-full min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted"
+                  >
+                    {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                    {theme === "light" ? "Dark mode" : "Light mode"}
+                  </button>
                 )}
               </header>
               <FilterPanel filters={filters} onChange={setFilters} />

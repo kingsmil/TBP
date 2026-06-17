@@ -39,6 +39,7 @@ from app.api.schemas import (
     HomeOSStreamRequest,
     LifestyleRequest,
     RecommendationRequest,
+    ScoreRankingRequest,
     DirectTransitRequest,
 )
 from app.config import settings
@@ -68,6 +69,7 @@ from app.services.forecasting import block_forecast, estate_forecast
 from app.services.future_dev import future_mrt, future_supply
 from app.services.lifestyle import block_lifestyle
 from app.services.recommendation import recommend
+from app.services import score_ranking as score_ranking_svc
 from app.services.search import search_blocks
 from app.services.undervalued import detect_undervalued
 
@@ -553,6 +555,21 @@ def recommendations(req: RecommendationRequest,
     return recommend(repo, provider=provider,
                      destinations=req.domain_destinations(),
                      weights=req.weights, limit=req.limit)
+
+
+@app.get("/score-ranking/fields")
+def score_ranking_fields():
+    """The scoring factors available to weight (drives the slider UI)."""
+    return {"fields": score_ranking_svc.list_fields()}
+
+
+@app.post("/score-ranking")
+def score_ranking(req: ScoreRankingRequest,
+                  repo: Repository = Depends(get_repository)):
+    dests = req.domain_destinations()
+    provider = get_commute_provider() if dests else None
+    return score_ranking_svc.rank(repo, weights=req.weights, provider=provider,
+                                  destinations=dests, limit=req.limit)
 
 
 def _points_geojson(features):

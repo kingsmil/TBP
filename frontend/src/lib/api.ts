@@ -26,6 +26,8 @@ import type {
   LifestyleResult,
   NewsItem,
   RecommendationResponse,
+  ScoreField,
+  ScoreRankingResponse,
   SearchFilters,
   SearchResponse,
   UndervaluedResponse,
@@ -230,6 +232,19 @@ export function getRecommendations(
   limit = 10,
 ): Promise<RecommendationResponse> {
   return postJSON<RecommendationResponse>("/recommendations", { destinations, limit });
+}
+
+// --- Score Ranking ---
+export function getScoreRankingFields(): Promise<{ fields: ScoreField[] }> {
+  return getJSON<{ fields: ScoreField[] }>("/score-ranking/fields");
+}
+
+export function rankByScore(body: {
+  weights: Record<string, number>;
+  destinations?: DestinationPayload[];
+  limit?: number;
+}): Promise<ScoreRankingResponse> {
+  return postJSON<ScoreRankingResponse>("/score-ranking", body);
 }
 
 // --- HomeOS Agent ---

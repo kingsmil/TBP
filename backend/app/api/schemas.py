@@ -79,6 +79,16 @@ class RecommendationRequest(BaseModel):
         return [d.to_domain() for d in self.destinations] if self.destinations else None
 
 
+class ScoreRankingRequest(BaseModel):
+    """Body for POST /score-ranking — user-weighted property ranking."""
+    weights: dict[str, float] = Field(default_factory=dict)
+    destinations: list[DestinationIn] = []
+    limit: int = Field(20, ge=1, le=200)
+
+    def domain_destinations(self) -> list[Destination] | None:
+        return [d.to_domain() for d in self.destinations] if self.destinations else None
+
+
 class HomeOSInvestigationRequest(BaseModel):
     profile_text: str = Field(..., min_length=10)
     limit: int = Field(5, ge=1, le=20)

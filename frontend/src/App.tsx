@@ -30,6 +30,7 @@ import { MAP_SEARCH_LIMIT } from "./lib/mapConfig";
 import NewsPanel from "./components/NewsPanel";
 import PipelinePanel from "./components/PipelinePanel";
 import PsfTrendChart from "./components/PsfTrendChart";
+import ScoreRankingPanel from "./components/ScoreRankingPanel";
 import StatCard from "./components/StatCard";
 import AuthModal from "./components/AuthModal";
 import UpgradeModal from "./components/UpgradeModal";
@@ -177,6 +178,7 @@ export default function App() {
   const [aiSelectedBlockId, setAiSelectedBlockId] = useState<number | null>(null);
   const [exploreSelectedBlockId, setExploreSelectedBlockId] = useState<number | null>(null);
   const [shortlistIds, setShortlistIds] = useState<number[]>([]);
+  const [scoreRankedIds, setScoreRankedIds] = useState<number[]>([]);
   const [hasAiMapFilter, setHasAiMapFilter] = useState(false);
   const [aiMapView, setAiMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
   const [exploreMapView, setExploreMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
@@ -589,6 +591,11 @@ export default function App() {
                 <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estate Comparison</h3>
                 <EstateComparison rows={comparison.data?.estates ?? []} />
               </div>
+              <Separator />
+              <ScoreRankingPanel
+                onResults={(rows) => setScoreRankedIds(rows.map((r) => r.block_id))}
+                onSelectBlock={(id) => setExploreSelectedBlockId(id)}
+              />
             </div>
           )}
         </aside>
@@ -615,6 +622,7 @@ export default function App() {
           )}
           <MapView
             blocks={blocks}
+            shortlistIds={scoreRankedIds}
             selectedBlockId={exploreSelectedBlockId}
             onSelectBlock={setExploreSelectedBlockId}
             nearbyBusRadiusM={nearbyBusRadiusM}

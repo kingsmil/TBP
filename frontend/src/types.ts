@@ -253,6 +253,36 @@ export interface RecommendationResponse {
   }[];
 }
 
+// --- Score Ranking ---
+export interface ScoreField {
+  key: string;
+  label: string;
+  description: string;
+  default_weight: number;
+  needs_destinations: boolean;
+  coming_soon: boolean;
+}
+
+export interface ScoreRankingRow {
+  block_id: number;
+  block_number: string;
+  street_name: string;
+  town: string;
+  planning_area_id: number | null;
+  lon: number;
+  lat: number;
+  overall_score: number;
+  breakdown: Record<string, number>;
+  rank: number;
+}
+
+export interface ScoreRankingResponse {
+  count: number;
+  results: ScoreRankingRow[];
+  fields: ScoreField[];
+  weights: Record<string, number>;
+}
+
 // --- HomeOS Agent ---
 export interface HomeOSPreferences {
   flat_type: string | null;

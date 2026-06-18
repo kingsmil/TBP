@@ -7,7 +7,6 @@ import {
   BarChart2,
   Table2,
   TrendingUp,
-  Eye,
   LogIn,
   LogOut,
   Sparkles,
@@ -17,6 +16,7 @@ import {
   Compass,
   Newspaper,
   MonitorCog,
+  ListOrdered,
 } from "lucide-react";
 import CasesPanel from "./components/CasesPanel";
 import DirectTransitFilter from "./components/DirectTransitFilter";
@@ -179,6 +179,8 @@ export default function App() {
   const [exploreSelectedBlockId, setExploreSelectedBlockId] = useState<number | null>(null);
   const [shortlistIds, setShortlistIds] = useState<number[]>([]);
   const [scoreRankedIds, setScoreRankedIds] = useState<number[]>([]);
+  // Explore product sub-tabs: manual exploration vs. score ranking.
+  const [exploreTab, setExploreTab] = useState<"explore" | "scoring">("explore");
   const [hasAiMapFilter, setHasAiMapFilter] = useState(false);
   const [aiMapView, setAiMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
   const [exploreMapView, setExploreMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
@@ -498,11 +500,11 @@ export default function App() {
                 H
               </div>
               <Separator className="w-7 my-1" />
-              <RailIcon icon={SlidersHorizontal} label="Filters"           onClick={() => setSidebarOpen(true)} />
-              <RailIcon icon={Eye}               label="Display"           onClick={() => setSidebarOpen(true)} />
-              <RailIcon icon={TrendingUp}        label="Stats"             onClick={() => setSidebarOpen(true)} />
-              <RailIcon icon={BarChart2}         label="PSF Trend"         onClick={() => setSidebarOpen(true)} />
-              <RailIcon icon={Table2}            label="Estate Comparison" onClick={() => setSidebarOpen(true)} />
+              <RailIcon icon={SlidersHorizontal} label="Filters"           onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
+              <RailIcon icon={TrendingUp}        label="Stats"             onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
+              <RailIcon icon={BarChart2}         label="PSF Trend"         onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
+              <RailIcon icon={Table2}            label="Estate Comparison" onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
+              <RailIcon icon={ListOrdered}       label="Scoring"           onClick={() => { setExploreTab("scoring"); setSidebarOpen(true); }} />
               <Separator className="w-7 my-1" />
               {AI_MODE_ENABLED && (
                 <RailIcon icon={Sparkles} label="AI mode" onClick={() => handleModeSwitch("ai")} />
@@ -523,12 +525,14 @@ export default function App() {
                   </div>
                   <div>
                     <h1 className="text-base font-bold text-foreground leading-tight">HDB Match</h1>
-                    <p className="text-xs text-muted-foreground">Explore mode</p>
+                    <p className="text-xs text-muted-foreground">
+                      {exploreTab === "scoring" ? "Score ranking" : "Explore mode"}
+                    </p>
                   </div>
                 </div>
-                {AI_MODE_ENABLED && themeButton}
+                {themeButton}
                 </div>
-                {AI_MODE_ENABLED ? (
+                {AI_MODE_ENABLED && (
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -550,52 +554,68 @@ export default function App() {
                       </button>
                     )}
                   </div>
-                ) : (
+                )}
+                {/* Explore / Scoring sub-tabs */}
+                <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setTheme((current) => current === "light" ? "dark" : "light")}
-                    className="mt-4 flex w-full min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted"
+                    onClick={() => setExploreTab("explore")}
+                    className={`flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                      exploreTab === "explore"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground hover:bg-muted"
+                    }`}
                   >
-                    {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                    {theme === "light" ? "Dark mode" : "Light mode"}
+                    <Compass className="h-3.5 w-3.5" />
+                    Explore
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => setExploreTab("scoring")}
+                    className={`flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                      exploreTab === "scoring"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <ListOrdered className="h-3.5 w-3.5" />
+                    Scoring
+                  </button>
+                </div>
               </header>
-              <FilterPanel filters={filters} onChange={setFilters} />
-              <Separator />
-              <DirectTransitFilter
-                filters={filters}
-                onResults={setDirectTransit}
-                onDestinationsChange={setDirectTransitDestinations}
-              />
-              <Separator />
-              <DisplayPanel
-                nearbyBusRadiusM={nearbyBusRadiusM}
-                onNearbyBusRadiusChange={setNearbyBusRadiusM}
-                hasSelectedProperty={selectedBlock != null}
-              />
-              <Separator />
-              <div className="grid grid-cols-2 gap-2 p-4">
-                <StatCard label="Matches"      value={String(directTransit?.count ?? search.data?.count ?? 0)} isLoading={search.isLoading} />
-                <StatCard label="Median PSF"   value={formatPsf(metrics?.median_psf)}   hint="estate avg" isLoading={estate.isLoading} />
-                <StatCard label="Median Price" value={formatSGD(metrics?.median_price)}  isLoading={estate.isLoading} />
-                <StatCard label="Growth"       value={metrics?.growth_pct != null ? `${metrics.growth_pct}%` : "—"} isLoading={estate.isLoading} />
-              </div>
-              <Separator />
-              <div className="p-4">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">PSF Trend</h3>
-                <PsfTrendChart series={estate.data?.psf_over_time ?? []} />
-              </div>
-              <Separator />
-              <div className="p-4">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estate Comparison</h3>
-                <EstateComparison rows={comparison.data?.estates ?? []} />
-              </div>
-              <Separator />
-              <ScoreRankingPanel
-                onResults={(rows) => setScoreRankedIds(rows.map((r) => r.block_id))}
-                onSelectBlock={(id) => setExploreSelectedBlockId(id)}
-              />
+              {exploreTab === "explore" ? (
+                <>
+                  <FilterPanel filters={filters} onChange={setFilters} />
+                  <Separator />
+                  <DirectTransitFilter
+                    filters={filters}
+                    onResults={setDirectTransit}
+                    onDestinationsChange={setDirectTransitDestinations}
+                  />
+                  <Separator />
+                  <div className="grid grid-cols-2 gap-2 p-4">
+                    <StatCard label="Matches"      value={String(directTransit?.count ?? search.data?.count ?? 0)} isLoading={search.isLoading} />
+                    <StatCard label="Median PSF"   value={formatPsf(metrics?.median_psf)}   hint="estate avg" isLoading={estate.isLoading} />
+                    <StatCard label="Median Price" value={formatSGD(metrics?.median_price)}  isLoading={estate.isLoading} />
+                    <StatCard label="Growth"       value={metrics?.growth_pct != null ? `${metrics.growth_pct}%` : "—"} isLoading={estate.isLoading} />
+                  </div>
+                  <Separator />
+                  <div className="p-4">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">PSF Trend</h3>
+                    <PsfTrendChart series={estate.data?.psf_over_time ?? []} />
+                  </div>
+                  <Separator />
+                  <div className="p-4">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estate Comparison</h3>
+                    <EstateComparison rows={comparison.data?.estates ?? []} />
+                  </div>
+                </>
+              ) : (
+                <ScoreRankingPanel
+                  onResults={(rows) => setScoreRankedIds(rows.map((r) => r.block_id))}
+                  onSelectBlock={(id) => setExploreSelectedBlockId(id)}
+                />
+              )}
             </div>
           )}
         </aside>
@@ -626,6 +646,8 @@ export default function App() {
             selectedBlockId={exploreSelectedBlockId}
             onSelectBlock={setExploreSelectedBlockId}
             nearbyBusRadiusM={nearbyBusRadiusM}
+            onNearbyBusRadiusChange={setNearbyBusRadiusM}
+            hasSelectedProperty={selectedBlock != null}
             destinations={directTransitDestinations}
             initialView={exploreMapView}
             onViewChange={setExploreMapView}

@@ -453,6 +453,8 @@ interface Props {
   onSelectBlock?: (blockId: number) => void;
   profileText?: string; // reserved for future case-file integration
   nearbyBusRadiusM?: number;
+  onNearbyBusRadiusChange?: (radiusM: number) => void;
+  hasSelectedProperty?: boolean;
   recommendationsOnly?: boolean;
   initialView?: MapViewState;
   onViewChange?: (view: MapViewState) => void;
@@ -467,6 +469,8 @@ export default function MapView({
   selectedBlockId,
   onSelectBlock,
   nearbyBusRadiusM = 0,
+  onNearbyBusRadiusChange,
+  hasSelectedProperty = false,
   recommendationsOnly = false,
   initialView = { center: SG_CENTER, zoom: 12 },
   onViewChange,
@@ -928,7 +932,39 @@ export default function MapView({
         </div>
       )}
 
-      {!busMode && !nearbyRouteFocus && <div className="absolute bottom-6 right-3 z-[1000] rounded-xl border border-border bg-card/90 p-3 shadow-md backdrop-blur-sm">
+      {!busMode && !nearbyRouteFocus && <div className="absolute bottom-6 right-3 z-[1000] w-56 rounded-xl border border-border bg-card/90 p-3 shadow-md backdrop-blur-sm">
+        {/* Display controls */}
+        {onNearbyBusRadiusChange && (
+          <div className="mb-3 border-b border-border pb-3">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Display
+            </p>
+            <label htmlFor="map-nearby-radius" className="block text-xs font-medium text-foreground">
+              Nearby transit radius
+            </label>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                id="map-nearby-radius"
+                type="number"
+                min={0}
+                max={2000}
+                step={50}
+                value={nearbyBusRadiusM}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  onNearbyBusRadiusChange(Number.isFinite(v) ? Math.min(2000, Math.max(0, v)) : 0);
+                }}
+                className="h-7 w-20 rounded border border-input bg-background px-2 text-xs"
+              />
+              <span className="text-[11px] text-muted-foreground">metres</span>
+            </div>
+            <p className="mt-1 text-[10px] leading-tight text-muted-foreground">
+              {hasSelectedProperty
+                ? "Bus & MRT routes near the selected property. 0 hides it."
+                : "Select a property to show its nearby transit routes."}
+            </p>
+          </div>
+        )}
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           MRT Access
         </p>

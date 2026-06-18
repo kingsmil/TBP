@@ -416,21 +416,27 @@ def commute_heatmap_endpoint(req: CommuteRequest,
 
 @app.get("/geocode")
 def geocode_address(q: str = Query(..., min_length=2)):
-    from app.config import settings
     from app.data.fetch_live import ONEMAP_SEARCH_URL
+    from app.services.commute import onemap_auth
     import requests
 
-    if not settings.onemap_token:
-        raise HTTPException(status_code=503, detail="ONEMAP_TOKEN is not configured")
+    token = onemap_auth.current_token()
+    if not token:
+        raise HTTPException(
+            status_code=503,
+            detail="OneMap not configured (set ONEMAP_EMAIL/ONEMAP_PASSWORD or ONEMAP_TOKEN)")
+    params = {"searchVal": q, "returnGeom": "Y", "getAddrDetails": "Y", "pageNum": 1}
     try:
         session = requests.Session()
         session.trust_env = False
-        response = session.get(
-            ONEMAP_SEARCH_URL,
-            params={"searchVal": q, "returnGeom": "Y", "getAddrDetails": "Y", "pageNum": 1},
-            headers={"Authorization": settings.onemap_token},
-            timeout=10,
-        )
+        response = session.get(ONEMAP_SEARCH_URL, params=params,
+                               headers={"Authorization": token}, timeout=10)
+        # Token expired/invalid: re-mint once and retry.
+        if response.status_code == 401:
+            token = onemap_auth.refresh()
+            if token:
+                response = session.get(ONEMAP_SEARCH_URL, params=params,
+                                       headers={"Authorization": token}, timeout=10)
         response.raise_for_status()
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"OneMap address search unavailable: {exc}") from exc

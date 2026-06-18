@@ -26,15 +26,17 @@ def main() -> int:
     args = parser.parse_args()
 
     database_url = os.environ.get("DATABASE_URL")
-    onemap_token = os.environ.get("ONEMAP_TOKEN")
+    from app.services.commute import onemap_auth
+    onemap_token = onemap_auth.current_token()  # static token or minted from creds
     datagov_api_key = os.environ.get("DATAGOV_API_KEY") or None
 
     if not database_url:
         log.error("DATABASE_URL not set — cannot seed PostGIS.")
         return 2
     if not onemap_token:
-        log.error("ONEMAP_TOKEN not set — required for geocoding block addresses.")
-        log.error("Get a free token at https://www.onemap.gov.sg/apidocs/")
+        log.error("OneMap not configured — required for geocoding block addresses.")
+        log.error("Set ONEMAP_EMAIL/ONEMAP_PASSWORD (or ONEMAP_TOKEN) in .env.")
+        log.error("Register free at https://www.onemap.gov.sg/apidocs/register")
         return 2
 
     log.info("Fetching live dataset (%d months)…", args.months)

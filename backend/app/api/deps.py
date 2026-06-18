@@ -33,9 +33,10 @@ def get_repository() -> Repository:
 
 @lru_cache(maxsize=1)
 def get_commute_provider():
-    """OneMap routing when ONEMAP_TOKEN is set, else the heuristic fallback."""
-    import os
-    if os.environ.get("ONEMAP_TOKEN"):
+    """OneMap routing when a token (or ONEMAP_EMAIL/PASSWORD to mint one) is
+    configured, else the heuristic fallback."""
+    from app.services.commute import onemap_auth
+    if onemap_auth.available():
         try:
             from app.services.commute.onemap import OneMapCommuteProvider
             return OneMapCommuteProvider()

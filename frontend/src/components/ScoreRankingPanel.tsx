@@ -51,8 +51,36 @@ export default function ScoreRankingPanel({ onResults, onSelectBlock }: Props) {
   );
   const needDestination = transportWeighted && destinations.length === 0;
 
+  // Active (enabled, weighted) factors and their total — used to show each
+  // factor's share of the final score. The backend normalizes internally, so
+  // these shares are exactly how much each factor counts.
+  const activeKeys = fields
+    .filter((f) => !f.coming_soon && (effectiveWeights[f.key] ?? 0) > 0)
+    .map((f) => f.key);
+  const totalWeight = activeKeys.reduce((s, k) => s + effectiveWeights[k], 0);
+  const share = (key: string) =>
+    totalWeight > 0 ? Math.round((effectiveWeights[key] / totalWeight) * 100) : 0;
+  const isBalanced = totalWeight === 100;
+
   function setWeight(key: string, value: number) {
     setWeights((w) => ({ ...w, [key]: value }));
+  }
+
+  // Scale the current weights so they sum to exactly 100, preserving ratios.
+  function normalizeTo100() {
+    if (totalWeight <= 0) return;
+    const next: Record<string, number> = {};
+    let acc = 0;
+    activeKeys.forEach((k, i) => {
+      if (i < activeKeys.length - 1) {
+        const v = Math.round((effectiveWeights[k] / totalWeight) * 100);
+        next[k] = v;
+        acc += v;
+      } else {
+        next[k] = Math.max(0, 100 - acc); // last factor absorbs rounding remainder
+      }
+    });
+    setWeights((w) => ({ ...w, ...next }));
   }
 
   async function searchAddress() {
@@ -141,7 +169,14 @@ export default function ScoreRankingPanel({ onResults, onSelectBlock }: Props) {
                     </span>
                   )}
                 </label>
-                <span className="tabular-nums text-[11px] text-muted-foreground">{disabled ? "—" : value}</span>
+                <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground">
+                  {disabled ? "—" : value > 0 ? (
+                    <>
+                      {value}
+                      <span className="ml-1 font-semibold text-primary">{share(f.key)}%</span>
+                    </>
+                  ) : value}
+                </span>
               </div>
               <input
                 id={`w-${f.key}`}
@@ -232,6 +267,24 @@ export default function ScoreRankingPanel({ onResults, onSelectBlock }: Props) {
           );
         })}
       </div>
+
+      {anyWeighted && (
+        <div className="flex items-center justify-between rounded-md bg-muted/50 px-2.5 py-1.5 text-[11px]">
+          <span className="text-muted-foreground">
+            Total weight{" "}
+            <span className="font-semibold tabular-nums text-foreground">{totalWeight}</span>
+            {!isBalanced && <span className="text-muted-foreground"> / 100</span>}
+          </span>
+          <button
+            type="button"
+            onClick={normalizeTo100}
+            disabled={isBalanced}
+            className="font-semibold text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
+          >
+            {isBalanced ? "Balanced ✓" : "Balance to 100"}
+          </button>
+        </div>
+      )}
 
       <Button className="w-full" onClick={() => void rank()} disabled={loading || !anyWeighted || needDestination}>
         <Sparkles className="mr-1.5 h-4 w-4" />

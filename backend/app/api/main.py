@@ -70,6 +70,7 @@ from app.services.future_dev import future_mrt, future_supply
 from app.services.lifestyle import block_lifestyle
 from app.services.recommendation import recommend
 from app.services import score_ranking as score_ranking_svc
+from app.analysis import appreciation_rankings as appreciation_rankings_svc
 from app.services.search import search_blocks
 from app.services.undervalued import detect_undervalued
 
@@ -576,6 +577,29 @@ def score_ranking(req: ScoreRankingRequest,
     provider = get_commute_provider() if dests else None
     return score_ranking_svc.rank(repo, weights=req.weights, provider=provider,
                                   destinations=dests, limit=req.limit)
+
+
+@app.get("/rankings/regions")
+def rankings_regions(limit: int = Query(50, ge=1, le=100)):
+    """Planning areas ranked by 10-year appreciation (precomputed)."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Rankings require PostGIS")
+    rows = appreciation_rankings_svc.read_region_rankings(engine, limit)
+    return {"count": len(rows), "results": rows,
+            "computed_at": rows[0]["computed_at"] if rows else None}
+
+
+@app.get("/rankings/blocks")
+def rankings_blocks(planning_area_id: int | None = None,
+                    limit: int = Query(50, ge=1, le=200)):
+    """Blocks ranked by 10-year appreciation (precomputed), optionally by area."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Rankings require PostGIS")
+    rows = appreciation_rankings_svc.read_block_rankings(engine, planning_area_id, limit)
+    return {"count": len(rows), "results": rows,
+            "computed_at": rows[0]["computed_at"] if rows else None}
 
 
 def _points_geojson(features):

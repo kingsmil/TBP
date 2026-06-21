@@ -1,0 +1,94 @@
+"""Background auto-refresh for appreciation rankings.
+
+Replaces an external cron: a lightweight asyncio task started in the FastAPI
+lifespan checks the rankings' age and rebuilds them in a worker thread when they
+are missing or older than RANKINGS_STALE_DAYS (default 30 = monthly). The check
+is cheap (one MAX(computed_at) query) and the rebuild runs off the event loop,
+so the server stays responsive and boot is never blocked.
+
+Disable with RANKINGS_AUTO_REFRESH=false. Only starts when PostGIS is available,
+so tests / mock mode are unaffected.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+from datetime import datetime, timezone
+
+log = logging.getLogger(__name__)
+
+CHECK_INTERVAL_S = 6 * 3600  # re-check staleness every 6h
+
+
+def _enabled() -> bool:
+    return os.environ.get("RANKINGS_AUTO_REFRESH", "true").lower() not in ("false", "0", "no")
+
+
+def _stale_days() -> int:
+    try:
+        return int(os.environ.get("RANKINGS_STALE_DAYS", "30"))
+    except ValueError:
+        return 30
+
+
+def _window_years() -> int:
+    try:
+        return int(os.environ.get("RANKINGS_WINDOW_YEARS", "10"))
+    except ValueError:
+        return 10
+
+
+def _age_days(engine) -> float | None:
+    """Age of the current rankings in days, or None if there are none yet."""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        ts = conn.execute(text("SELECT MAX(computed_at) FROM region_appreciation_ranking")).scalar()
+    if ts is None:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - ts).total_seconds() / 86400.0
+
+
+def _rebuild() -> None:
+    """Synchronous rebuild — runs in a worker thread."""
+    from app.api.deps import get_engine_or_none, get_repository
+    from app.analysis import appreciation_rankings as ar
+    engine = get_engine_or_none()
+    if engine is None:
+        return
+    blocks, regions = ar.build_rankings(get_repository(), years=_window_years())
+    if blocks or regions:
+        ar.persist(engine, blocks, regions)
+        log.info("Auto-refreshed appreciation rankings: %d blocks, %d regions.",
+                 len(blocks), len(regions))
+
+
+async def _loop() -> None:
+    from app.api.deps import get_engine_or_none
+    while True:
+        try:
+            engine = get_engine_or_none()
+            if engine is not None:
+                age = _age_days(engine)
+                if age is None or age >= _stale_days():
+                    log.info("Appreciation rankings %s — rebuilding in background…",
+                             "missing" if age is None else f"are {age:.0f} days old")
+                    await asyncio.to_thread(_rebuild)
+        except Exception as exc:  # never let the loop die
+            log.warning("Ranking refresh check failed: %s", exc)
+        await asyncio.sleep(CHECK_INTERVAL_S)
+
+
+def start_ranking_refresh() -> asyncio.Task | None:
+    """Start the background refresh task, or None if disabled / no database."""
+    if not _enabled():
+        return None
+    from app.api.deps import get_engine_or_none
+    if get_engine_or_none() is None:
+        return None
+    try:
+        return asyncio.create_task(_loop())
+    except RuntimeError:
+        return None

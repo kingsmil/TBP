@@ -81,7 +81,13 @@ from contextlib import asynccontextmanager
 async def _lifespan(application):
     from app.homeos.wiring import setup as homeos_setup
     homeos_setup()
-    yield
+    from app.analysis.scheduler import start_ranking_refresh
+    refresh_task = start_ranking_refresh()
+    try:
+        yield
+    finally:
+        if refresh_task is not None:
+            refresh_task.cancel()
 
 
 app = FastAPI(title="HDB Match API", version="0.1.0",

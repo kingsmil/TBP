@@ -283,6 +283,47 @@ export interface ScoreRankingResponse {
   weights: Record<string, number>;
 }
 
+// --- Appreciation rankings ---
+export interface RegionRankingRow {
+  planning_area_id: number;
+  name: string | null;
+  region: string | null;
+  rank: number;
+  appreciation_score: number | null;
+  cagr_pct: number | null;
+  median_psf_start: number | null;
+  median_psf_end: number | null;
+  year_start: number | null;
+  year_end: number | null;
+  txn_count: number;
+  block_count: number;
+  computed_at: string;
+}
+
+export interface BlockRankingRow {
+  block_id: number;
+  planning_area_id: number | null;
+  planning_area_name: string | null;
+  block_number: string | null;
+  street_name: string | null;
+  town: string | null;
+  lat: number | null;
+  lon: number | null;
+  rank: number;
+  region_rank: number | null;
+  appreciation_score: number | null;
+  cagr_pct: number | null;
+  year_start: number | null;
+  year_end: number | null;
+  txn_count: number;
+}
+
+export interface RankingsResponse<T> {
+  count: number;
+  results: T[];
+  computed_at: string | null;
+}
+
 // --- HomeOS Agent ---
 export interface HomeOSPreferences {
   flat_type: string | null;

@@ -61,6 +61,8 @@ vi.mock("./lib/api", () => ({
   getEstateComparison: vi.fn(async () => ({ estates: [] })),
   getScoreRankingFields: vi.fn(async () => ({ fields: [] })),
   rankByScore: vi.fn(async () => ({ count: 0, results: [], fields: [], weights: {} })),
+  getRegionRankings: vi.fn(async () => ({ count: 0, results: [], computed_at: null })),
+  getBlockRankings: vi.fn(async () => ({ count: 0, results: [], computed_at: null })),
   geocodeAddress: vi.fn(async () => ({ results: [] })),
   getHomeOSCaseFile: vi.fn(),
   getRecommendations: vi.fn(),

@@ -17,6 +17,7 @@ import {
   Newspaper,
   MonitorCog,
   ListOrdered,
+  Info,
 } from "lucide-react";
 import CasesPanel from "./components/CasesPanel";
 import DirectTransitFilter from "./components/DirectTransitFilter";
@@ -31,6 +32,7 @@ import NewsPanel from "./components/NewsPanel";
 import PipelinePanel from "./components/PipelinePanel";
 import PsfTrendChart from "./components/PsfTrendChart";
 import ScoreRankingPanel from "./components/ScoreRankingPanel";
+import InfoPanel from "./components/InfoPanel";
 import StatCard from "./components/StatCard";
 import AuthModal from "./components/AuthModal";
 import UpgradeModal from "./components/UpgradeModal";
@@ -179,8 +181,8 @@ export default function App() {
   const [exploreSelectedBlockId, setExploreSelectedBlockId] = useState<number | null>(null);
   const [shortlistIds, setShortlistIds] = useState<number[]>([]);
   const [scoreRankedIds, setScoreRankedIds] = useState<number[]>([]);
-  // Explore product sub-tabs: manual exploration vs. score ranking.
-  const [exploreTab, setExploreTab] = useState<"explore" | "scoring">("explore");
+  // Explore product sub-tabs: manual exploration, score ranking, info/rankings.
+  const [exploreTab, setExploreTab] = useState<"explore" | "scoring" | "info">("explore");
   const [hasAiMapFilter, setHasAiMapFilter] = useState(false);
   const [aiMapView, setAiMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
   const [exploreMapView, setExploreMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
@@ -505,6 +507,7 @@ export default function App() {
               <RailIcon icon={BarChart2}         label="PSF Trend"         onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
               <RailIcon icon={Table2}            label="Estate Comparison" onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
               <RailIcon icon={ListOrdered}       label="Scoring"           onClick={() => { setExploreTab("scoring"); setSidebarOpen(true); }} />
+              <RailIcon icon={Info}              label="Info / rankings"   onClick={() => { setExploreTab("info"); setSidebarOpen(true); }} />
               <Separator className="w-7 my-1" />
               {AI_MODE_ENABLED && (
                 <RailIcon icon={Sparkles} label="AI mode" onClick={() => handleModeSwitch("ai")} />
@@ -526,7 +529,7 @@ export default function App() {
                   <div>
                     <h1 className="text-base font-bold text-foreground leading-tight">HDB Match</h1>
                     <p className="text-xs text-muted-foreground">
-                      {exploreTab === "scoring" ? "Score ranking" : "Explore mode"}
+                      {exploreTab === "scoring" ? "Score ranking" : exploreTab === "info" ? "Appreciation rankings" : "Explore mode"}
                     </p>
                   </div>
                 </div>
@@ -555,12 +558,12 @@ export default function App() {
                     )}
                   </div>
                 )}
-                {/* Explore / Scoring sub-tabs */}
-                <div className="mt-4 grid grid-cols-2 gap-2">
+                {/* Explore / Scoring / Info sub-tabs */}
+                <div className="mt-4 grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setExploreTab("explore")}
-                    className={`flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                    className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold shadow-sm transition-colors ${
                       exploreTab === "explore"
                         ? "bg-primary text-primary-foreground"
                         : "border border-border bg-card text-foreground hover:bg-muted"
@@ -572,7 +575,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setExploreTab("scoring")}
-                    className={`flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                    className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold shadow-sm transition-colors ${
                       exploreTab === "scoring"
                         ? "bg-primary text-primary-foreground"
                         : "border border-border bg-card text-foreground hover:bg-muted"
@@ -580,6 +583,18 @@ export default function App() {
                   >
                     <ListOrdered className="h-3.5 w-3.5" />
                     Scoring
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExploreTab("info")}
+                    className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                      exploreTab === "info"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                    Info
                   </button>
                 </div>
               </header>
@@ -610,11 +625,13 @@ export default function App() {
                     <EstateComparison rows={comparison.data?.estates ?? []} />
                   </div>
                 </>
-              ) : (
+              ) : exploreTab === "scoring" ? (
                 <ScoreRankingPanel
                   onResults={(rows) => setScoreRankedIds(rows.map((r) => r.block_id))}
                   onSelectBlock={(id) => setExploreSelectedBlockId(id)}
                 />
+              ) : (
+                <InfoPanel onSelectBlock={(id) => setExploreSelectedBlockId(id)} />
               )}
             </div>
           )}

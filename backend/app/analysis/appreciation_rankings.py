@@ -229,12 +229,19 @@ def read_region_rankings(engine, limit: int = 50) -> list[dict]:
 def read_block_rankings(engine, planning_area_id: int | None = None,
                         limit: int = 50) -> list[dict]:
     from sqlalchemy import text
-    sql = "SELECT * FROM block_appreciation_ranking"
+    sql = """
+        SELECT r.*, b.block_number, b.street_name, b.town,
+               ST_Y(b.geom) AS lat, ST_X(b.geom) AS lon,
+               pa.name AS planning_area_name
+        FROM block_appreciation_ranking r
+        LEFT JOIN hdb_blocks b ON b.block_id = r.block_id
+        LEFT JOIN planning_areas pa ON pa.planning_area_id = r.planning_area_id
+    """
     params: dict = {"limit": limit}
     if planning_area_id is not None:
-        sql += " WHERE planning_area_id = :pa"
+        sql += " WHERE r.planning_area_id = :pa"
         params["pa"] = planning_area_id
-    sql += " ORDER BY rank LIMIT :limit"
+    sql += " ORDER BY r.rank LIMIT :limit"
     with engine.connect() as conn:
         rows = conn.execute(text(sql), params).mappings().all()
     return [dict(r) for r in rows]

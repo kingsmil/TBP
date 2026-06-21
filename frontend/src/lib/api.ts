@@ -25,7 +25,10 @@ import type {
   HomeOSScheduleViewingResponse,
   LifestyleResult,
   NewsItem,
+  RankingsResponse,
   RecommendationResponse,
+  RegionRankingRow,
+  BlockRankingRow,
   ScoreField,
   ScoreRankingResponse,
   SearchFilters,
@@ -245,6 +248,20 @@ export function rankByScore(body: {
   limit?: number;
 }): Promise<ScoreRankingResponse> {
   return postJSON<ScoreRankingResponse>("/score-ranking", body);
+}
+
+// --- Appreciation rankings (precomputed) ---
+export function getRegionRankings(limit = 30): Promise<RankingsResponse<RegionRankingRow>> {
+  return getJSON<RankingsResponse<RegionRankingRow>>(`/rankings/regions?limit=${limit}`);
+}
+
+export function getBlockRankings(
+  limit = 30,
+  planningAreaId?: number,
+): Promise<RankingsResponse<BlockRankingRow>> {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  if (planningAreaId != null) qs.set("planning_area_id", String(planningAreaId));
+  return getJSON<RankingsResponse<BlockRankingRow>>(`/rankings/blocks?${qs}`);
 }
 
 // --- HomeOS Agent ---

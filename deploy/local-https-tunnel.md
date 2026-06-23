@@ -42,7 +42,7 @@ That's it. The script:
 **Stop it** any time:
 ```powershell
 ./deploy/stop.ps1        # stop backend + Caddy + tunnel  (Ctrl+C in the serve window does the same)
-./deploy/stop.ps1 -Db    # also stop the database containers
+./deploy/stop.ps1 -StopDb   # also stop the database containers
 ```
 (Stop works from any terminal — the script tracks process IDs in `deploy/.run/`.)
 

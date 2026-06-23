@@ -64,5 +64,34 @@ class TestRankings(unittest.TestCase):
         self.assertGreaterEqual(b.txn_count, ar.BLOCK_MIN_TXNS)
 
 
+class TestScoring(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.repo, _ = build_seeded_repo(seed=42, blocks_per_area=6, months=120)
+
+    def test_cagr_only_default_has_no_scores(self):
+        # Default build is fast CAGR-only (no composite score).
+        blocks, _ = ar.build_rankings(self.repo, years=10)
+        self.assertTrue(all(b.appreciation_score is None for b in blocks))
+
+    def test_with_score_only_scores_top_n_per_region(self):
+        blocks, _ = ar.build_rankings(self.repo, years=10, with_score=True, score_top_n=2)
+        scored = [b for b in blocks if b.appreciation_score is not None]
+        self.assertGreater(len(scored), 0)
+        self.assertTrue(all(b.region_rank <= 2 for b in scored))
+
+    def test_top_n_bounds_scored_count(self):
+        few, _ = ar.build_rankings(self.repo, years=10, with_score=True, score_top_n=2)
+        more, _ = ar.build_rankings(self.repo, years=10, with_score=True, score_top_n=None)
+        n_few = sum(b.appreciation_score is not None for b in few)
+        n_all = sum(b.appreciation_score is not None for b in more)
+        self.assertGreater(n_few, 0)
+        self.assertLessEqual(n_few, n_all)
+
+    def test_region_score_present_when_blocks_scored(self):
+        blocks, regions = ar.build_rankings(self.repo, years=10, with_score=True, score_top_n=5)
+        self.assertTrue(any(r.appreciation_score is not None for r in regions))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -23,7 +23,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build appreciation rankings")
     parser.add_argument("--years", type=int, default=ar.DEFAULT_WINDOW_YEARS,
                         help="Analysis window in years (default 10)")
+    parser.add_argument("--with-score", action="store_true",
+                        help="Also compute the (slow) forward-looking composite "
+                             "score. Default is fast CAGR-only.")
+    parser.add_argument("--score-top-n", type=int, default=ar.DEFAULT_SCORE_TOP_N,
+                        help="When --with-score, cap composite scoring to the top "
+                             "N blocks per region (0 = all). Default 50.")
     args = parser.parse_args()
+    top_n = None if args.score_top_n == 0 else args.score_top_n
 
     from app.api.deps import get_engine_or_none, get_repository
     engine = get_engine_or_none()
@@ -33,9 +40,12 @@ def main() -> int:
         return 2
 
     repo = get_repository()
-    log.info("Computing %d-year appreciation rankings…", args.years)
+    mode = (f"with composite score (top {top_n or 'all'}/region)"
+            if args.with_score else "CAGR-only (fast)")
+    log.info("Computing %d-year appreciation rankings — %s…", args.years, mode)
     t0 = time.time()
-    blocks, regions = ar.build_rankings(repo, years=args.years)
+    blocks, regions = ar.build_rankings(repo, years=args.years,
+                                        with_score=args.with_score, score_top_n=top_n)
     log.info("Ranked %d blocks and %d regions in %.1fs.",
              len(blocks), len(regions), time.time() - t0)
 

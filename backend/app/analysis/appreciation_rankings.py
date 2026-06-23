@@ -27,6 +27,9 @@ DEFAULT_WINDOW_YEARS = 10
 BLOCK_MIN_TXNS = 5
 REGION_MIN_TXNS = 20
 MIN_DISTINCT_YEARS = 2
+# The composite appreciation score is expensive (several PostGIS queries per
+# block). When computed, bound it to the top-N CAGR performers in each region.
+DEFAULT_SCORE_TOP_N = 50
 
 
 @dataclass
@@ -89,8 +92,17 @@ def _cagr(annual: dict[int, float], ref_year: int, years: int):
     return round(cagr * 100, 2), round(psf_start, 2), round(psf_end, 2), year_start, year_end
 
 
-def _latest_year(repo: Repository) -> int | None:
-    years = [_year(t.transaction_month) for t in repo.transactions()]
+def _group_transactions(repo: Repository) -> dict[int, list]:
+    """All transactions grouped by block in a single pass (one DB query)."""
+    by_block: dict[int, list] = {}
+    for t in repo.transactions():
+        by_block.setdefault(t.block_id, []).append(t)
+    return by_block
+
+
+def _latest_year_from(txns_by_block: dict[int, list]) -> int | None:
+    years = [_year(t.transaction_month)
+             for txns in txns_by_block.values() for t in txns]
     return max(years) if years else None
 
 
@@ -101,28 +113,29 @@ def _assign_ranks(items: list, key=lambda r: (r.cagr_pct, r.appreciation_score o
 
 
 def build_block_rankings(repo: Repository, years: int = DEFAULT_WINDOW_YEARS,
-                         ref_year: int | None = None) -> list[BlockRanking]:
-    ref_year = ref_year or _latest_year(repo)
+                         ref_year: int | None = None, with_score: bool = False,
+                         score_top_n: int | None = DEFAULT_SCORE_TOP_N,
+                         txns_by_block: dict[int, list] | None = None) -> list[BlockRanking]:
+    """Rank blocks by CAGR (fast). When `with_score`, also attach the composite
+    appreciation score — but only for the top `score_top_n` blocks in each
+    region, since that part is expensive (set score_top_n=None for all)."""
+    if txns_by_block is None:
+        txns_by_block = _group_transactions(repo)
+    ref_year = ref_year or _latest_year_from(txns_by_block)
     if ref_year is None:
         return []
     out: list[BlockRanking] = []
     for b in repo.blocks():
-        txns = list(repo.transactions_for_block(b.block_id))
+        txns = txns_by_block.get(b.block_id, [])
         if len(txns) < BLOCK_MIN_TXNS:
             continue
         cagr = _cagr(_annual_median_psf(txns), ref_year, years)
         if cagr is None:
             continue
         cagr_pct, psf_start, psf_end, y0, y1 = cagr
-        score = None
-        try:
-            appr = appreciation(repo, b.block_id)
-            score = appr["appreciation_score"] if appr else None
-        except Exception:
-            pass
         out.append(BlockRanking(
             block_id=b.block_id, planning_area_id=b.planning_area_id,
-            cagr_pct=cagr_pct, appreciation_score=score,
+            cagr_pct=cagr_pct, appreciation_score=None,
             median_psf_start=psf_start, median_psf_end=psf_end,
             year_start=y0, year_end=y1, txn_count=len(txns),
         ))
@@ -134,13 +147,27 @@ def build_block_rankings(repo: Repository, years: int = DEFAULT_WINDOW_YEARS,
     for group in by_area.values():
         for i, r in enumerate(sorted(group, key=lambda r: r.rank), start=1):
             r.region_rank = i
+
+    # (Optional) composite score — the slow pass, bounded to top-N per region.
+    if with_score:
+        for r in out:
+            if score_top_n is not None and r.region_rank > score_top_n:
+                continue
+            try:
+                appr = appreciation(repo, r.block_id)
+                r.appreciation_score = appr["appreciation_score"] if appr else None
+            except Exception:
+                pass
     return out
 
 
 def build_region_rankings(repo: Repository, years: int = DEFAULT_WINDOW_YEARS,
                           ref_year: int | None = None,
-                          block_rankings: list[BlockRanking] | None = None) -> list[RegionRanking]:
-    ref_year = ref_year or _latest_year(repo)
+                          block_rankings: list[BlockRanking] | None = None,
+                          txns_by_block: dict[int, list] | None = None) -> list[RegionRanking]:
+    if txns_by_block is None:
+        txns_by_block = _group_transactions(repo)
+    ref_year = ref_year or _latest_year_from(txns_by_block)
     if ref_year is None:
         return []
     # Mean composite score per area from the block rankings (already computed).
@@ -157,7 +184,7 @@ def build_region_rankings(repo: Repository, years: int = DEFAULT_WINDOW_YEARS,
     areas = {pa.planning_area_id: pa for pa in repo.planning_areas()}
     out: list[RegionRanking] = []
     for pa_id, block_ids in blocks_by_area.items():
-        txns = [t for bid in block_ids for t in repo.transactions_for_block(bid)]
+        txns = [t for bid in block_ids for t in txns_by_block.get(bid, [])]
         if len(txns) < REGION_MIN_TXNS:
             continue
         cagr = _cagr(_annual_median_psf(txns), ref_year, years)
@@ -180,11 +207,21 @@ def build_region_rankings(repo: Repository, years: int = DEFAULT_WINDOW_YEARS,
     return out
 
 
-def build_rankings(repo: Repository, years: int = DEFAULT_WINDOW_YEARS):
-    """Compute both block and region rankings. Returns (blocks, regions)."""
-    ref_year = _latest_year(repo)
-    blocks = build_block_rankings(repo, years, ref_year)
-    regions = build_region_rankings(repo, years, ref_year, block_rankings=blocks)
+def build_rankings(repo: Repository, years: int = DEFAULT_WINDOW_YEARS,
+                   with_score: bool = False,
+                   score_top_n: int | None = DEFAULT_SCORE_TOP_N):
+    """Compute both block and region rankings. Returns (blocks, regions).
+
+    with_score=False (default) is the fast CAGR-only build for manual runs;
+    with_score=True attaches the composite appreciation score (bounded to the
+    top `score_top_n` blocks per region) — used by the monthly background job.
+    """
+    txns_by_block = _group_transactions(repo)  # one query, reused by both passes
+    ref_year = _latest_year_from(txns_by_block)
+    blocks = build_block_rankings(repo, years, ref_year, with_score=with_score,
+                                  score_top_n=score_top_n, txns_by_block=txns_by_block)
+    regions = build_region_rankings(repo, years, ref_year, block_rankings=blocks,
+                                    txns_by_block=txns_by_block)
     return blocks, regions
 
 

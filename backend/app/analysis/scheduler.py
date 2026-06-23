@@ -39,6 +39,16 @@ def _window_years() -> int:
         return 10
 
 
+def _score_top_n() -> int | None:
+    """Cap composite scoring to the top-N blocks per region (0 = all)."""
+    from app.analysis.appreciation_rankings import DEFAULT_SCORE_TOP_N
+    try:
+        n = int(os.environ.get("RANKINGS_SCORE_TOP_N", str(DEFAULT_SCORE_TOP_N)))
+    except ValueError:
+        return DEFAULT_SCORE_TOP_N
+    return None if n == 0 else n
+
+
 def _age_days(engine) -> float | None:
     """Age of the current rankings in days, or None if there are none yet."""
     from sqlalchemy import text
@@ -58,7 +68,9 @@ def _rebuild() -> None:
     engine = get_engine_or_none()
     if engine is None:
         return
-    blocks, regions = ar.build_rankings(get_repository(), years=_window_years())
+    # Background job: include the composite score (bounded to top-N/region).
+    blocks, regions = ar.build_rankings(get_repository(), years=_window_years(),
+                                        with_score=True, score_top_n=_score_top_n())
     if blocks or regions:
         ar.persist(engine, blocks, regions)
         log.info("Auto-refreshed appreciation rankings: %d blocks, %d regions.",

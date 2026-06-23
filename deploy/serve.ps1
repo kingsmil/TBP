@@ -1,22 +1,25 @@
 <#
 .SYNOPSIS
-  Run HDB Match locally and expose it over HTTPS through Cloudflare.
+  One-command local HTTPS deploy for HDB Match.
 
-  Auto-selects the tunnel:
+  Checks/installs the tools it needs (Caddy, cloudflared), starts the database,
+  backend, and Caddy, then opens a Cloudflare tunnel — auto-selecting:
     * CF_TUNNEL_NAME set  -> named tunnel  (stable URL / your own domain)
     * not set             -> quick tunnel  (temporary *.trycloudflare.com URL)
 
-  Brings up the backend + Caddy (frontend + /api) and runs the tunnel in the
-  foreground. Ctrl+C stops everything it started.
-
 .EXAMPLE
-  ./deploy/serve.ps1                 # quick tunnel (or stable if CF_TUNNEL_NAME in .env)
-  ./deploy/serve.ps1 -SkipBuild      # reuse the existing frontend build
-  ./deploy/serve.ps1 -TunnelName hdb # force a named tunnel
+  ./deploy/serve.ps1            # deploy (install if needed) + open tunnel
+  ./deploy/serve.ps1 -Stop      # stop backend + Caddy + tunnel
+  ./deploy/serve.ps1 -Stop -StopDb   # also stop the database containers
+  ./deploy/serve.ps1 -SkipBuild      # reuse the last frontend build
+  ./deploy/serve.ps1 -NoInstall      # don't auto-install missing tools
 #>
 [CmdletBinding()]
 param(
+  [switch]$Stop,
+  [switch]$StopDb,
   [switch]$SkipBuild,
+  [switch]$NoInstall,
   [int]$CaddyPort = 0,
   [string]$TunnelName
 )
@@ -24,6 +27,8 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot      # deploy/ -> repo root
 Set-Location $Root
+$StateDir = Join-Path $Root "deploy/.run"
+$PidFile = Join-Path $StateDir "pids.json"
 
 function Read-DotEnv($path) {
   $h = @{}
@@ -43,12 +48,62 @@ function Test-Port($p) {
   catch { $false }
 }
 
-function Require-Tool($name) {
+function Refresh-Path {
+  $m = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+  $u = [Environment]::GetEnvironmentVariable('Path', 'User')
+  $env:Path = "$m;$u"
+}
+
+function Ensure-Tool($name, $wingetId) {
+  if (Get-Command $name -ErrorAction SilentlyContinue) { return }
+  if ($NoInstall) { throw "'$name' not found and -NoInstall set. Install it and retry." }
+  Write-Host "> Installing $name..." -ForegroundColor Cyan
+  if (Get-Command winget -ErrorAction SilentlyContinue) {
+    winget install --id $wingetId -e --accept-source-agreements --accept-package-agreements --silent
+  }
+  elseif (Get-Command choco -ErrorAction SilentlyContinue) {
+    choco install $name -y
+  }
+  elseif (Get-Command scoop -ErrorAction SilentlyContinue) {
+    scoop install $name
+  }
+  else {
+    throw "No package manager (winget/choco/scoop) found. Install $name manually."
+  }
+  Refresh-Path
   if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
-    throw "'$name' not found on PATH. Install it (see deploy/local-https-tunnel.md) and retry."
+    throw "$name still not on PATH after install. Open a NEW terminal and re-run."
   }
 }
 
+function Save-Pids($map) {
+  New-Item -ItemType Directory -Force $StateDir | Out-Null
+  ($map | ConvertTo-Json) | Set-Content -Encoding utf8 $PidFile
+}
+
+function Stop-AppProcesses {
+  if (Test-Path $PidFile) {
+    $s = Get-Content $PidFile -Raw | ConvertFrom-Json
+    foreach ($prop in $s.PSObject.Properties) {
+      try { Stop-Process -Id ([int]$prop.Value) -Force -ErrorAction SilentlyContinue } catch {}
+    }
+    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+  }
+}
+
+# ── Stop mode ─────────────────────────────────────────────────────────────────
+if ($Stop -or $StopDb) {
+  Write-Host "> Stopping backend, Caddy and tunnel..." -ForegroundColor Cyan
+  Stop-AppProcesses
+  if ($StopDb) {
+    Write-Host "> Stopping database containers..." -ForegroundColor Cyan
+    docker compose stop db redis
+  }
+  Write-Host "> Stopped." -ForegroundColor Green
+  return
+}
+
+# ── Resolve config ────────────────────────────────────────────────────────────
 $envv = Read-DotEnv (Join-Path $Root ".env")
 if (-not $TunnelName) { $TunnelName = $env:CF_TUNNEL_NAME }
 if (-not $TunnelName) { $TunnelName = $envv['CF_TUNNEL_NAME'] }
@@ -57,64 +112,73 @@ $apiPort = if ($envv['API_PORT']) { $envv['API_PORT'] } else { '8010' }
 if ($CaddyPort -le 0) { $CaddyPort = if ($envv['CADDY_PORT']) { [int]$envv['CADDY_PORT'] } else { 8080 } }
 $env:CADDY_PORT = "$CaddyPort"   # consumed by deploy/Caddyfile
 
-Require-Tool caddy
-Require-Tool cloudflared
+# ── Ensure tools ──────────────────────────────────────────────────────────────
+Ensure-Tool caddy CaddyServer.Caddy
+Ensure-Tool cloudflared Cloudflare.cloudflared
 
-$started = @()
-function Stop-Started {
-  foreach ($p in $started) {
-    if ($p -and -not $p.HasExited) {
-      try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
-    }
-  }
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+  throw "Docker not found. Install Docker Desktop, start it, then re-run."
 }
+docker info | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Docker isn't running. Start Docker Desktop and re-run." }
 
+Write-Host "> Starting database (db, redis)..." -ForegroundColor Cyan
+docker compose up -d db redis | Out-Null
+
+$started = @{}
 try {
-  # 1. Frontend build (skip if up to date / -SkipBuild and dist exists).
+  # 1. Frontend build.
   if (-not ($SkipBuild -and (Test-Path "$Root/frontend/dist/index.html"))) {
     Write-Host "> Building frontend..." -ForegroundColor Cyan
     Push-Location "$Root/frontend"; npm run build; Pop-Location
   }
 
-  # 2. Backend (skip if something is already on the API port).
+  # 2. Backend.
   if (Test-Port $apiPort) {
-    Write-Host "> Backend already listening on :$apiPort - reusing it." -ForegroundColor DarkGray
+    Write-Host "> Backend already on :$apiPort - reusing it." -ForegroundColor DarkGray
   }
   else {
     Write-Host "> Starting backend on :$apiPort..." -ForegroundColor Cyan
     $py = "$Root/backend/.venv/Scripts/python.exe"
     if (-not (Test-Path $py)) { $py = 'python' }
-    $started += Start-Process -FilePath $py -ArgumentList '-m', 'app.run_server' `
+    $p = Start-Process -FilePath $py -ArgumentList '-m', 'app.run_server' `
       -WorkingDirectory "$Root/backend" -WindowStyle Minimized -PassThru
+    $started.backend = $p.Id
   }
 
-  # 3. Caddy (frontend + /api on one port).
+  # 3. Caddy.
   if (Test-Port $CaddyPort) {
     Write-Host "> Caddy port :$CaddyPort already in use - reusing it." -ForegroundColor DarkGray
   }
   else {
     Write-Host "> Starting Caddy on :$CaddyPort..." -ForegroundColor Cyan
-    $started += Start-Process -FilePath 'caddy' -ArgumentList 'run', '--config', 'deploy/Caddyfile' `
+    $p = Start-Process -FilePath 'caddy' -ArgumentList 'run', '--config', 'deploy/Caddyfile' `
       -WorkingDirectory $Root -WindowStyle Minimized -PassThru
+    $started.caddy = $p.Id
   }
-
+  Save-Pids $started
   Start-Sleep -Seconds 3
   Write-Host "> Local app: http://localhost:$CaddyPort" -ForegroundColor DarkGray
 
-  # 4. Tunnel - stable if configured, otherwise a quick tunnel.
+  # 4. Tunnel (shares this console so the URL is visible; PID tracked for -Stop).
   if ($TunnelName) {
     $dest = if ($tunnelHost) { " -> https://$tunnelHost" } else { "" }
     Write-Host "> Stable tunnel '$TunnelName'$dest" -ForegroundColor Green
-    Write-Host "  (uses your cloudflared named-tunnel config; see the runbook for setup)" -ForegroundColor DarkGray
-    cloudflared tunnel run $TunnelName
+    $cf = Start-Process -FilePath 'cloudflared' -ArgumentList 'tunnel', 'run', $TunnelName `
+      -NoNewWindow -PassThru
   }
   else {
     Write-Host "> No CF_TUNNEL_NAME set - opening a temporary quick tunnel." -ForegroundColor Yellow
-    Write-Host "  Watch for the printed https://*.trycloudflare.com URL below." -ForegroundColor DarkGray
-    cloudflared tunnel --url "http://localhost:$CaddyPort"
+    Write-Host "  Watch for the https://*.trycloudflare.com URL below." -ForegroundColor DarkGray
+    $cf = Start-Process -FilePath 'cloudflared' -ArgumentList 'tunnel', '--url', "http://localhost:$CaddyPort" `
+      -NoNewWindow -PassThru
   }
+  $started.cloudflared = $cf.Id
+  Save-Pids $started
+  Write-Host "> Press Ctrl+C to stop (or run: ./deploy/serve.ps1 -Stop)." -ForegroundColor DarkGray
+  Wait-Process -Id $cf.Id
 }
 finally {
   Write-Host "`n> Shutting down services this script started..." -ForegroundColor Cyan
-  Stop-Started
+  Stop-AppProcesses
 }

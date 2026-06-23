@@ -21,9 +21,21 @@ winget install CaddyServer.Caddy
 ## One command (recommended)
 
 ```powershell
-docker compose up -d db redis     # start the database (Docker Desktop running)
-./deploy/serve.ps1                # builds frontend, starts backend + Caddy, opens the tunnel
+./deploy/serve.ps1     # installs tools if needed, starts DB + backend + Caddy, opens the tunnel
 ```
+
+That's it. The script:
+- **Installs Caddy + cloudflared if missing** (via winget/choco/scoop) — skip with `-NoInstall`
+- Checks Docker is running and starts the **database** (`db`, `redis`)
+- Builds the frontend (skip with `-SkipBuild`), starts the **backend** + **Caddy**
+- Opens the **tunnel** and prints the URL
+
+**Stop it** any time:
+```powershell
+./deploy/stop.ps1        # stop backend + Caddy + tunnel  (Ctrl+C in the serve window does the same)
+./deploy/stop.ps1 -Db    # also stop the database containers
+```
+(Stop works from any terminal — the script tracks process IDs in `deploy/.run/`.)
 
 `serve.ps1` **auto-selects the tunnel** from your `.env`:
 

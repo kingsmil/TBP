@@ -28,7 +28,16 @@ That's it. The script:
 - **Installs Caddy + cloudflared if missing** (via winget/choco/scoop) — skip with `-NoInstall`
 - Checks Docker is running and starts the **database** (`db`, `redis`)
 - Builds the frontend (skip with `-SkipBuild`), starts the **backend** + **Caddy**
-- Opens the **tunnel** and prints the URL
+- Opens the **tunnel** and prints the URL in a green banner:
+  ```
+  ============================================================
+   PUBLIC URL : https://random-words-1234.trycloudflare.com
+   LOCAL      : http://localhost:8080
+  ============================================================
+  ```
+  The URL is also written to `deploy/.run/url.txt` — read it any time with
+  `Get-Content deploy/.run/url.txt`. (A quick tunnel gets a fresh URL each run;
+  a named tunnel always uses your `CF_TUNNEL_HOSTNAME`.)
 
 **Stop it** any time:
 ```powershell

@@ -160,22 +160,54 @@ try {
   Start-Sleep -Seconds 3
   Write-Host "> Local app: http://localhost:$CaddyPort" -ForegroundColor DarkGray
 
-  # 4. Tunnel (shares this console so the URL is visible; PID tracked for -Stop).
+  # 4. Tunnel. PID tracked for -Stop; the public URL is surfaced below.
+  $log = Join-Path $StateDir "cloudflared.log"
+  $urlFile = Join-Path $StateDir "url.txt"
+  Remove-Item $log, $urlFile -Force -ErrorAction SilentlyContinue
+
   if ($TunnelName) {
-    $dest = if ($tunnelHost) { " -> https://$tunnelHost" } else { "" }
-    Write-Host "> Stable tunnel '$TunnelName'$dest" -ForegroundColor Green
     $cf = Start-Process -FilePath 'cloudflared' -ArgumentList 'tunnel', 'run', $TunnelName `
       -NoNewWindow -PassThru
   }
   else {
-    Write-Host "> No CF_TUNNEL_NAME set - opening a temporary quick tunnel." -ForegroundColor Yellow
-    Write-Host "  Watch for the https://*.trycloudflare.com URL below." -ForegroundColor DarkGray
-    $cf = Start-Process -FilePath 'cloudflared' -ArgumentList 'tunnel', '--url', "http://localhost:$CaddyPort" `
+    Write-Host "> Opening a temporary quick tunnel..." -ForegroundColor Yellow
+    $cf = Start-Process -FilePath 'cloudflared' `
+      -ArgumentList 'tunnel', '--url', "http://localhost:$CaddyPort", '--logfile', $log `
       -NoNewWindow -PassThru
   }
   $started.cloudflared = $cf.Id
   Save-Pids $started
-  Write-Host "> Press Ctrl+C to stop (or run: ./deploy/serve.ps1 -Stop)." -ForegroundColor DarkGray
+
+  # Resolve the public URL (named host, or parse it from the quick-tunnel log).
+  $publicUrl = $null
+  if ($TunnelName) {
+    if ($tunnelHost) { $publicUrl = "https://$tunnelHost" }
+  }
+  else {
+    $deadline = (Get-Date).AddSeconds(30)
+    while (-not $publicUrl -and (Get-Date) -lt $deadline -and -not $cf.HasExited) {
+      Start-Sleep -Milliseconds 500
+      if (Test-Path $log) {
+        $hit = Select-String -Path $log -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com' `
+          -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($hit) { $publicUrl = $hit.Matches[0].Value }
+      }
+    }
+  }
+  if ($publicUrl) { Set-Content -Encoding ascii $urlFile $publicUrl }
+
+  Write-Host ""
+  Write-Host "  ============================================================" -ForegroundColor Green
+  if ($publicUrl) {
+    Write-Host "   PUBLIC URL : $publicUrl" -ForegroundColor Green
+  }
+  else {
+    Write-Host "   Tunnel starting - see the cloudflared output for the URL." -ForegroundColor Yellow
+  }
+  Write-Host "   LOCAL      : http://localhost:$CaddyPort" -ForegroundColor DarkGray
+  Write-Host "   (also saved to deploy/.run/url.txt)" -ForegroundColor DarkGray
+  Write-Host "  ============================================================" -ForegroundColor Green
+  Write-Host "  Press Ctrl+C to stop (or run: ./deploy/stop.ps1)." -ForegroundColor DarkGray
   Wait-Process -Id $cf.Id
 }
 finally {

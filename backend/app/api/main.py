@@ -61,7 +61,7 @@ from app.services import analytics as analytics_svc
 from app.services import block_agents as block_agents_svc
 from app.services import outreach as outreach_svc
 from app.services.appreciation import appreciation as appreciation_svc
-from app.services.comparison import compare_estates
+from app.services.comparison import compare_estates_cached, warm_comparison_cache
 from app.services.commute.couple import couple_optimize, recommended_estates
 from app.services.commute.optimizer import commute_heatmap, optimize_commute
 from app.services.dream_home import dream_home_finder
@@ -83,6 +83,10 @@ async def _lifespan(application):
     homeos_setup()
     from app.analysis.scheduler import start_ranking_refresh
     refresh_task = start_ranking_refresh()
+    # Warm the shared estate-comparison cache in the background so the first
+    # request is already instant (PostGIS only — mock mode is tiny/fast).
+    if get_engine_or_none() is not None:
+        warm_comparison_cache(get_repository())
     try:
         yield
     finally:
@@ -284,7 +288,7 @@ def comparison_estates(
             ids = [int(x) for x in estates.split(",") if x.strip()]
         except ValueError:
             raise HTTPException(status_code=400, detail="invalid estates list")
-    return {"estates": compare_estates(repo, ids, flat_type)}
+    return {"estates": compare_estates_cached(repo, ids, flat_type)}
 
 
 @app.post("/homeos/investigate")

@@ -6,7 +6,10 @@ MRT/bus/school accessibility. Powers GET /comparison/estates.
 """
 from __future__ import annotations
 
+import os
+
 from app.repositories.base import Repository
+from app.services.cache import SWRCache
 from app.services.accessibility import (
     bus_score, combined_score, estate_accessibility, future_mrt_score,
     mrt_score, school_score,
@@ -128,3 +131,23 @@ def compare_estates(repo: Repository, planning_area_ids: list[int] | None = None
         r["median_psf"] if r["median_psf"] is not None else float("inf"),
     ))
     return rows
+
+
+# The full comparison is identical for every user and only changes when data
+# changes, so cache it and refresh in the background rather than recomputing per
+# request. Default TTL 6h; refresh is stale-while-revalidate (never blocks).
+_CACHE = SWRCache(ttl=float(os.environ.get("COMPARISON_CACHE_TTL", str(6 * 3600))))
+
+
+def compare_estates_cached(repo: Repository, planning_area_ids: list[int] | None = None,
+                           flat_type: str | None = None) -> list[dict]:
+    """Cached full-comparison; a specific estate subset bypasses the cache."""
+    if planning_area_ids is not None:
+        return compare_estates(repo, planning_area_ids, flat_type)
+    key = flat_type or "__all__"
+    return _CACHE.get(key, lambda: compare_estates(repo, None, flat_type))
+
+
+def warm_comparison_cache(repo: Repository) -> None:
+    """Pre-compute the default comparison in the background (call at startup)."""
+    _CACHE.warm("__all__", lambda: compare_estates(repo, None, None))

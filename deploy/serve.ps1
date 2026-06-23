@@ -29,6 +29,7 @@ $Root = Split-Path -Parent $PSScriptRoot      # deploy/ -> repo root
 Set-Location $Root
 $StateDir = Join-Path $Root "deploy/.run"
 $PidFile = Join-Path $StateDir "pids.json"
+$UrlFile = Join-Path $StateDir "url.txt"
 
 function Read-DotEnv($path) {
   $h = @{}
@@ -46,6 +47,22 @@ function Read-DotEnv($path) {
 function Test-Port($p) {
   try { $c = New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1', $p); $c.Close(); $true }
   catch { $false }
+}
+
+function Get-PidOnPort($p) {
+  try {
+    (Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue |
+      Select-Object -First 1).OwningProcess
+  }
+  catch { $null }
+}
+
+function Get-TrackedAlive($name) {
+  if (-not (Test-Path $PidFile)) { return $null }
+  $s = Get-Content $PidFile -Raw | ConvertFrom-Json
+  $procId = $s.$name
+  if (-not $procId) { return $null }
+  return Get-Process -Id ([int]$procId) -ErrorAction SilentlyContinue
 }
 
 function Refresh-Path {
@@ -112,6 +129,19 @@ $apiPort = if ($envv['API_PORT']) { $envv['API_PORT'] } else { '8010' }
 if ($CaddyPort -le 0) { $CaddyPort = if ($envv['CADDY_PORT']) { [int]$envv['CADDY_PORT'] } else { 8080 } }
 $env:CADDY_PORT = "$CaddyPort"   # consumed by deploy/Caddyfile
 
+# ── Already running? Don't double-start the tunnel. ───────────────────────────
+# (Done before anything else so a second run short-circuits cleanly instead of
+# spawning a second tunnel and clobbering the PID file.)
+$liveTunnel = Get-TrackedAlive 'cloudflared'
+if ($liveTunnel) {
+  $u = if (Test-Path $UrlFile) { (Get-Content $UrlFile -Raw).Trim() } else { '(see deploy/.run/url.txt)' }
+  Write-Host "> Already running (tunnel PID $($liveTunnel.Id))." -ForegroundColor Yellow
+  Write-Host "  PUBLIC URL : $u" -ForegroundColor Green
+  Write-Host "  LOCAL      : http://localhost:$CaddyPort" -ForegroundColor DarkGray
+  Write-Host "  Run ./deploy/stop.ps1 first if you want to restart." -ForegroundColor DarkGray
+  return
+}
+
 # ── Ensure tools ──────────────────────────────────────────────────────────────
 Ensure-Tool caddy CaddyServer.Caddy
 Ensure-Tool cloudflared Cloudflare.cloudflared
@@ -133,9 +163,11 @@ try {
     Push-Location "$Root/frontend"; npm run build; Pop-Location
   }
 
-  # 2. Backend.
+  # 2. Backend (reused if its port is up; tracked either way so -Stop is clean).
   if (Test-Port $apiPort) {
     Write-Host "> Backend already on :$apiPort - reusing it." -ForegroundColor DarkGray
+    $bpid = Get-PidOnPort $apiPort
+    if ($bpid) { $started.backend = $bpid }
   }
   else {
     Write-Host "> Starting backend on :$apiPort..." -ForegroundColor Cyan
@@ -149,6 +181,8 @@ try {
   # 3. Caddy.
   if (Test-Port $CaddyPort) {
     Write-Host "> Caddy port :$CaddyPort already in use - reusing it." -ForegroundColor DarkGray
+    $cpid = Get-PidOnPort $CaddyPort
+    if ($cpid) { $started.caddy = $cpid }
   }
   else {
     Write-Host "> Starting Caddy on :$CaddyPort..." -ForegroundColor Cyan
@@ -162,8 +196,7 @@ try {
 
   # 4. Tunnel. PID tracked for -Stop; the public URL is surfaced below.
   $log = Join-Path $StateDir "cloudflared.log"
-  $urlFile = Join-Path $StateDir "url.txt"
-  Remove-Item $log, $urlFile -Force -ErrorAction SilentlyContinue
+  Remove-Item $log, $UrlFile -Force -ErrorAction SilentlyContinue
 
   if ($TunnelName) {
     $cf = Start-Process -FilePath 'cloudflared' -ArgumentList 'tunnel', 'run', $TunnelName `
@@ -194,7 +227,7 @@ try {
       }
     }
   }
-  if ($publicUrl) { Set-Content -Encoding ascii $urlFile $publicUrl }
+  if ($publicUrl) { Set-Content -Encoding ascii $UrlFile $publicUrl }
 
   Write-Host ""
   Write-Host "  ============================================================" -ForegroundColor Green

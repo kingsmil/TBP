@@ -3,7 +3,8 @@
 # TLS is terminated by the tunnel, so Caddy itself serves plain HTTP here.
 #
 # Run from the repo root:  caddy run --config deploy/Caddyfile
-:8080 {
+# Port can be overridden with the CADDY_PORT env var (default 8080).
+:{$CADDY_PORT:8080} {
 	encode gzip
 
 	# API → FastAPI backend. handle_path strips the /api prefix, matching the

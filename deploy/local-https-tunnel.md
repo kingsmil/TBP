@@ -18,7 +18,48 @@ winget install CaddyServer.Caddy
 # (or: choco install cloudflared caddy   /   scoop install cloudflared caddy)
 ```
 
-## Start it (4 terminals, from the repo root)
+## One command (recommended)
+
+```powershell
+docker compose up -d db redis     # start the database (Docker Desktop running)
+./deploy/serve.ps1                # builds frontend, starts backend + Caddy, opens the tunnel
+```
+
+`serve.ps1` **auto-selects the tunnel** from your `.env`:
+
+| `.env` | Result |
+|---|---|
+| `CF_TUNNEL_NAME` blank (default) | Temporary **quick tunnel** — prints a fresh `https://*.trycloudflare.com` URL |
+| `CF_TUNNEL_NAME=<your-tunnel>` | **Stable tunnel** — your own domain (one-time setup below) |
+
+Ctrl+C stops everything the script started. Flags: `-SkipBuild` (reuse the last
+frontend build), `-TunnelName <name>`, `-CaddyPort <port>`.
+
+### Later: a stable URL with your own domain (one-time)
+
+```powershell
+cloudflared login                                   # authorise your Cloudflare account
+cloudflared tunnel create hdbmatch                  # creates a named tunnel + credentials
+cloudflared tunnel route dns hdbmatch app.yourdomain.com
+```
+Add an ingress rule to `~/.cloudflared/config.yml`:
+```yaml
+tunnel: hdbmatch
+ingress:
+  - hostname: app.yourdomain.com
+    service: http://localhost:8080
+  - service: http_status:404
+```
+Then set in `.env`:
+```
+CF_TUNNEL_NAME=hdbmatch
+CF_TUNNEL_HOSTNAME=app.yourdomain.com
+```
+Now `./deploy/serve.ps1` serves the same app at your stable `https://app.yourdomain.com`.
+
+---
+
+## Manual start (4 terminals, from the repo root)
 
 **1. Database** — start Docker Desktop, then:
 ```powershell

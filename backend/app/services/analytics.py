@@ -54,10 +54,17 @@ def growth_pct(monthly: list[dict]) -> float | None:
 
 
 def psf_by_lease_age(repo: Repository, transactions,
-                     current_year: int | None = None, bucket: int = 10) -> list[dict]:
-    """Group transactions by their block's remaining-lease bucket."""
+                     current_year: int | None = None, bucket: int = 10,
+                     block_by_id: dict | None = None) -> list[dict]:
+    """Group transactions by their block's remaining-lease bucket.
+
+    Pass `block_by_id` to avoid a per-transaction block lookup (one query each).
+    """
+    def get_block(bid):
+        return block_by_id.get(bid) if block_by_id is not None else repo.block(bid)
+
     def key(t: Transaction):
-        b = repo.block(t.block_id)
+        b = get_block(t.block_id)
         if b is None:
             return None
         rem = remaining_lease_years(b.lease_commencement_year, current_year)
@@ -71,11 +78,15 @@ def psf_by_lease_age(repo: Repository, transactions,
     return rows
 
 
-def price_vs_mrt_distance(repo: Repository, block_ids, flat_type=None) -> list[dict]:
+def price_vs_mrt_distance(repo: Repository, block_ids, flat_type=None,
+                          txns_by_block: dict | None = None,
+                          prox_by_id: dict | None = None) -> list[dict]:
+    """Pass `txns_by_block` / `prox_by_id` to avoid a per-block query each."""
     rows = []
     for bid in block_ids:
-        txns = _filter_flat_type(repo.transactions_for_block(bid), flat_type)
-        prox = repo.proximity(bid)
+        raw = txns_by_block.get(bid, []) if txns_by_block is not None else repo.transactions_for_block(bid)
+        txns = _filter_flat_type(raw, flat_type)
+        prox = prox_by_id.get(bid) if prox_by_id is not None else repo.proximity(bid)
         if not txns or prox is None or prox.nearest_mrt_distance_m is None:
             continue
         s = summarize(txns)
@@ -123,12 +134,22 @@ def block_analytics(repo: Repository, block_id: int,
 
 def estate_analytics(repo: Repository, planning_area_id: int,
                      flat_type: str | None = None) -> dict | None:
-    block_ids = [b.block_id for b in repo.blocks()
-                 if b.planning_area_id == planning_area_id]
+    # Preload blocks, the estate's transactions, and proximity ONCE, then pass
+    # them down — otherwise the lease-age and PSF-vs-MRT helpers do thousands of
+    # per-row/per-block queries (this was a ~9s endpoint on real data).
+    blocks = list(repo.blocks())
+    block_by_id = {b.block_id: b for b in blocks}
+    block_ids = [b.block_id for b in blocks if b.planning_area_id == planning_area_id]
     if not block_ids:
         return None
-    txns_all = [t for t in repo.transactions() if t.block_id in set(block_ids)]
+    id_set = set(block_ids)
+    txns_by_block: dict[int, list] = {}
+    for t in repo.transactions():
+        if t.block_id in id_set:
+            txns_by_block.setdefault(t.block_id, []).append(t)
+    txns_all = [t for ts in txns_by_block.values() for t in ts]
     txns = _filter_flat_type(txns_all, flat_type)
+    prox_by_id = {p.block_id: p for p in repo.all_proximity()}
     monthly = monthly_summaries(txns)
     return {
         "scope": "estate",
@@ -138,8 +159,9 @@ def estate_analytics(repo: Repository, planning_area_id: int,
         "psf_over_time": monthly,
         "volume_over_time": volume_over_time(monthly),
         "psf_by_flat_type": psf_by_flat_type(txns_all),
-        "psf_by_lease_age": psf_by_lease_age(repo, txns_all),
-        "price_vs_mrt_distance": price_vs_mrt_distance(repo, block_ids, flat_type),
+        "psf_by_lease_age": psf_by_lease_age(repo, txns_all, block_by_id=block_by_id),
+        "price_vs_mrt_distance": price_vs_mrt_distance(
+            repo, block_ids, flat_type, txns_by_block=txns_by_block, prox_by_id=prox_by_id),
     }
 
 

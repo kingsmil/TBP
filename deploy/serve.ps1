@@ -129,13 +129,14 @@ $apiPort = if ($envv['API_PORT']) { $envv['API_PORT'] } else { '8010' }
 if ($CaddyPort -le 0) { $CaddyPort = if ($envv['CADDY_PORT']) { [int]$envv['CADDY_PORT'] } else { 8080 } }
 $env:CADDY_PORT = "$CaddyPort"   # consumed by deploy/Caddyfile
 
-# ── Already running? Don't double-start the tunnel. ───────────────────────────
-# (Done before anything else so a second run short-circuits cleanly instead of
-# spawning a second tunnel and clobbering the PID file.)
+# ── Fully healthy already? Short-circuit. ─────────────────────────────────────
+# Only when the tunnel, backend AND Caddy are all up — otherwise fall through and
+# (re)start whatever is down, so a dead backend self-heals instead of leaving a
+# tunnel that 502s on every /api call.
 $liveTunnel = Get-TrackedAlive 'cloudflared'
-if ($liveTunnel) {
+if ($liveTunnel -and (Test-Port $apiPort) -and (Test-Port $CaddyPort)) {
   $u = if (Test-Path $UrlFile) { (Get-Content $UrlFile -Raw).Trim() } else { '(see deploy/.run/url.txt)' }
-  Write-Host "> Already running (tunnel PID $($liveTunnel.Id))." -ForegroundColor Yellow
+  Write-Host "> Already running and healthy (tunnel PID $($liveTunnel.Id))." -ForegroundColor Yellow
   Write-Host "  PUBLIC URL : $u" -ForegroundColor Green
   Write-Host "  LOCAL      : http://localhost:$CaddyPort" -ForegroundColor DarkGray
   Write-Host "  Run ./deploy/stop.ps1 first if you want to restart." -ForegroundColor DarkGray
@@ -178,6 +179,19 @@ try {
     $started.backend = $p.Id
   }
 
+  # Wait for the backend to actually accept connections (so a silent crash is
+  # reported instead of surfacing later as a 502 from Caddy).
+  if (-not (Test-Port $apiPort)) {
+    Write-Host "> Waiting for backend on :$apiPort..." -ForegroundColor DarkGray
+    $bd = (Get-Date).AddSeconds(20)
+    while (-not (Test-Port $apiPort) -and (Get-Date) -lt $bd) { Start-Sleep -Milliseconds 500 }
+  }
+  if (-not (Test-Port $apiPort)) {
+    Write-Host "! Backend did NOT come up on :$apiPort - /api calls will 502." -ForegroundColor Red
+    Write-Host "  Check the minimized backend window, or run it directly to see the error:" -ForegroundColor Red
+    Write-Host "    cd backend; .\.venv\Scripts\python.exe -m app.run_server" -ForegroundColor Red
+  }
+
   # 3. Caddy.
   if (Test-Port $CaddyPort) {
     Write-Host "> Caddy port :$CaddyPort already in use - reusing it." -ForegroundColor DarkGray
@@ -194,40 +208,43 @@ try {
   Start-Sleep -Seconds 3
   Write-Host "> Local app: http://localhost:$CaddyPort" -ForegroundColor DarkGray
 
-  # 4. Tunnel. PID tracked for -Stop; the public URL is surfaced below.
+  # 4. Tunnel. Reuse an existing live tunnel (e.g. we only restarted a dead
+  # backend); otherwise start a fresh one. PID tracked for -Stop.
   $log = Join-Path $StateDir "cloudflared.log"
-  Remove-Item $log, $UrlFile -Force -ErrorAction SilentlyContinue
-
-  if ($TunnelName) {
-    $cf = Start-Process -FilePath 'cloudflared' -ArgumentList 'tunnel', 'run', $TunnelName `
-      -NoNewWindow -PassThru
-  }
-  else {
-    Write-Host "> Opening a temporary quick tunnel..." -ForegroundColor Yellow
-    $cf = Start-Process -FilePath 'cloudflared' `
-      -ArgumentList 'tunnel', '--url', "http://localhost:$CaddyPort", '--logfile', $log `
-      -NoNewWindow -PassThru
-  }
-  $started.cloudflared = $cf.Id
-  Save-Pids $started
-
-  # Resolve the public URL (named host, or parse it from the quick-tunnel log).
   $publicUrl = $null
-  if ($TunnelName) {
-    if ($tunnelHost) { $publicUrl = "https://$tunnelHost" }
+
+  if ($liveTunnel) {
+    Write-Host "> Tunnel already running (PID $($liveTunnel.Id)) - reusing it." -ForegroundColor DarkGray
+    $cf = $liveTunnel
+    $started.cloudflared = $cf.Id
+    if (Test-Path $UrlFile) { $publicUrl = (Get-Content $UrlFile -Raw).Trim() }
   }
   else {
-    $deadline = (Get-Date).AddSeconds(30)
-    while (-not $publicUrl -and (Get-Date) -lt $deadline -and -not $cf.HasExited) {
-      Start-Sleep -Milliseconds 500
-      if (Test-Path $log) {
-        $hit = Select-String -Path $log -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com' `
-          -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($hit) { $publicUrl = $hit.Matches[0].Value }
+    Remove-Item $log, $UrlFile -Force -ErrorAction SilentlyContinue
+    if ($TunnelName) {
+      $cf = Start-Process -FilePath 'cloudflared' -ArgumentList 'tunnel', 'run', $TunnelName `
+        -NoNewWindow -PassThru
+      if ($tunnelHost) { $publicUrl = "https://$tunnelHost" }
+    }
+    else {
+      Write-Host "> Opening a temporary quick tunnel..." -ForegroundColor Yellow
+      $cf = Start-Process -FilePath 'cloudflared' `
+        -ArgumentList 'tunnel', '--url', "http://localhost:$CaddyPort", '--logfile', $log `
+        -NoNewWindow -PassThru
+      $deadline = (Get-Date).AddSeconds(30)
+      while (-not $publicUrl -and (Get-Date) -lt $deadline -and -not $cf.HasExited) {
+        Start-Sleep -Milliseconds 500
+        if (Test-Path $log) {
+          $hit = Select-String -Path $log -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com' `
+            -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($hit) { $publicUrl = $hit.Matches[0].Value }
+        }
       }
     }
+    $started.cloudflared = $cf.Id
+    if ($publicUrl) { Set-Content -Encoding ascii $UrlFile $publicUrl }
   }
-  if ($publicUrl) { Set-Content -Encoding ascii $UrlFile $publicUrl }
+  Save-Pids $started
 
   Write-Host ""
   Write-Host "  ============================================================" -ForegroundColor Green

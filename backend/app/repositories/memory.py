@@ -115,6 +115,9 @@ class InMemoryRepository(Repository):
     def proximity(self, block_id: int) -> BlockProximity | None:
         return self._proximity.get(block_id)
 
+    def all_proximity(self) -> Sequence[BlockProximity]:
+        return list(self._proximity.values())
+
     def bus_stop_reach(self, bus_stop_code: str) -> dict | None:
         origin = self._bus.get(bus_stop_code)
         if origin is None:

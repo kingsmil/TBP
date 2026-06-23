@@ -246,12 +246,8 @@ class PostgisRepository(Repository):
         rows = self._all(self._ACTIVE_SELECT + " WHERE listing_id = :id", {"id": listing_id})
         return self._active_row(rows[0]) if rows else None
 
-    def proximity(self, block_id: int) -> BlockProximity | None:
-        rows = self._all("SELECT * FROM block_proximity WHERE block_id = :id",
-                         {"id": block_id})
-        if not rows:
-            return None
-        r = rows[0]
+    @staticmethod
+    def _prox_row(r) -> BlockProximity:
         return BlockProximity(
             block_id=r.block_id,
             nearest_mrt_station_id=r.nearest_mrt_station_id,
@@ -264,6 +260,14 @@ class PostgisRepository(Repository):
             schools_within_2km=r.schools_within_2km or 0,
             bus_stops_within_400m=r.bus_stops_within_400m or 0,
         )
+
+    def proximity(self, block_id: int) -> BlockProximity | None:
+        rows = self._all("SELECT * FROM block_proximity WHERE block_id = :id",
+                         {"id": block_id})
+        return self._prox_row(rows[0]) if rows else None
+
+    def all_proximity(self) -> Sequence[BlockProximity]:
+        return [self._prox_row(r) for r in self._all("SELECT * FROM block_proximity")]
 
     def search_blocks(self, q: SearchQuery) -> list[dict]:
         """Execute the map search as one aggregate SQL query."""

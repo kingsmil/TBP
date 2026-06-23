@@ -67,6 +67,9 @@ class Repository(ABC):
     @abstractmethod
     def proximity(self, block_id: int) -> BlockProximity | None: ...
     @abstractmethod
+    def all_proximity(self) -> Sequence[BlockProximity]:
+        """Every block's precomputed proximity in one call (bulk reads)."""
+    @abstractmethod
     def bus_stop_reach(self, bus_stop_code: str) -> dict | None:
         """Services boarding at this stop and every stop reachable downstream."""
 

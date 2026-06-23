@@ -7,8 +7,14 @@ MRT/bus/school accessibility. Powers GET /comparison/estates.
 from __future__ import annotations
 
 from app.repositories.base import Repository
-from app.services.accessibility import estate_accessibility
-from app.services.analytics import estate_analytics, remaining_lease_years
+from app.services.accessibility import (
+    bus_score, combined_score, estate_accessibility, future_mrt_score,
+    mrt_score, school_score,
+)
+from app.services.analytics import (
+    estate_analytics, growth_pct, remaining_lease_years,
+)
+from app.services.stats import monthly_summaries, summarize
 
 
 def lease_profile(repo: Repository, block_ids: list[int],
@@ -54,12 +60,68 @@ def estate_metrics(repo: Repository, planning_area_id: int,
     }
 
 
+def _avg(values: list[float]) -> float | None:
+    return round(sum(values) / len(values), 2) if values else None
+
+
 def compare_estates(repo: Repository, planning_area_ids: list[int] | None = None,
                     flat_type: str | None = None) -> list[dict]:
-    if planning_area_ids is None:
-        planning_area_ids = [pa.planning_area_id for pa in repo.planning_areas()]
-    rows = [estate_metrics(repo, pid, flat_type) for pid in planning_area_ids]
-    rows = [r for r in rows if r is not None]
+    """Side-by-side metrics for every (or selected) planning area.
+
+    Single-pass: blocks, transactions and proximity are each loaded ONCE and
+    grouped by area, rather than re-querying per area (which is O(areas x all
+    transactions) and becomes very slow with years of data).
+    """
+    blocks = list(repo.blocks())
+    block_by_id = {b.block_id: b for b in blocks}
+    areas = {pa.planning_area_id: pa for pa in repo.planning_areas()}
+    prox_by_id = {p.block_id: p for p in repo.all_proximity()}
+
+    blocks_by_area: dict[int, list] = {}
+    for b in blocks:
+        if b.planning_area_id is not None:
+            blocks_by_area.setdefault(b.planning_area_id, []).append(b)
+
+    txns_by_area: dict[int, list] = {}
+    for t in repo.transactions():
+        b = block_by_id.get(t.block_id)
+        if b is None or b.planning_area_id is None:
+            continue
+        if flat_type is not None and t.flat_type != flat_type:
+            continue
+        txns_by_area.setdefault(b.planning_area_id, []).append(t)
+
+    target = planning_area_ids if planning_area_ids is not None else list(blocks_by_area.keys())
+    rows = []
+    for pid in target:
+        area_blocks = blocks_by_area.get(pid)
+        if not area_blocks:
+            continue
+        txns = txns_by_area.get(pid, [])
+        s = summarize(txns)
+        proxs = [prox_by_id[b.block_id] for b in area_blocks if b.block_id in prox_by_id]
+        years = [remaining_lease_years(b.lease_commencement_year) for b in area_blocks]
+        rows.append({
+            "planning_area_id": pid,
+            "name": areas[pid].name if pid in areas else None,
+            "block_count": len(area_blocks),
+            "median_psf": s.median_psf,
+            "median_price": s.median_price,
+            "growth_pct": growth_pct(monthly_summaries(txns)),
+            "txn_count": s.txn_count,
+            "lease_profile": {
+                "avg_remaining_lease": round(sum(years) / len(years), 1) if years else None,
+                "min_remaining_lease": min(years) if years else None,
+                "max_remaining_lease": max(years) if years else None,
+            },
+            "accessibility": {
+                "mrt_score": _avg([mrt_score(p) for p in proxs]),
+                "future_mrt_score": _avg([future_mrt_score(p) for p in proxs]),
+                "bus_score": _avg([bus_score(p) for p in proxs]),
+                "school_score": _avg([school_score(p) for p in proxs]),
+                "combined_score": _avg([combined_score(p) for p in proxs]),
+            },
+        })
     # Most accessible first, then cheapest PSF.
     rows.sort(key=lambda r: (
         -(r["accessibility"]["combined_score"] or 0.0),

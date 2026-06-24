@@ -37,6 +37,8 @@ import type {
   BtoResaleCompare,
   RecommendQuestion,
   RecommendResult,
+  AmenityType,
+  AmenityPoi,
   ScoreField,
   ScoreRankingResponse,
   SearchFilters,
@@ -128,6 +130,14 @@ export interface ReferenceFeatureCollection {
 
 export function getReferenceLayer(layer: string): Promise<ReferenceFeatureCollection> {
   return getJSON<ReferenceFeatureCollection>(`/reference/${layer}`);
+}
+
+// --- Amenities ---
+export function getAmenityTypes(): Promise<{ amenities: AmenityType[] }> {
+  return getJSON<{ amenities: AmenityType[] }>("/amenities");
+}
+export function getAmenities(key: string): Promise<{ key: string; count: number; results: AmenityPoi[] }> {
+  return getJSON<{ key: string; count: number; results: AmenityPoi[] }>(`/amenities/${key}`);
 }
 
 export interface BusReachStop {

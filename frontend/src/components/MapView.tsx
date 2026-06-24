@@ -6,12 +6,18 @@ import { divIcon, type LatLngBoundsExpression } from "leaflet";
 import useSupercluster from "use-supercluster";
 import type { BlockSummary, DirectTransitDestination } from "../types";
 import { ACCESS_COLORS, formatDistance, formatPsf, formatSGD, mrtAccessClass } from "../lib/format";
-import { getBusStopReach, getReferenceLayer } from "../lib/api";
+import { getBusStopReach, getReferenceLayer, getAmenityTypes, getAmenities } from "../lib/api";
 import type { BusReachResponse } from "../lib/api";
+
+const AMENITY_EMOJI: Record<string, string> = {
+  schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",
+  sports: "⚽", community: "🏛️", library: "📚",
+};
 import { distanceMetres } from "../lib/geo";
 
+// Grey base map: mutes roads/highways so MRT/bus lines and amenity markers pop.
 const ONEMAP_TILES =
-  "https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png";
+  "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 
 // Max pan bounds — keeps user inside Singapore region
 const SG_BOUNDS: LatLngBoundsExpression = [
@@ -517,6 +523,19 @@ export default function MapView({
     queryFn: () => getBusStopReach(selectedBusStop!),
     enabled: busMode && selectedBusStop != null,
   });
+
+  // ── Amenity layers (schools, parks, hawker, …) ──────────────────────────────
+  const [activeAmenities, setActiveAmenities] = useState<string[]>([]);
+  const amenityTypes = useQuery({ queryKey: ["amenity-types"], queryFn: getAmenityTypes, staleTime: 6e5 });
+  const amenityQueries = useQueries({
+    queries: activeAmenities.map((key) => ({
+      queryKey: ["amenities", key],
+      queryFn: () => getAmenities(key),
+      staleTime: 6e5,
+    })),
+  });
+  const amenityColor = (key: string) =>
+    amenityTypes.data?.amenities.find((a) => a.key === key)?.color ?? "#475569";
   const displayedServices = busReach.data?.services.filter((service) =>
     activeBusService == null
       || `${service.service_no}-${service.direction}` === activeBusService
@@ -628,6 +647,27 @@ export default function MapView({
         />
 
         {destinations.length > 0 && <DestinationMarkers destinations={destinations} />}
+
+        {!busMode && !nearbyRouteFocus && activeAmenities.length > 0 && (
+          <Pane name="amenities" style={{ zIndex: 560 }}>
+            {amenityQueries.map((q, i) => {
+              const key = activeAmenities[i];
+              const color = amenityColor(key);
+              const emoji = AMENITY_EMOJI[key] ?? "📍";
+              return (q.data?.results ?? []).map((poi, j) => (
+                <CircleMarker
+                  // biome-ignore lint/suspicious/noArrayIndexKey: stable per-layer order
+                  key={`${key}-${j}`}
+                  center={[poi.lat, poi.lon]}
+                  radius={5}
+                  pathOptions={{ pane: "amenities", color: "#ffffff", weight: 1.5, fillColor: color, fillOpacity: 0.95 }}
+                >
+                  <Tooltip direction="top" opacity={0.95}>{emoji} {poi.name}</Tooltip>
+                </CircleMarker>
+              ));
+            })}
+          </Pane>
+        )}
 
         {!busMode && !nearbyRouteFocus && !recommendationsOnly && (
           <ClusteredBlocks
@@ -932,7 +972,32 @@ export default function MapView({
         </div>
       )}
 
-      {!busMode && !nearbyRouteFocus && <div className="absolute bottom-6 right-3 z-[1000] w-56 rounded-xl border border-border bg-card/90 p-3 shadow-md backdrop-blur-sm">
+      {!busMode && !nearbyRouteFocus && <div className="absolute bottom-6 right-3 z-[1000] max-h-[70vh] w-56 overflow-y-auto rounded-xl border border-border bg-card/90 p-3 shadow-md backdrop-blur-sm">
+        {/* Amenities */}
+        {(amenityTypes.data?.amenities.length ?? 0) > 0 && (
+          <div className="mb-3 border-b border-border pb-3">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Amenities</p>
+            <div className="flex flex-wrap gap-1.5">
+              {amenityTypes.data?.amenities.map((a) => {
+                const active = activeAmenities.includes(a.key);
+                return (
+                  <button
+                    key={a.key}
+                    type="button"
+                    onClick={() => setActiveAmenities((cur) =>
+                      cur.includes(a.key) ? cur.filter((k) => k !== a.key) : [...cur, a.key])}
+                    className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                      active ? "text-white" : "border-border bg-card text-muted-foreground hover:bg-muted"
+                    }`}
+                    style={active ? { background: a.color, borderColor: a.color } : undefined}
+                  >
+                    <span>{AMENITY_EMOJI[a.key] ?? "📍"}</span>{a.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {/* Display controls */}
         {onNearbyBusRadiusChange && (
           <div className="mb-3 border-b border-border pb-3">

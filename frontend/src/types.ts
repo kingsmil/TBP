@@ -419,6 +419,19 @@ export interface RecommendResult {
   comparison: BtoResaleCompare | null;
 }
 
+export interface AmenityType {
+  key: string;
+  label: string;
+  color: string;
+}
+
+export interface AmenityPoi {
+  name: string;
+  lat: number;
+  lon: number;
+  address: string;
+}
+
 // --- HomeOS Agent ---
 export interface HomeOSPreferences {
   flat_type: string | null;

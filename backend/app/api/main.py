@@ -75,6 +75,7 @@ from app.analysis import appreciation_rankings as appreciation_rankings_svc
 from app.services import bto as bto_svc
 from app.services import bto_compare as bto_compare_svc
 from app.services import recommend_path as recommend_path_svc
+from app.services import amenities as amenities_svc
 from app.services.search import search_blocks
 from app.services.undervalued import detect_undervalued
 
@@ -609,6 +610,21 @@ def bto_trends():
     if engine is None:
         raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
     return bto_svc.trends(engine)
+
+
+@app.get("/amenities")
+def amenities_list():
+    """Available amenity layers (drives the map's toggle chips)."""
+    return {"amenities": amenities_svc.list_amenities()}
+
+
+@app.get("/amenities/{key}")
+def amenities_points(key: str, repo: Repository = Depends(get_repository)):
+    """POIs for one amenity layer (schools from our data; rest via OneMap)."""
+    data = amenities_svc.amenities(repo, key)
+    if data is None:
+        raise HTTPException(status_code=404, detail="unknown amenity")
+    return {"key": key, "count": len(data), "results": data}
 
 
 @app.get("/compare/options")

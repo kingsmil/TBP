@@ -66,6 +66,7 @@ vi.mock("./lib/api", () => ({
   getBtoExercises: vi.fn(async () => ({ results: [] })),
   getBtoTrends: vi.fn(async () => ({ overall: [], by_flat_type: [], exercise_count: 0 })),
   getBtoExercise: vi.fn(async () => ({ exercise: null, rates: [], estates: [] })),
+  getBtoPriceTrends: vi.fn(async () => ({ years: [], by_room_type: [], towns: [], room_types: [] })),
   geocodeAddress: vi.fn(async () => ({ results: [] })),
   getHomeOSCaseFile: vi.fn(),
   getRecommendations: vi.fn(),

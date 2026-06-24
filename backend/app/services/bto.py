@@ -76,3 +76,52 @@ def trends(engine) -> dict:
 
     return {"overall": overall, "by_flat_type": by_flat_type,
             "exercise_count": len(exercises)}
+
+
+def price_ranges(engine, town: str | None = None, room_type: str | None = None) -> list[dict]:
+    from sqlalchemy import text
+    sql = "SELECT * FROM bto_price_ranges"
+    where, params = [], {}
+    if town:
+        where.append("town = :town"); params["town"] = town
+    if room_type:
+        where.append("room_type = :rt"); params["rt"] = room_type
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY financial_year, town, room_type"
+    with engine.connect() as conn:
+        rows = conn.execute(text(sql), params).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def price_trends(engine, town: str | None = None) -> dict:
+    """Midpoint selling price per financial year, by room type (avg across towns
+    unless a town is given). Plus the available towns / room types for filters."""
+    from sqlalchemy import text
+    sql = """
+        SELECT financial_year, room_type,
+               AVG((min_selling_price + max_selling_price) / 2.0) AS mid
+        FROM bto_price_ranges
+        WHERE min_selling_price IS NOT NULL AND max_selling_price IS NOT NULL
+    """
+    params: dict = {}
+    if town:
+        sql += " AND town = :town"; params["town"] = town
+    sql += " GROUP BY financial_year, room_type ORDER BY financial_year"
+    with engine.connect() as conn:
+        rows = conn.execute(text(sql), params).mappings().all()
+        towns = [r[0] for r in conn.execute(text(
+            "SELECT DISTINCT town FROM bto_price_ranges ORDER BY town")).all()]
+        room_types = [r[0] for r in conn.execute(text(
+            "SELECT DISTINCT room_type FROM bto_price_ranges ORDER BY room_type")).all()]
+
+    years = sorted({r["financial_year"] for r in rows})
+    by_rt: dict[str, dict[int, float]] = {}
+    for r in rows:
+        by_rt.setdefault(r["room_type"], {})[r["financial_year"]] = round(float(r["mid"]))
+    by_room_type = [{
+        "room_type": rt,
+        "series": [{"financial_year": y, "mid": by_rt[rt].get(y)} for y in years],
+    } for rt in sorted(by_rt.keys())]
+    return {"years": years, "by_room_type": by_room_type,
+            "towns": towns, "room_types": room_types}

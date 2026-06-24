@@ -99,6 +99,12 @@ def _refresh_bto() -> None:
     if exercises:
         bto.persist(engine, exercises)
         log.info("Auto-refreshed BTO data: %d exercise(s).", len(exercises))
+    try:
+        prices = bto.fetch_price_ranges()
+        bto.persist_price_ranges(engine, prices)
+        log.info("Auto-refreshed BTO price ranges: %d row(s).", len(prices))
+    except Exception as exc:
+        log.warning("BTO price-range refresh failed: %s", exc)
 
 
 async def _loop() -> None:

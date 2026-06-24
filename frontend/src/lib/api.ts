@@ -32,6 +32,7 @@ import type {
   BtoExercise,
   BtoExerciseDetail,
   BtoTrends,
+  BtoPriceTrends,
   ScoreField,
   ScoreRankingResponse,
   SearchFilters,
@@ -262,6 +263,9 @@ export function getBtoTrends(): Promise<BtoTrends> {
 }
 export function getBtoExercise(id: string): Promise<BtoExerciseDetail> {
   return getJSON<BtoExerciseDetail>(`/bto/exercises/${id}`);
+}
+export function getBtoPriceTrends(town?: string): Promise<BtoPriceTrends> {
+  return getJSON<BtoPriceTrends>(`/bto/price-trends${town ? `?town=${encodeURIComponent(town)}` : ""}`);
 }
 
 // --- Appreciation rankings (precomputed) ---

@@ -366,6 +366,24 @@ export interface BtoTrends {
   exercise_count: number;
 }
 
+export interface BtoPriceTrends {
+  years: number[];
+  by_room_type: { room_type: string; series: { financial_year: number; mid: number | null }[] }[];
+  towns: string[];
+  room_types: string[];
+}
+
+export interface BtoPriceRow {
+  id: number;
+  financial_year: number;
+  town: string;
+  room_type: string;
+  min_selling_price: number | null;
+  max_selling_price: number | null;
+  min_price_less_grant: number | null;
+  max_price_less_grant: number | null;
+}
+
 // --- HomeOS Agent ---
 export interface HomeOSPreferences {
   flat_type: string | null;

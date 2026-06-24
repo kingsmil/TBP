@@ -608,6 +608,24 @@ def bto_trends():
     return bto_svc.trends(engine)
 
 
+@app.get("/bto/price-trends")
+def bto_price_trends(town: str | None = None):
+    """BTO selling-price midpoint per financial year, by room type."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    return bto_svc.price_trends(engine, town)
+
+
+@app.get("/bto/price-ranges")
+def bto_price_ranges(town: str | None = None, room_type: str | None = None):
+    """Raw BTO price-range rows (financial year / town / room type)."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    return {"results": bto_svc.price_ranges(engine, town, room_type)}
+
+
 @app.get("/bto/exercises/{exercise_id}")
 def bto_exercise_detail(exercise_id: str):
     """One exercise: flat supply, applications and rates by estate + flat type."""

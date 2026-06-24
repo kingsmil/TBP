@@ -142,9 +142,72 @@ def persist(engine, exercises: list[tuple[dict, list[dict]]]) -> None:
                 """), rows)
 
 
+# ── BTO selling-price ranges (data.gov.sg collection 177) ─────────────────────
+
+PRICE_RESOURCE_ID = "d_2d493bdcc1d9a44828b6e71cb095b88d"
+_DATASTORE = "https://data.gov.sg/api/action/datastore_search"
+
+
+def _to_int(v) -> int | None:
+    try:
+        n = int(float(v))
+        return n if n > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def fetch_price_ranges(resource_id: str = PRICE_RESOURCE_ID) -> list[dict]:
+    """Fetch all BTO price-range records from data.gov.sg (paged)."""
+    import requests
+    rows: list[dict] = []
+    offset, limit = 0, 1000
+    while True:
+        r = requests.get(_DATASTORE, params={"resource_id": resource_id,
+                                             "limit": limit, "offset": offset},
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        if r.status_code != 200:
+            break
+        result = (r.json() or {}).get("result") or {}
+        recs = result.get("records") or []
+        for rec in recs:
+            fy = _to_int(rec.get("financial_year"))
+            if fy is None or not rec.get("town") or not rec.get("room_type"):
+                continue
+            rows.append({
+                "financial_year": fy,
+                "town": rec["town"].strip(),
+                "room_type": rec["room_type"].strip(),
+                "min_selling_price": _to_int(rec.get("min_selling_price")),
+                "max_selling_price": _to_int(rec.get("max_selling_price")),
+                "min_price_less_grant": _to_int(rec.get("min_selling_price_less_ahg_shg")),
+                "max_price_less_grant": _to_int(rec.get("max_selling_price_less_ahg_shg")),
+            })
+        if len(recs) < limit:
+            break
+        offset += limit
+    return rows
+
+
+def persist_price_ranges(engine, rows: list[dict]) -> None:
+    from sqlalchemy import text
+    if not rows:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM bto_price_ranges"))
+        conn.execute(text("""
+            INSERT INTO bto_price_ranges
+              (financial_year, town, room_type, min_selling_price, max_selling_price,
+               min_price_less_grant, max_price_less_grant)
+            VALUES
+              (:financial_year, :town, :room_type, :min_selling_price, :max_selling_price,
+               :min_price_less_grant, :max_price_less_grant)
+            ON CONFLICT (financial_year, town, room_type) DO NOTHING
+        """), rows)
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    parser = argparse.ArgumentParser(description="Ingest HDB BTO application rates")
+    parser = argparse.ArgumentParser(description="Ingest HDB BTO data")
     parser.add_argument("--months-back", type=int, default=48,
                         help="How many months back to probe for exercises (default 48)")
     args = parser.parse_args()
@@ -157,13 +220,18 @@ def main() -> int:
 
     log.info("Discovering BTO exercises (last %d months)...", args.months_back)
     exercises = discover_exercises(args.months_back)
-    if not exercises:
+    if exercises:
+        persist(engine, exercises)
+        log.info("Stored %d BTO exercise(s): %s", len(exercises),
+                 ", ".join(s["exercise_id"] for s, _ in exercises))
+    else:
         log.warning("No BTO exercises found.")
-        return 1
-    persist(engine, exercises)
-    log.info("Stored %d BTO exercise(s): %s", len(exercises),
-             ", ".join(s["exercise_id"] for s, _ in exercises))
-    return 0
+
+    log.info("Fetching BTO price ranges...")
+    prices = fetch_price_ranges()
+    persist_price_ranges(engine, prices)
+    log.info("Stored %d BTO price-range row(s).", len(prices))
+    return 0 if (exercises or prices) else 1
 
 
 if __name__ == "__main__":

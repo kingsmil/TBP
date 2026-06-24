@@ -63,6 +63,9 @@ vi.mock("./lib/api", () => ({
   rankByScore: vi.fn(async () => ({ count: 0, results: [], fields: [], weights: {} })),
   getRegionRankings: vi.fn(async () => ({ count: 0, results: [], computed_at: null })),
   getBlockRankings: vi.fn(async () => ({ count: 0, results: [], computed_at: null })),
+  getBtoExercises: vi.fn(async () => ({ results: [] })),
+  getBtoTrends: vi.fn(async () => ({ overall: [], by_flat_type: [], exercise_count: 0 })),
+  getBtoExercise: vi.fn(async () => ({ exercise: null, rates: [], estates: [] })),
   geocodeAddress: vi.fn(async () => ({ results: [] })),
   getHomeOSCaseFile: vi.fn(),
   getRecommendations: vi.fn(),
@@ -132,6 +135,8 @@ describe("App", () => {
       "hdb_user",
       JSON.stringify({ email: "pro@example.com", is_subscribed: true }),
     );
+    // These tests exercise the resale product; skip the BTO/Resale chooser.
+    window.localStorage.setItem("hdb-product", "resale");
     document.documentElement.classList.remove("dark");
   });
 
@@ -202,6 +207,7 @@ describe("App", () => {
   it("opens the sign-in modal from Explore mode", async () => {
     // Logged-out visitor lands directly in Explore mode with a Sign in button.
     window.localStorage.clear();
+    window.localStorage.setItem("hdb-product", "resale");
     renderApp();
 
     await waitFor(() => screen.getByRole("button", { name: /^sign in$/i }));

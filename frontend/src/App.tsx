@@ -18,6 +18,7 @@ import {
   MonitorCog,
   ListOrdered,
   Info,
+  ChevronDown,
 } from "lucide-react";
 import CasesPanel from "./components/CasesPanel";
 import DirectTransitFilter from "./components/DirectTransitFilter";
@@ -33,6 +34,8 @@ import PipelinePanel from "./components/PipelinePanel";
 import PsfTrendChart from "./components/PsfTrendChart";
 import ScoreRankingPanel from "./components/ScoreRankingPanel";
 import InfoPanel from "./components/InfoPanel";
+import ProductChooser from "./components/ProductChooser";
+import BtoDashboard from "./components/BtoDashboard";
 import StatCard from "./components/StatCard";
 import AuthModal from "./components/AuthModal";
 import UpgradeModal from "./components/UpgradeModal";
@@ -95,6 +98,16 @@ export default function App() {
   const [mode, setMode] = useState<Mode>(() =>
     AI_MODE_ENABLED && getStoredUser()?.is_subscribed ? "ai" : "explore",
   );
+
+  // Top-level product choice: resale / bto / unsure (the chooser).
+  const [product, setProductState] = useState<"resale" | "bto" | "unsure">(() => {
+    const saved = window.localStorage.getItem("hdb-product");
+    return saved === "resale" || saved === "bto" ? saved : "unsure";
+  });
+  const setProduct = useCallback((p: "resale" | "bto" | "unsure") => {
+    setProductState(p);
+    try { window.localStorage.setItem("hdb-product", p); } catch { /* ignore */ }
+  }, []);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = window.localStorage.getItem("hdb-match-theme");
     if (saved === "light" || saved === "dark") return saved;
@@ -485,6 +498,20 @@ export default function App() {
     </button>
   );
 
+  // ── Product gate: chooser / BTO before the resale (explore) product ───
+  if (product === "unsure") {
+    return <ProductChooser onSelect={setProduct} />;
+  }
+  if (product === "bto") {
+    return (
+      <BtoDashboard
+        onBack={() => setProduct("unsure")}
+        theme={theme}
+        onToggleTheme={() => setTheme((c) => (c === "light" ? "dark" : "light"))}
+      />
+    );
+  }
+
   // ── Explore mode — 2-column (behaviour unchanged) ─────────────────────
   if (mode === "explore") {
     return (
@@ -533,7 +560,18 @@ export default function App() {
                     </p>
                   </div>
                 </div>
-                {themeButton}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProduct("unsure")}
+                    title="Switch between BTO and Resale"
+                    className="flex h-9 items-center gap-1 rounded-lg border border-border bg-muted/50 px-2.5 text-[11px] font-semibold text-foreground hover:bg-muted"
+                  >
+                    Resale
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                  {themeButton}
+                </div>
                 </div>
                 {AI_MODE_ENABLED && (
                   <div className="mt-4 grid grid-cols-2 gap-2">

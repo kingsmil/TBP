@@ -71,6 +71,7 @@ from app.services.lifestyle import block_lifestyle
 from app.services.recommendation import recommend
 from app.services import score_ranking as score_ranking_svc
 from app.analysis import appreciation_rankings as appreciation_rankings_svc
+from app.services import bto as bto_svc
 from app.services.search import search_blocks
 from app.services.undervalued import detect_undervalued
 
@@ -587,6 +588,36 @@ def score_ranking(req: ScoreRankingRequest,
     provider = get_commute_provider() if dests else None
     return score_ranking_svc.rank(repo, weights=req.weights, provider=provider,
                                   destinations=dests, limit=req.limit)
+
+
+@app.get("/bto/exercises")
+def bto_exercises():
+    """All BTO sales exercises with summary (units, applicants, overall rate)."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    return {"results": bto_svc.list_exercises(engine)}
+
+
+@app.get("/bto/trends")
+def bto_trends():
+    """Subscription trend across exercises (overall + per flat type)."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    return bto_svc.trends(engine)
+
+
+@app.get("/bto/exercises/{exercise_id}")
+def bto_exercise_detail(exercise_id: str):
+    """One exercise: flat supply, applications and rates by estate + flat type."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    data = bto_svc.exercise_detail(engine, exercise_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="exercise not found")
+    return data
 
 
 @app.get("/rankings/regions")

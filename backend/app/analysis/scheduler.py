@@ -77,6 +77,30 @@ def _rebuild() -> None:
                  len(blocks), len(regions))
 
 
+def _bto_age_days(engine) -> float | None:
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        ts = conn.execute(text("SELECT MAX(fetched_at) FROM bto_exercises")).scalar()
+    if ts is None:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - ts).total_seconds() / 86400.0
+
+
+def _refresh_bto() -> None:
+    """Synchronous BTO ingest — runs in a worker thread."""
+    from app.api.deps import get_engine_or_none
+    from app.data import bto
+    engine = get_engine_or_none()
+    if engine is None:
+        return
+    exercises = bto.discover_exercises()
+    if exercises:
+        bto.persist(engine, exercises)
+        log.info("Auto-refreshed BTO data: %d exercise(s).", len(exercises))
+
+
 async def _loop() -> None:
     from app.api.deps import get_engine_or_none
     while True:
@@ -88,6 +112,14 @@ async def _loop() -> None:
                     log.info("Appreciation rankings %s — rebuilding in background…",
                              "missing" if age is None else f"are {age:.0f} days old")
                     await asyncio.to_thread(_rebuild)
+                try:
+                    bto_age = _bto_age_days(engine)
+                    if bto_age is None or bto_age >= _stale_days():
+                        log.info("BTO data %s — refreshing in background…",
+                                 "missing" if bto_age is None else f"is {bto_age:.0f} days old")
+                        await asyncio.to_thread(_refresh_bto)
+                except Exception as exc:
+                    log.warning("BTO refresh check failed: %s", exc)
         except Exception as exc:  # never let the loop die
             log.warning("Ranking refresh check failed: %s", exc)
         await asyncio.sleep(CHECK_INTERVAL_S)

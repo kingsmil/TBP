@@ -324,6 +324,48 @@ export interface RankingsResponse<T> {
   computed_at: string | null;
 }
 
+// --- BTO ---
+export interface BtoExercise {
+  exercise_id: string;
+  label: string;
+  launch_start_date: string | null;
+  launch_end_date: string | null;
+  is_final_update: boolean;
+  estate_count: number;
+  total_units: number;
+  total_applicants: number;
+  overall_app_rate: number | null;
+  fetched_at: string;
+}
+
+export interface BtoRate {
+  id: number;
+  exercise_id: string;
+  estate_name: string;
+  flat_type: string;
+  classification: string | null;
+  project_names: string | null;
+  flat_supply: number;
+  total_applicant_no: number;
+  overall_rate: number | null;
+  rate_first_time_fam: number | null;
+  rate_second_time_fam: number | null;
+  rate_first_time_singles: number | null;
+  rate_elderly: number | null;
+}
+
+export interface BtoExerciseDetail {
+  exercise: BtoExercise;
+  rates: BtoRate[];
+  estates: { estate_name: string; flat_types: BtoRate[] }[];
+}
+
+export interface BtoTrends {
+  overall: { exercise_id: string; label: string; overall_app_rate: number | null; total_units: number; total_applicants: number }[];
+  by_flat_type: { flat_type: string; series: { exercise_id: string; label: string; rate: number | null }[] }[];
+  exercise_count: number;
+}
+
 // --- HomeOS Agent ---
 export interface HomeOSPreferences {
   flat_type: string | null;

@@ -29,6 +29,9 @@ import type {
   RecommendationResponse,
   RegionRankingRow,
   BlockRankingRow,
+  BtoExercise,
+  BtoExerciseDetail,
+  BtoTrends,
   ScoreField,
   ScoreRankingResponse,
   SearchFilters,
@@ -248,6 +251,17 @@ export function rankByScore(body: {
   limit?: number;
 }): Promise<ScoreRankingResponse> {
   return postJSON<ScoreRankingResponse>("/score-ranking", body);
+}
+
+// --- BTO ---
+export function getBtoExercises(): Promise<{ results: BtoExercise[] }> {
+  return getJSON<{ results: BtoExercise[] }>("/bto/exercises");
+}
+export function getBtoTrends(): Promise<BtoTrends> {
+  return getJSON<BtoTrends>("/bto/trends");
+}
+export function getBtoExercise(id: string): Promise<BtoExerciseDetail> {
+  return getJSON<BtoExerciseDetail>(`/bto/exercises/${id}`);
 }
 
 // --- Appreciation rankings (precomputed) ---

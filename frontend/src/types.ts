@@ -384,6 +384,27 @@ export interface BtoPriceRow {
   max_price_less_grant: number | null;
 }
 
+export interface CompareOptions {
+  towns: string[];
+  flat_types: string[];
+}
+
+export interface BtoResaleCompare {
+  town: string;
+  flat_type: string;
+  bto: {
+    available: boolean; latest_year: number | null;
+    min_price: number | null; max_price: number | null; mid_price: number | null;
+    app_rate: number | null; wait_years: string;
+  };
+  resale: {
+    available: boolean; median_price: number | null; median_psf: number | null;
+    txn_count: number; cagr_pct: number | null; wait_years: string;
+  };
+  gap: { price_diff: number | null; price_pct: number | null; annual_saving: number | null };
+  price_series: { year: number; bto: number | null; resale: number | null }[];
+}
+
 // --- HomeOS Agent ---
 export interface HomeOSPreferences {
   flat_type: string | null;

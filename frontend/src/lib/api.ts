@@ -33,6 +33,8 @@ import type {
   BtoExerciseDetail,
   BtoTrends,
   BtoPriceTrends,
+  CompareOptions,
+  BtoResaleCompare,
   ScoreField,
   ScoreRankingResponse,
   SearchFilters,
@@ -266,6 +268,13 @@ export function getBtoExercise(id: string): Promise<BtoExerciseDetail> {
 }
 export function getBtoPriceTrends(town?: string): Promise<BtoPriceTrends> {
   return getJSON<BtoPriceTrends>(`/bto/price-trends${town ? `?town=${encodeURIComponent(town)}` : ""}`);
+}
+export function getCompareOptions(): Promise<CompareOptions> {
+  return getJSON<CompareOptions>("/compare/options");
+}
+export function getBtoResaleCompare(town: string, flatType: string): Promise<BtoResaleCompare> {
+  return getJSON<BtoResaleCompare>(
+    `/compare/bto-resale?town=${encodeURIComponent(town)}&flat_type=${encodeURIComponent(flatType)}`);
 }
 
 // --- Appreciation rankings (precomputed) ---

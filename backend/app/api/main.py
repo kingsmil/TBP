@@ -72,6 +72,7 @@ from app.services.recommendation import recommend
 from app.services import score_ranking as score_ranking_svc
 from app.analysis import appreciation_rankings as appreciation_rankings_svc
 from app.services import bto as bto_svc
+from app.services import bto_compare as bto_compare_svc
 from app.services.search import search_blocks
 from app.services.undervalued import detect_undervalued
 
@@ -606,6 +607,25 @@ def bto_trends():
     if engine is None:
         raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
     return bto_svc.trends(engine)
+
+
+@app.get("/compare/options")
+def compare_options(repo: Repository = Depends(get_repository)):
+    """Towns + flat types available for the BTO-vs-resale comparison."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Comparison requires PostGIS")
+    return bto_compare_svc.options(repo, engine)
+
+
+@app.get("/compare/bto-resale")
+def compare_bto_resale(town: str, flat_type: str,
+                       repo: Repository = Depends(get_repository)):
+    """BTO vs resale for one town + flat type: price gap, ballot odds, trend."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Comparison requires PostGIS")
+    return bto_compare_svc.compare(repo, engine, town, flat_type)
 
 
 @app.get("/bto/price-trends")

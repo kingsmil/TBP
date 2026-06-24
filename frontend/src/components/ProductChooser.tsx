@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Building2, KeyRound, HelpCircle, Check } from "lucide-react";
+import { Building2, KeyRound, HelpCircle } from "lucide-react";
+import BtoResaleCompare from "./BtoResaleCompare";
 
 interface Props {
   onSelect: (product: "resale" | "bto") => void;
@@ -57,29 +58,31 @@ export default function ProductChooser({ onSelect }: Props) {
         </button>
 
         {showCompare && (
-          <div className="mt-3 overflow-hidden rounded-xl border border-border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/50 text-left">
-                  <th className="px-4 py-2 font-medium text-muted-foreground"></th>
-                  <th className="px-4 py-2 font-semibold">BTO</th>
-                  <th className="px-4 py-2 font-semibold">Resale</th>
-                </tr>
-              </thead>
-              <tbody>
-                {COMPARE.map((row) => (
-                  <tr key={row.label} className="border-t border-border">
-                    <td className="px-4 py-2 font-medium text-muted-foreground">{row.label}</td>
-                    <td className="px-4 py-2">{row.bto}</td>
-                    <td className="px-4 py-2">{row.resale}</td>
+          <div className="mt-3 space-y-5">
+            <div className="overflow-hidden rounded-xl border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/50 text-left">
+                    <th className="px-4 py-2 font-medium text-muted-foreground"></th>
+                    <th className="px-4 py-2 font-semibold">BTO</th>
+                    <th className="px-4 py-2 font-semibold">Resale</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="flex flex-wrap gap-2 border-t border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-              <Check className="h-4 w-4 text-emerald-600" />
-              Want it cheaper and can wait? Try <button className="font-semibold text-primary hover:underline" onClick={() => onSelect("bto")}>BTO</button>.
-              Need to move soon or want a specific location? Try <button className="font-semibold text-primary hover:underline" onClick={() => onSelect("resale")}>Resale</button>.
+                </thead>
+                <tbody>
+                  {COMPARE.map((row) => (
+                    <tr key={row.label} className="border-t border-border">
+                      <td className="px-4 py-2 font-medium text-muted-foreground">{row.label}</td>
+                      <td className="px-4 py-2">{row.bto}</td>
+                      <td className="px-4 py-2">{row.resale}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <h2 className="text-base font-semibold">See the real numbers</h2>
+              <p className="mb-3 text-xs text-muted-foreground">Pick a town &amp; flat type to compare actual BTO and resale prices.</p>
+              <BtoResaleCompare onSelect={onSelect} />
             </div>
           </div>
         )}

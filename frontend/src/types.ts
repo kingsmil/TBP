@@ -253,6 +253,185 @@ export interface RecommendationResponse {
   }[];
 }
 
+// --- Score Ranking ---
+export interface ScoreField {
+  key: string;
+  label: string;
+  description: string;
+  default_weight: number;
+  needs_destinations: boolean;
+  coming_soon: boolean;
+}
+
+export interface ScoreRankingRow {
+  block_id: number;
+  block_number: string;
+  street_name: string;
+  town: string;
+  planning_area_id: number | null;
+  lon: number;
+  lat: number;
+  overall_score: number;
+  breakdown: Record<string, number>;
+  rank: number;
+}
+
+export interface ScoreRankingResponse {
+  count: number;
+  results: ScoreRankingRow[];
+  fields: ScoreField[];
+  weights: Record<string, number>;
+}
+
+// --- Appreciation rankings ---
+export interface RegionRankingRow {
+  planning_area_id: number;
+  name: string | null;
+  region: string | null;
+  rank: number;
+  appreciation_score: number | null;
+  cagr_pct: number | null;
+  median_psf_start: number | null;
+  median_psf_end: number | null;
+  year_start: number | null;
+  year_end: number | null;
+  txn_count: number;
+  block_count: number;
+  computed_at: string;
+}
+
+export interface BlockRankingRow {
+  block_id: number;
+  planning_area_id: number | null;
+  planning_area_name: string | null;
+  block_number: string | null;
+  street_name: string | null;
+  town: string | null;
+  lat: number | null;
+  lon: number | null;
+  rank: number;
+  region_rank: number | null;
+  appreciation_score: number | null;
+  cagr_pct: number | null;
+  year_start: number | null;
+  year_end: number | null;
+  txn_count: number;
+}
+
+export interface RankingsResponse<T> {
+  count: number;
+  results: T[];
+  computed_at: string | null;
+}
+
+// --- BTO ---
+export interface BtoExercise {
+  exercise_id: string;
+  label: string;
+  launch_start_date: string | null;
+  launch_end_date: string | null;
+  is_final_update: boolean;
+  estate_count: number;
+  total_units: number;
+  total_applicants: number;
+  overall_app_rate: number | null;
+  fetched_at: string;
+}
+
+export interface BtoRate {
+  id: number;
+  exercise_id: string;
+  estate_name: string;
+  flat_type: string;
+  classification: string | null;
+  project_names: string | null;
+  flat_supply: number;
+  total_applicant_no: number;
+  overall_rate: number | null;
+  rate_first_time_fam: number | null;
+  rate_second_time_fam: number | null;
+  rate_first_time_singles: number | null;
+  rate_elderly: number | null;
+}
+
+export interface BtoExerciseDetail {
+  exercise: BtoExercise;
+  rates: BtoRate[];
+  estates: { estate_name: string; flat_types: BtoRate[] }[];
+}
+
+export interface BtoTrends {
+  overall: { exercise_id: string; label: string; overall_app_rate: number | null; total_units: number; total_applicants: number }[];
+  by_flat_type: { flat_type: string; series: { exercise_id: string; label: string; rate: number | null }[] }[];
+  exercise_count: number;
+}
+
+export interface BtoPriceTrends {
+  years: number[];
+  by_room_type: { room_type: string; series: { financial_year: number; mid: number | null }[] }[];
+  towns: string[];
+  room_types: string[];
+}
+
+export interface BtoPriceRow {
+  id: number;
+  financial_year: number;
+  town: string;
+  room_type: string;
+  min_selling_price: number | null;
+  max_selling_price: number | null;
+  min_price_less_grant: number | null;
+  max_price_less_grant: number | null;
+}
+
+export interface CompareOptions {
+  towns: string[];
+  flat_types: string[];
+}
+
+export interface BtoResaleCompare {
+  town: string;
+  flat_type: string;
+  bto: {
+    available: boolean; latest_year: number | null;
+    min_price: number | null; max_price: number | null; mid_price: number | null;
+    app_rate: number | null; wait_years: string;
+  };
+  resale: {
+    available: boolean; median_price: number | null; median_psf: number | null;
+    txn_count: number; cagr_pct: number | null; wait_years: string;
+  };
+  gap: { price_diff: number | null; price_pct: number | null; annual_saving: number | null };
+  price_series: { year: number; bto: number | null; resale: number | null }[];
+}
+
+export interface RecommendQuestion {
+  id: string;
+  label: string;
+  options: { value: string; label: string }[];
+}
+
+export interface RecommendResult {
+  recommendation: "bto" | "resale" | "either";
+  confidence: "strong" | "moderate" | "lean";
+  score: { bto: number; resale: number; net: number };
+  reasons: string[];
+  comparison: BtoResaleCompare | null;
+}
+
+export interface AmenityType {
+  key: string;
+  label: string;
+  color: string;
+}
+
+export interface AmenityPoi {
+  name: string;
+  lat: number;
+  lon: number;
+  address: string;
+}
+
 // --- HomeOS Agent ---
 export interface HomeOSPreferences {
   flat_type: string | null;

@@ -25,7 +25,22 @@ import type {
   HomeOSScheduleViewingResponse,
   LifestyleResult,
   NewsItem,
+  RankingsResponse,
   RecommendationResponse,
+  RegionRankingRow,
+  BlockRankingRow,
+  BtoExercise,
+  BtoExerciseDetail,
+  BtoTrends,
+  BtoPriceTrends,
+  CompareOptions,
+  BtoResaleCompare,
+  RecommendQuestion,
+  RecommendResult,
+  AmenityType,
+  AmenityPoi,
+  ScoreField,
+  ScoreRankingResponse,
   SearchFilters,
   SearchResponse,
   UndervaluedResponse,
@@ -115,6 +130,14 @@ export interface ReferenceFeatureCollection {
 
 export function getReferenceLayer(layer: string): Promise<ReferenceFeatureCollection> {
   return getJSON<ReferenceFeatureCollection>(`/reference/${layer}`);
+}
+
+// --- Amenities ---
+export function getAmenityTypes(): Promise<{ amenities: AmenityType[] }> {
+  return getJSON<{ amenities: AmenityType[] }>("/amenities");
+}
+export function getAmenities(key: string): Promise<{ key: string; count: number; results: AmenityPoi[] }> {
+  return getJSON<{ key: string; count: number; results: AmenityPoi[] }>(`/amenities/${key}`);
 }
 
 export interface BusReachStop {
@@ -230,6 +253,62 @@ export function getRecommendations(
   limit = 10,
 ): Promise<RecommendationResponse> {
   return postJSON<RecommendationResponse>("/recommendations", { destinations, limit });
+}
+
+// --- Score Ranking ---
+export function getScoreRankingFields(): Promise<{ fields: ScoreField[] }> {
+  return getJSON<{ fields: ScoreField[] }>("/score-ranking/fields");
+}
+
+export function rankByScore(body: {
+  weights: Record<string, number>;
+  destinations?: DestinationPayload[];
+  limit?: number;
+}): Promise<ScoreRankingResponse> {
+  return postJSON<ScoreRankingResponse>("/score-ranking", body);
+}
+
+// --- BTO ---
+export function getBtoExercises(): Promise<{ results: BtoExercise[] }> {
+  return getJSON<{ results: BtoExercise[] }>("/bto/exercises");
+}
+export function getBtoTrends(): Promise<BtoTrends> {
+  return getJSON<BtoTrends>("/bto/trends");
+}
+export function getBtoExercise(id: string): Promise<BtoExerciseDetail> {
+  return getJSON<BtoExerciseDetail>(`/bto/exercises/${id}`);
+}
+export function getBtoPriceTrends(town?: string): Promise<BtoPriceTrends> {
+  return getJSON<BtoPriceTrends>(`/bto/price-trends${town ? `?town=${encodeURIComponent(town)}` : ""}`);
+}
+export function getCompareOptions(): Promise<CompareOptions> {
+  return getJSON<CompareOptions>("/compare/options");
+}
+export function getRecommendQuestions(): Promise<{ questions: RecommendQuestion[] }> {
+  return getJSON<{ questions: RecommendQuestion[] }>("/compare/recommend/questions");
+}
+export function postRecommend(body: {
+  answers: Record<string, string>; town?: string; flat_type?: string;
+}): Promise<RecommendResult> {
+  return postJSON<RecommendResult>("/compare/recommend", body);
+}
+export function getBtoResaleCompare(town: string, flatType: string): Promise<BtoResaleCompare> {
+  return getJSON<BtoResaleCompare>(
+    `/compare/bto-resale?town=${encodeURIComponent(town)}&flat_type=${encodeURIComponent(flatType)}`);
+}
+
+// --- Appreciation rankings (precomputed) ---
+export function getRegionRankings(limit = 30): Promise<RankingsResponse<RegionRankingRow>> {
+  return getJSON<RankingsResponse<RegionRankingRow>>(`/rankings/regions?limit=${limit}`);
+}
+
+export function getBlockRankings(
+  limit = 30,
+  planningAreaId?: number,
+): Promise<RankingsResponse<BlockRankingRow>> {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  if (planningAreaId != null) qs.set("planning_area_id", String(planningAreaId));
+  return getJSON<RankingsResponse<BlockRankingRow>>(`/rankings/blocks?${qs}`);
 }
 
 // --- HomeOS Agent ---

@@ -1,8 +1,8 @@
 """Seed PostGIS with live HDB data from data.gov.sg + OneMap.
 
 Usage:
-    python -m app.data.seed_live              # last 24 months
-    python -m app.data.seed_live --months 12  # last 12 months
+    python -m app.data.seed_live              # last 120 months (10 years)
+    python -m app.data.seed_live --months 24  # last 24 months
 
 Requires:
     DATABASE_URL  — PostGIS connection string (set in .env)
@@ -21,20 +21,23 @@ log = logging.getLogger(__name__)
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Seed PostGIS with live HDB data")
-    parser.add_argument("--months", type=int, default=24,
-                        help="How many months of HDB transactions to fetch (default 24)")
+    parser.add_argument("--months", type=int, default=120,
+                        help="How many months of HDB transactions to fetch "
+                             "(default 120 = 10 years, for appreciation analysis)")
     args = parser.parse_args()
 
     database_url = os.environ.get("DATABASE_URL")
-    onemap_token = os.environ.get("ONEMAP_TOKEN")
+    from app.services.commute import onemap_auth
+    onemap_token = onemap_auth.current_token()  # static token or minted from creds
     datagov_api_key = os.environ.get("DATAGOV_API_KEY") or None
 
     if not database_url:
         log.error("DATABASE_URL not set — cannot seed PostGIS.")
         return 2
     if not onemap_token:
-        log.error("ONEMAP_TOKEN not set — required for geocoding block addresses.")
-        log.error("Get a free token at https://www.onemap.gov.sg/apidocs/")
+        log.error("OneMap not configured — required for geocoding block addresses.")
+        log.error("Set ONEMAP_EMAIL/ONEMAP_PASSWORD (or ONEMAP_TOKEN) in .env.")
+        log.error("Register free at https://www.onemap.gov.sg/apidocs/register")
         return 2
 
     log.info("Fetching live dataset (%d months)…", args.months)

@@ -16,6 +16,7 @@ import datetime as _dt
 import os
 
 from app.core.geo import Point
+from app.services.commute import onemap_auth
 from app.services.commute.models import CommuteResult
 from app.services.commute.provider import CommuteProvider
 
@@ -25,12 +26,20 @@ ROUTE_URL = "https://www.onemap.gov.sg/api/public/routingsvc/route"
 class OneMapCommuteProvider(CommuteProvider):
     def __init__(self, token: str | None = None, *, max_walk_m: int = 1000,
                  timeout: float = 10.0, cache: dict | None = None):
-        self._token = token or os.environ.get("ONEMAP_TOKEN")
-        if not self._token:
-            raise RuntimeError("ONEMAP_TOKEN not set")
+        # An explicit token pins this provider to it (tests / back-compat) and
+        # disables auto-refresh. Otherwise the token manager supplies one — a
+        # static ONEMAP_TOKEN or a token minted from ONEMAP_EMAIL/PASSWORD — and
+        # re-mints it before expiry and on a 401.
+        self._explicit_token = token or None
+        if self._explicit_token is None and not onemap_auth.available():
+            raise RuntimeError(
+                "No OneMap token: set ONEMAP_TOKEN, or ONEMAP_EMAIL/ONEMAP_PASSWORD")
         self._max_walk_m = max_walk_m
         self._timeout = timeout
         self._cache = cache if cache is not None else {}
+
+    def _auth(self) -> str | None:
+        return self._explicit_token or onemap_auth.current_token()
 
     @staticmethod
     def _key(origin: Point, dest: Point, mode: str) -> str:
@@ -57,8 +66,17 @@ class OneMapCommuteProvider(CommuteProvider):
         }
         resp = requests.get(
             ROUTE_URL, params=params,
-            headers={"Authorization": self._token}, timeout=self._timeout,
+            headers={"Authorization": self._auth()}, timeout=self._timeout,
         )
+        # Token expired/invalid: re-mint once and retry (only when the manager
+        # owns the token — an explicitly-pinned token is not auto-refreshed).
+        if resp.status_code == 401 and self._explicit_token is None:
+            new_token = onemap_auth.refresh()
+            if new_token:
+                resp = requests.get(
+                    ROUTE_URL, params=params,
+                    headers={"Authorization": new_token}, timeout=self._timeout,
+                )
         resp.raise_for_status()
         result = self._parse(resp.json(), origin, dest, mode)
         self._cache[cache_key] = result

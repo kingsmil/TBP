@@ -6,12 +6,18 @@ import { divIcon, type LatLngBoundsExpression } from "leaflet";
 import useSupercluster from "use-supercluster";
 import type { BlockSummary, DirectTransitDestination } from "../types";
 import { ACCESS_COLORS, formatDistance, formatPsf, formatSGD, mrtAccessClass } from "../lib/format";
-import { getBusStopReach, getReferenceLayer } from "../lib/api";
+import { getBusStopReach, getReferenceLayer, getAmenityTypes, getAmenities } from "../lib/api";
 import type { BusReachResponse } from "../lib/api";
+
+const AMENITY_EMOJI: Record<string, string> = {
+  schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",
+  sports: "⚽", community: "🏛️", library: "📚",
+};
 import { distanceMetres } from "../lib/geo";
 
+// Grey base map: mutes roads/highways so MRT/bus lines and amenity markers pop.
 const ONEMAP_TILES =
-  "https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png";
+  "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 
 // Max pan bounds — keeps user inside Singapore region
 const SG_BOUNDS: LatLngBoundsExpression = [
@@ -453,6 +459,8 @@ interface Props {
   onSelectBlock?: (blockId: number) => void;
   profileText?: string; // reserved for future case-file integration
   nearbyBusRadiusM?: number;
+  onNearbyBusRadiusChange?: (radiusM: number) => void;
+  hasSelectedProperty?: boolean;
   recommendationsOnly?: boolean;
   initialView?: MapViewState;
   onViewChange?: (view: MapViewState) => void;
@@ -467,6 +475,8 @@ export default function MapView({
   selectedBlockId,
   onSelectBlock,
   nearbyBusRadiusM = 0,
+  onNearbyBusRadiusChange,
+  hasSelectedProperty = false,
   recommendationsOnly = false,
   initialView = { center: SG_CENTER, zoom: 12 },
   onViewChange,
@@ -513,6 +523,19 @@ export default function MapView({
     queryFn: () => getBusStopReach(selectedBusStop!),
     enabled: busMode && selectedBusStop != null,
   });
+
+  // ── Amenity layers (schools, parks, hawker, …) ──────────────────────────────
+  const [activeAmenities, setActiveAmenities] = useState<string[]>([]);
+  const amenityTypes = useQuery({ queryKey: ["amenity-types"], queryFn: getAmenityTypes, staleTime: 6e5 });
+  const amenityQueries = useQueries({
+    queries: activeAmenities.map((key) => ({
+      queryKey: ["amenities", key],
+      queryFn: () => getAmenities(key),
+      staleTime: 6e5,
+    })),
+  });
+  const amenityColor = (key: string) =>
+    amenityTypes.data?.amenities.find((a) => a.key === key)?.color ?? "#475569";
   const displayedServices = busReach.data?.services.filter((service) =>
     activeBusService == null
       || `${service.service_no}-${service.direction}` === activeBusService
@@ -625,6 +648,27 @@ export default function MapView({
 
         {destinations.length > 0 && <DestinationMarkers destinations={destinations} />}
 
+        {!busMode && !nearbyRouteFocus && activeAmenities.length > 0 && (
+          <Pane name="amenities" style={{ zIndex: 560 }}>
+            {amenityQueries.map((q, i) => {
+              const key = activeAmenities[i];
+              const color = amenityColor(key);
+              const emoji = AMENITY_EMOJI[key] ?? "📍";
+              return (q.data?.results ?? []).map((poi, j) => (
+                <CircleMarker
+                  // biome-ignore lint/suspicious/noArrayIndexKey: stable per-layer order
+                  key={`${key}-${j}`}
+                  center={[poi.lat, poi.lon]}
+                  radius={5}
+                  pathOptions={{ pane: "amenities", color: "#ffffff", weight: 1.5, fillColor: color, fillOpacity: 0.95 }}
+                >
+                  <Tooltip direction="top" opacity={0.95}>{emoji} {poi.name}</Tooltip>
+                </CircleMarker>
+              ));
+            })}
+          </Pane>
+        )}
+
         {!busMode && !nearbyRouteFocus && !recommendationsOnly && (
           <ClusteredBlocks
             blocks={blocks}
@@ -656,11 +700,11 @@ export default function MapView({
               <Fragment key={`${service.service_no}-${service.direction}`}>
                 <Polyline
                   positions={positions}
-                  pathOptions={{ pane: "bus-routes", color: "#ffffff", weight: 9, opacity: 0.9 }}
+                  pathOptions={{ pane: "bus-routes", color: "#ffffff", weight: 7, opacity: 0.85, dashArray: "9 8", lineCap: "round" }}
                 />
                 <Polyline
                   positions={positions}
-                  pathOptions={{ pane: "bus-routes", color, weight: 6, opacity: 0.95 }}
+                  pathOptions={{ pane: "bus-routes", color, weight: 4, opacity: 0.95, dashArray: "9 8", lineCap: "round" }}
                 >
                   <Tooltip sticky opacity={0.95}>
                     Bus {service.service_no}, direction {service.direction}
@@ -680,12 +724,12 @@ export default function MapView({
                 <Polyline
                   positions={positions}
                   interactive={false}
-                  pathOptions={{ pane: "nearby-bus-routes", color: "#ffffff", weight: 7, opacity: 0.75 }}
+                  pathOptions={{ pane: "nearby-bus-routes", color: "#ffffff", weight: 5.5, opacity: 0.7, dashArray: "8 7", lineCap: "round" }}
                 />
                 <Polyline
                   positions={positions}
                   interactive={false}
-                  pathOptions={{ pane: "nearby-bus-routes", color, weight: 4, opacity: 0.9 }}
+                  pathOptions={{ pane: "nearby-bus-routes", color, weight: 3, opacity: 0.9, dashArray: "8 7", lineCap: "round" }}
                 />
               </Fragment>
             );
@@ -699,12 +743,12 @@ export default function MapView({
                 <Polyline
                   positions={positions}
                   interactive={false}
-                  pathOptions={{ pane: "nearby-bus-routes", color: "#ffffff", weight: 9, opacity: 0.8 }}
+                  pathOptions={{ pane: "nearby-bus-routes", color: "#ffffff", weight: 11, opacity: 0.9, lineCap: "round", lineJoin: "round" }}
                 />
                 <Polyline
                   positions={positions}
                   interactive={false}
-                  pathOptions={{ pane: "nearby-bus-routes", color, weight: 6, opacity: 0.95 }}
+                  pathOptions={{ pane: "nearby-bus-routes", color, weight: 7, opacity: 1, lineCap: "round", lineJoin: "round" }}
                 />
               </Fragment>
             );
@@ -928,7 +972,64 @@ export default function MapView({
         </div>
       )}
 
-      {!busMode && !nearbyRouteFocus && <div className="absolute bottom-6 right-3 z-[1000] rounded-xl border border-border bg-card/90 p-3 shadow-md backdrop-blur-sm">
+      {!busMode && !nearbyRouteFocus && <div className="absolute bottom-6 right-3 z-[1000] max-h-[70vh] w-56 overflow-y-auto rounded-xl border border-border bg-card/90 p-3 shadow-md backdrop-blur-sm">
+        {/* Amenities */}
+        {(amenityTypes.data?.amenities.length ?? 0) > 0 && (
+          <div className="mb-3 border-b border-border pb-3">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Amenities</p>
+            <div className="flex flex-wrap gap-1.5">
+              {amenityTypes.data?.amenities.map((a) => {
+                const active = activeAmenities.includes(a.key);
+                return (
+                  <button
+                    key={a.key}
+                    type="button"
+                    onClick={() => setActiveAmenities((cur) =>
+                      cur.includes(a.key) ? cur.filter((k) => k !== a.key) : [...cur, a.key])}
+                    className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                      active ? "text-white" : "border-border bg-card text-muted-foreground hover:bg-muted"
+                    }`}
+                    style={active ? { background: a.color, borderColor: a.color } : undefined}
+                  >
+                    <span>{AMENITY_EMOJI[a.key] ?? "📍"}</span>{a.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {/* Display controls */}
+        {onNearbyBusRadiusChange && (
+          <div className="mb-3 border-b border-border pb-3">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Display
+            </p>
+            <label htmlFor="map-nearby-radius" className="block text-xs font-medium text-foreground">
+              Nearby transit radius
+            </label>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                id="map-nearby-radius"
+                type="number"
+                min={0}
+                max={2000}
+                step={50}
+                value={nearbyBusRadiusM}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  onNearbyBusRadiusChange(Number.isFinite(v) ? Math.min(2000, Math.max(0, v)) : 0);
+                }}
+                className="h-7 w-20 rounded border border-input bg-background px-2 text-xs"
+              />
+              <span className="text-[11px] text-muted-foreground">metres</span>
+            </div>
+            <p className="mt-1 text-[10px] leading-tight text-muted-foreground">
+              {hasSelectedProperty
+                ? "Bus & MRT routes near the selected property. 0 hides it."
+                : "Select a property to show its nearby transit routes."}
+            </p>
+          </div>
+        )}
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           MRT Access
         </p>
@@ -942,6 +1043,23 @@ export default function MapView({
               <span className="text-xs text-foreground">{label}</span>
             </div>
           ))}
+        </div>
+        <p className="mb-2 mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Lines
+        </p>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <svg width="20" height="8" className="shrink-0" aria-hidden>
+              <line x1="0" y1="4" x2="20" y2="4" stroke="#d42e12" strokeWidth="4" strokeLinecap="round" />
+            </svg>
+            <span className="text-xs text-foreground">MRT line (solid)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <svg width="20" height="8" className="shrink-0" aria-hidden>
+              <line x1="0" y1="4" x2="20" y2="4" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeDasharray="4 4" />
+            </svg>
+            <span className="text-xs text-foreground">Bus route (dashed)</span>
+          </div>
         </div>
       </div>}
     </div>

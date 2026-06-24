@@ -3,6 +3,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
+// These tests exercise the AI-mode experience, which ships behind a feature
+// flag (off by default). Enable it here so the AI surfaces render.
+vi.mock("./lib/featureFlags", () => ({ AI_MODE_ENABLED: true }));
+
 vi.mock("./components/MapView", () => ({
   default: ({
     selectedBlockId,
@@ -33,6 +37,10 @@ vi.mock("./lib/api", () => ({
     status: "done",
   })),
   getCases: vi.fn(async () => []),
+  getModels: vi.fn(async () => ({
+    models: [{ id: "openai/gpt-5.4-nano", name: "GPT-5.4 Nano", provider: "OpenAI" }],
+    default: "openai/gpt-5.4-nano",
+  })),
   getBlockListings: vi.fn(async () => ({ block_id: 1, count: 0, listings: [] })),
   getEstateAnalytics: vi.fn(async () => ({
     scope: "estate",
@@ -51,6 +59,19 @@ vi.mock("./lib/api", () => ({
     psf_by_flat_type: [],
   })),
   getEstateComparison: vi.fn(async () => ({ estates: [] })),
+  getScoreRankingFields: vi.fn(async () => ({ fields: [] })),
+  rankByScore: vi.fn(async () => ({ count: 0, results: [], fields: [], weights: {} })),
+  getRegionRankings: vi.fn(async () => ({ count: 0, results: [], computed_at: null })),
+  getBlockRankings: vi.fn(async () => ({ count: 0, results: [], computed_at: null })),
+  getBtoExercises: vi.fn(async () => ({ results: [] })),
+  getBtoTrends: vi.fn(async () => ({ overall: [], by_flat_type: [], exercise_count: 0 })),
+  getBtoExercise: vi.fn(async () => ({ exercise: null, rates: [], estates: [] })),
+  getBtoPriceTrends: vi.fn(async () => ({ years: [], by_room_type: [], towns: [], room_types: [] })),
+  getCompareOptions: vi.fn(async () => ({ towns: [], flat_types: [] })),
+  getBtoResaleCompare: vi.fn(async () => ({ town: "", flat_type: "", bto: {}, resale: {}, gap: {}, price_series: [] })),
+  getRecommendQuestions: vi.fn(async () => ({ questions: [] })),
+  postRecommend: vi.fn(async () => ({ recommendation: "either", confidence: "lean", score: { bto: 0, resale: 0, net: 0 }, reasons: [], comparison: null })),
+  geocodeAddress: vi.fn(async () => ({ results: [] })),
   getHomeOSCaseFile: vi.fn(),
   getRecommendations: vi.fn(),
   getReferenceLayer: vi.fn(),
@@ -112,6 +133,15 @@ function renderApp() {
 describe("App", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    // Seed a subscribed user so the app initializes in AI mode (these tests
+    // exercise the AI experience, which requires an active subscription).
+    window.localStorage.setItem("hdb_token", "test-token");
+    window.localStorage.setItem(
+      "hdb_user",
+      JSON.stringify({ email: "pro@example.com", is_subscribed: true }),
+    );
+    // These tests exercise the resale product; skip the BTO/Resale chooser.
+    window.localStorage.setItem("hdb-product", "resale");
     document.documentElement.classList.remove("dark");
   });
 
@@ -180,8 +210,10 @@ describe("App", () => {
   });
 
   it("opens the sign-in modal from Explore mode", async () => {
+    // Logged-out visitor lands directly in Explore mode with a Sign in button.
+    window.localStorage.clear();
+    window.localStorage.setItem("hdb-product", "resale");
     renderApp();
-    fireEvent.click(screen.getByRole("button", { name: /^explore$/i }));
 
     await waitFor(() => screen.getByRole("button", { name: /^sign in$/i }));
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));

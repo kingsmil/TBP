@@ -7,7 +7,6 @@ import {
   BarChart2,
   Table2,
   TrendingUp,
-  Eye,
   LogIn,
   LogOut,
   Sparkles,
@@ -17,6 +16,9 @@ import {
   Compass,
   Newspaper,
   MonitorCog,
+  ListOrdered,
+  Info,
+  ChevronDown,
 } from "lucide-react";
 import CasesPanel from "./components/CasesPanel";
 import DirectTransitFilter from "./components/DirectTransitFilter";
@@ -30,6 +32,10 @@ import { MAP_SEARCH_LIMIT } from "./lib/mapConfig";
 import NewsPanel from "./components/NewsPanel";
 import PipelinePanel from "./components/PipelinePanel";
 import PsfTrendChart from "./components/PsfTrendChart";
+import ScoreRankingPanel from "./components/ScoreRankingPanel";
+import InfoPanel from "./components/InfoPanel";
+import ProductChooser from "./components/ProductChooser";
+import BtoDashboard from "./components/BtoDashboard";
 import StatCard from "./components/StatCard";
 import AuthModal from "./components/AuthModal";
 import UpgradeModal from "./components/UpgradeModal";
@@ -46,6 +52,7 @@ import {
 import { clearAuth, getStoredUser, type AuthUser } from "./lib/auth";
 import { formatPsf, formatSGD } from "./lib/format";
 import { getStoredModel, setStoredModel, DEFAULT_MODEL } from "./lib/modelPreference";
+import { AI_MODE_ENABLED } from "./lib/featureFlags";
 import type {
   AgentEvent,
   DirectTransitDestination,
@@ -87,7 +94,20 @@ function RailIcon({
 
 export default function App() {
   // Subscribed users land in AI mode; everyone else starts in free Explore mode.
-  const [mode, setMode] = useState<Mode>(() => (getStoredUser()?.is_subscribed ? "ai" : "explore"));
+  // When AI mode is disabled entirely, the app is a pure manual product.
+  const [mode, setMode] = useState<Mode>(() =>
+    AI_MODE_ENABLED && getStoredUser()?.is_subscribed ? "ai" : "explore",
+  );
+
+  // Top-level product choice: resale / bto / unsure (the chooser).
+  const [product, setProductState] = useState<"resale" | "bto" | "unsure">(() => {
+    const saved = window.localStorage.getItem("hdb-product");
+    return saved === "resale" || saved === "bto" ? saved : "unsure";
+  });
+  const setProduct = useCallback((p: "resale" | "bto" | "unsure") => {
+    setProductState(p);
+    try { window.localStorage.setItem("hdb-product", p); } catch { /* ignore */ }
+  }, []);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = window.localStorage.getItem("hdb-match-theme");
     if (saved === "light" || saved === "dark") return saved;
@@ -140,15 +160,19 @@ export default function App() {
 
   const isSubscribed = authUser?.is_subscribed ?? false;
 
-  // Defense-in-depth: never allow AI mode without an active subscription.
-  // Covers stale state, lapsed subscriptions, and direct state manipulation.
+  // Defense-in-depth: never allow AI mode when it's disabled, or without an
+  // active subscription. Covers stale state, lapsed subscriptions, and the
+  // AI-disabled product configuration.
   useEffect(() => {
-    if (mode === "ai" && !isSubscribed) {
+    if (mode === "ai" && (!AI_MODE_ENABLED || !isSubscribed)) {
       setMode("explore");
     }
   }, [mode, isSubscribed]);
 
   function handleModeSwitch(next: Mode) {
+    if (next === "ai" && !AI_MODE_ENABLED) {
+      return;
+    }
     if (next === "ai" && !isSubscribed) {
       setShowUpgradeModal(true);
       return;
@@ -169,6 +193,9 @@ export default function App() {
   const [aiSelectedBlockId, setAiSelectedBlockId] = useState<number | null>(null);
   const [exploreSelectedBlockId, setExploreSelectedBlockId] = useState<number | null>(null);
   const [shortlistIds, setShortlistIds] = useState<number[]>([]);
+  const [scoreRankedIds, setScoreRankedIds] = useState<number[]>([]);
+  // Explore product sub-tabs: manual exploration, score ranking, info/rankings.
+  const [exploreTab, setExploreTab] = useState<"explore" | "scoring" | "info">("explore");
   const [hasAiMapFilter, setHasAiMapFilter] = useState(false);
   const [aiMapView, setAiMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
   const [exploreMapView, setExploreMapView] = useState<MapViewState>({ center: [1.352, 103.82], zoom: 12 });
@@ -440,7 +467,7 @@ export default function App() {
     cases.find((c) => c.case_id === activeCaseId)?.profile_text ??
     "";
 
-  const authOverlays = (
+  const authOverlays = !AI_MODE_ENABLED ? null : (
     <>
       {showAuthModal && (
         <AuthModal
@@ -471,6 +498,20 @@ export default function App() {
     </button>
   );
 
+  // ── Product gate: chooser / BTO before the resale (explore) product ───
+  if (product === "unsure") {
+    return <ProductChooser onSelect={setProduct} />;
+  }
+  if (product === "bto") {
+    return (
+      <BtoDashboard
+        onBack={() => setProduct("unsure")}
+        theme={theme}
+        onToggleTheme={() => setTheme((c) => (c === "light" ? "dark" : "light"))}
+      />
+    );
+  }
+
   // ── Explore mode — 2-column (behaviour unchanged) ─────────────────────
   if (mode === "explore") {
     return (
@@ -488,15 +529,20 @@ export default function App() {
                 H
               </div>
               <Separator className="w-7 my-1" />
-              <RailIcon icon={SlidersHorizontal} label="Filters"           onClick={() => setSidebarOpen(true)} />
-              <RailIcon icon={Eye}               label="Display"           onClick={() => setSidebarOpen(true)} />
-              <RailIcon icon={TrendingUp}        label="Stats"             onClick={() => setSidebarOpen(true)} />
-              <RailIcon icon={BarChart2}         label="PSF Trend"         onClick={() => setSidebarOpen(true)} />
-              <RailIcon icon={Table2}            label="Estate Comparison" onClick={() => setSidebarOpen(true)} />
+              <RailIcon icon={SlidersHorizontal} label="Filters"           onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
+              <RailIcon icon={TrendingUp}        label="Stats"             onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
+              <RailIcon icon={BarChart2}         label="PSF Trend"         onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
+              <RailIcon icon={Table2}            label="Estate Comparison" onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
+              <RailIcon icon={ListOrdered}       label="Scoring"           onClick={() => { setExploreTab("scoring"); setSidebarOpen(true); }} />
+              <RailIcon icon={Info}              label="Info / rankings"   onClick={() => { setExploreTab("info"); setSidebarOpen(true); }} />
               <Separator className="w-7 my-1" />
-              <RailIcon icon={Sparkles} label="AI mode" onClick={() => handleModeSwitch("ai")} />
+              {AI_MODE_ENABLED && (
+                <RailIcon icon={Sparkles} label="AI mode" onClick={() => handleModeSwitch("ai")} />
+              )}
               <RailIcon icon={theme === "light" ? Moon : Sun} label={`${theme === "light" ? "Dark" : "Light"} mode`} onClick={() => setTheme((current) => current === "light" ? "dark" : "light")} />
-              <RailIcon icon={authUser ? LogOut : LogIn} label={authUser ? "Sign out" : "Sign in"} onClick={authUser ? handleLogout : () => setShowAuthModal(true)} />
+              {AI_MODE_ENABLED && (
+                <RailIcon icon={authUser ? LogOut : LogIn} label={authUser ? "Sign out" : "Sign in"} onClick={authUser ? handleLogout : () => setShowAuthModal(true)} />
+              )}
             </div>
           )}
           {sidebarOpen && (
@@ -509,63 +555,122 @@ export default function App() {
                   </div>
                   <div>
                     <h1 className="text-base font-bold text-foreground leading-tight">HDB Match</h1>
-                    <p className="text-xs text-muted-foreground">Explore mode</p>
+                    <p className="text-xs text-muted-foreground">
+                      {exploreTab === "scoring" ? "Score ranking" : exploreTab === "info" ? "Appreciation rankings" : "Explore mode"}
+                    </p>
                   </div>
                 </div>
-                {themeButton}
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => handleModeSwitch("ai")}
-                    className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted"
+                    onClick={() => setProduct("unsure")}
+                    title="Switch between BTO and Resale"
+                    className="flex h-9 items-center gap-1 rounded-lg border border-border bg-muted/50 px-2.5 text-[11px] font-semibold text-foreground hover:bg-muted"
                   >
-                    <Sparkles className="h-3 w-3" />
-                    AI Mode
+                    Resale
+                    <ChevronDown className="h-3 w-3" />
                   </button>
-                  {authUser ? (
-                    <button type="button" onClick={handleLogout} title={`Signed in as ${authUser.email}`} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted">
-                      <LogOut className="h-4 w-4" />
-                      Sign out
+                  {themeButton}
+                </div>
+                </div>
+                {AI_MODE_ENABLED && (
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleModeSwitch("ai")}
+                      className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      AI Mode
                     </button>
-                  ) : (
-                    <button type="button" onClick={() => setShowAuthModal(true)} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90">
-                      <LogIn className="h-4 w-4" />
-                      Sign in
-                    </button>
-                  )}
+                    {authUser ? (
+                      <button type="button" onClick={handleLogout} title={`Signed in as ${authUser.email}`} className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm hover:bg-muted">
+                        <LogOut className="h-4 w-4" />
+                        Sign out
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => setShowAuthModal(true)} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90">
+                        <LogIn className="h-4 w-4" />
+                        Sign in
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* Explore / Scoring / Info sub-tabs */}
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setExploreTab("explore")}
+                    className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                      exploreTab === "explore"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Compass className="h-3.5 w-3.5" />
+                    Explore
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExploreTab("scoring")}
+                    className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                      exploreTab === "scoring"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <ListOrdered className="h-3.5 w-3.5" />
+                    Scoring
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExploreTab("info")}
+                    className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                      exploreTab === "info"
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                    Info
+                  </button>
                 </div>
               </header>
-              <FilterPanel filters={filters} onChange={setFilters} />
-              <Separator />
-              <DirectTransitFilter
-                filters={filters}
-                onResults={setDirectTransit}
-                onDestinationsChange={setDirectTransitDestinations}
-              />
-              <Separator />
-              <DisplayPanel
-                nearbyBusRadiusM={nearbyBusRadiusM}
-                onNearbyBusRadiusChange={setNearbyBusRadiusM}
-                hasSelectedProperty={selectedBlock != null}
-              />
-              <Separator />
-              <div className="grid grid-cols-2 gap-2 p-4">
-                <StatCard label="Matches"      value={String(directTransit?.count ?? search.data?.count ?? 0)} isLoading={search.isLoading} />
-                <StatCard label="Median PSF"   value={formatPsf(metrics?.median_psf)}   hint="estate avg" isLoading={estate.isLoading} />
-                <StatCard label="Median Price" value={formatSGD(metrics?.median_price)}  isLoading={estate.isLoading} />
-                <StatCard label="Growth"       value={metrics?.growth_pct != null ? `${metrics.growth_pct}%` : "—"} isLoading={estate.isLoading} />
-              </div>
-              <Separator />
-              <div className="p-4">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">PSF Trend</h3>
-                <PsfTrendChart series={estate.data?.psf_over_time ?? []} />
-              </div>
-              <Separator />
-              <div className="p-4">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estate Comparison</h3>
-                <EstateComparison rows={comparison.data?.estates ?? []} />
-              </div>
+              {exploreTab === "explore" ? (
+                <>
+                  <FilterPanel filters={filters} onChange={setFilters} />
+                  <Separator />
+                  <DirectTransitFilter
+                    filters={filters}
+                    onResults={setDirectTransit}
+                    onDestinationsChange={setDirectTransitDestinations}
+                  />
+                  <Separator />
+                  <div className="grid grid-cols-2 gap-2 p-4">
+                    <StatCard label="Matches"      value={String(directTransit?.count ?? search.data?.count ?? 0)} isLoading={search.isLoading} />
+                    <StatCard label="Median PSF"   value={formatPsf(metrics?.median_psf)}   hint="estate avg" isLoading={estate.isLoading} />
+                    <StatCard label="Median Price" value={formatSGD(metrics?.median_price)}  isLoading={estate.isLoading} />
+                    <StatCard label="Growth"       value={metrics?.growth_pct != null ? `${metrics.growth_pct}%` : "—"} isLoading={estate.isLoading} />
+                  </div>
+                  <Separator />
+                  <div className="p-4">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">PSF Trend</h3>
+                    <PsfTrendChart series={estate.data?.psf_over_time ?? []} />
+                  </div>
+                  <Separator />
+                  <div className="p-4">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estate Comparison</h3>
+                    <EstateComparison rows={comparison.data?.estates ?? []} />
+                  </div>
+                </>
+              ) : exploreTab === "scoring" ? (
+                <ScoreRankingPanel
+                  onResults={(rows) => setScoreRankedIds(rows.map((r) => r.block_id))}
+                  onSelectBlock={(id) => setExploreSelectedBlockId(id)}
+                />
+              ) : (
+                <InfoPanel onSelectBlock={(id) => setExploreSelectedBlockId(id)} />
+              )}
             </div>
           )}
         </aside>
@@ -592,9 +697,12 @@ export default function App() {
           )}
           <MapView
             blocks={blocks}
+            shortlistIds={scoreRankedIds}
             selectedBlockId={exploreSelectedBlockId}
             onSelectBlock={setExploreSelectedBlockId}
             nearbyBusRadiusM={nearbyBusRadiusM}
+            onNearbyBusRadiusChange={setNearbyBusRadiusM}
+            hasSelectedProperty={selectedBlock != null}
             destinations={directTransitDestinations}
             initialView={exploreMapView}
             onViewChange={setExploreMapView}

@@ -503,7 +503,7 @@ def build_planning_areas(blocks: list[Block]) -> list[PlanningArea]:
 
 # ── Main assembler ────────────────────────────────────────────────────────────
 
-def fetch_dataset(onemap_token: str, months: int = 24,
+def fetch_dataset(onemap_token: str, months: int = 120,
                   datagov_api_key: str | None = None) -> Dataset:
     """Fetch all live data and return a Dataset."""
 

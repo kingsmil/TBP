@@ -222,67 +222,101 @@ agent tool-calling internals.
 
 ---
 
-## Quick start
+## Running it
 
-Requires Docker, Python 3.12+, and Node 18+.
+Requires Docker Desktop, Python 3.12+, and Node 18+. Copy `.env.example` to
+`.env` and fill in any keys you have (OneMap is the main one for live data).
 
-### Full stack with live resale data
-
-```bash
-# Start PostGIS, Redis, FastAPI, and Vite in Docker.
-make docker-up
-
-# Load live HDB resale transactions from data.gov.sg into PostGIS.
-# Default imports the first 5,000 records; DATA_GOV_LIMIT=all loads everything.
-make live-load
-```
-
-- Frontend → `http://localhost:5173`
-- API → `http://localhost:8000`  ·  Swagger → `http://localhost:8000/docs`
-
-The resale feed has no coordinates, so the loader geocodes unique block/street
-addresses with OneMap before inserting into PostGIS. Set `ONEMAP_TOKEN` to avoid
-unauthenticated rate limits.
-
-### Enabling AI mode locally
-
-HomeOS auto-detects its LLM provider. Add a gateway key to `.env`:
+### Option A — Docker (everything in containers)
 
 ```bash
-AI_GATEWAY_API_KEY=your_vercel_ai_gateway_key
-LLM_MODEL=openai/gpt-5.4-nano        # any provider/model the gateway routes to
-AUTH_REQUIRED=false                  # skip subscription gating during development
+make docker-up        # PostGIS + Redis + backend + frontend
+make live-load        # load live HDB resale data into PostGIS
 ```
+Frontend → `http://localhost:5173` · API/Swagger → `http://localhost:8000/docs`
 
-With no key, the agent pipeline runs in **mock mode** — deterministic narratives,
-no network, identical event stream — so you can develop the UI without spend.
-
-### Running without a database (mock mode)
-
-The API falls back to a seeded in-memory repository when `DATABASE_URL` is
-unset, so the backend and frontend run with no Postgres at all:
+### Option B — host-run (backend + frontend on your machine, DB in Docker)
 
 ```bash
-cd backend && python -m app.run_server
+make db-up                                   # PostGIS + Redis only
+make db-migrate                              # apply PostGIS migrations
+cd backend && python -m app.data.seed_live   # load 10 years of live HDB data (default)
+make backend                                 # API/Swagger → http://localhost:8010/docs
+make frontend-install                        # first time only: npm install
+make frontend-dev                            # Vite → http://localhost:5173
 ```
 
-The vector-tile endpoint requires PostGIS; in mock mode the map uses the
-`/reference/{layer}` GeoJSON endpoints instead.
+### Mock mode (no database, no keys)
+
+```bash
+cd backend && python -m app.run_server       # seeded in-memory data
+```
+The API falls back to an in-memory repository when `DATABASE_URL` is unset. The
+map uses `/reference/{layer}` GeoJSON instead of vector tiles (those need PostGIS).
+
+### Data commands
+
+```bash
+make seed                                          # mock/sample data into PostGIS
+cd backend && python -m app.data.seed_live         # live data, last 120 months (10y)
+cd backend && python -m app.data.seed_live --months 24   # shorter window
+make listings-load                                 # "on the market now" HDB listings
+```
+
+### OneMap (live commute routing + address geocoding)
+
+Set credentials in `.env` and the backend auto-mints + refreshes its token
+(3-day TTL) — no manual rotation needed:
+```
+ONEMAP_EMAIL=you@example.com
+ONEMAP_PASSWORD=...
+```
+Register free at <https://www.onemap.gov.sg/apidocs/register>. A static
+`ONEMAP_TOKEN` is still honoured if you prefer.
+
+### Appreciation rankings
+
+Ranks every region and block by 10-year price appreciation (CAGR) and stores it
+(needs live PostGIS data):
+
+```bash
+cd backend && python -m app.analysis.build_rankings               # fast, CAGR-only (~1s)
+cd backend && python -m app.analysis.build_rankings --with-score  # + composite score (bounded)
+```
+The backend also rebuilds these monthly in the background
+(`RANKINGS_AUTO_REFRESH`, default on). Read them via `GET /rankings/regions`
+and `GET /rankings/blocks`, or the **Info** tab in the UI.
+
+---
+
+## Run locally over HTTPS (share a link)
+
+Serve the whole app from your machine behind a trusted public HTTPS URL — no
+cloud deploy. Installs the tools it needs on first run:
+
+```powershell
+./deploy/serve.ps1        # install (if needed) + DB + backend + Caddy + tunnel
+./deploy/stop.ps1         # stop it all  (-Db also stops the DB containers)
+```
+
+Prints a `https://*.trycloudflare.com` URL anyone can open. Set `CF_TUNNEL_NAME`
+in `.env` for a stable URL on your own domain. Full guide:
+[`deploy/local-https-tunnel.md`](deploy/local-https-tunnel.md).
 
 ---
 
 ## Testing
 
 ```bash
-make test            # full backend suite (pytest)
-make test-core       # dependency-free pure-Python core (stdlib only, runs anywhere)
-make frontend-test   # Vitest unit/component tests
+make test                          # full backend suite (pytest)
+make test-core                     # dependency-free pure-Python core (runs anywhere)
+make frontend-test                 # Vitest unit/component tests
+cd frontend && npx tsc --noEmit    # frontend typecheck
 ```
 
-The pure-Python core, all scoring/analytics logic, the **agent pipeline**
+The pure-Python core, all scoring/analytics/ranking logic, the agent pipeline
 (via `TestModel`, no API key), the SSE event sequence, and the API service layer
-are unit-tested. Frontend tests cover pure utilities and core components
-including the streaming pipeline panel.
+are unit-tested. Frontend tests cover pure utilities and core components.
 
 ---
 
@@ -317,6 +351,9 @@ Interactive docs at `/docs`. Selected endpoints:
 | `GET /undervalued` | Estates priced below accessibility-implied peers |
 | `POST /recommendations` · `/dream-home-finder` | Composite ranking with reasons |
 | `GET /blocks/{id}/listings` | Live resale listings for a block |
+| **Score ranking & appreciation** | |
+| `GET /score-ranking/fields` · `POST /score-ranking` | User-weighted property ranking (extensible factors) |
+| `GET /rankings/regions` · `/rankings/blocks` | Precomputed 10-year appreciation rankings |
 
 ---
 

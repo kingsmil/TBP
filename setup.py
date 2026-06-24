@@ -216,12 +216,14 @@ def setup_database():
     run([str(PYTHON), "-m", "app.db.migrate"], cwd=BACKEND, env=env)
     ok("Migrations applied")
 
-    if env.get("ONEMAP_TOKEN"):
-        info("ONEMAP_TOKEN found — seeding with live HDB data (this takes a few minutes)…")
+    has_onemap = bool(env.get("ONEMAP_TOKEN")
+                      or (env.get("ONEMAP_EMAIL") and env.get("ONEMAP_PASSWORD")))
+    if has_onemap:
+        info("OneMap configured — seeding with live HDB data (this takes a few minutes)…")
         run([str(PYTHON), "-m", "app.data.seed_live"], cwd=BACKEND, env=env)
         ok("Live data seeded")
     else:
-        info("No ONEMAP_TOKEN — seeding with mock data. Add ONEMAP_TOKEN to .env for live data.")
+        info("No OneMap credentials — seeding with mock data. Set ONEMAP_EMAIL/ONEMAP_PASSWORD in .env for live data.")
         run([str(PYTHON), "-m", "app.data.seed"], cwd=BACKEND, env=env)
         ok("Mock data seeded")
 

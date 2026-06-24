@@ -39,6 +39,8 @@ from app.api.schemas import (
     HomeOSStreamRequest,
     LifestyleRequest,
     RecommendationRequest,
+    RecommendRequest,
+    ScoreRankingRequest,
     DirectTransitRequest,
 )
 from app.config import settings
@@ -60,7 +62,7 @@ from app.services import analytics as analytics_svc
 from app.services import block_agents as block_agents_svc
 from app.services import outreach as outreach_svc
 from app.services.appreciation import appreciation as appreciation_svc
-from app.services.comparison import compare_estates
+from app.services.comparison import compare_estates_cached, warm_comparison_cache
 from app.services.commute.couple import couple_optimize, recommended_estates
 from app.services.commute.optimizer import commute_heatmap, optimize_commute
 from app.services.dream_home import dream_home_finder
@@ -68,6 +70,12 @@ from app.services.forecasting import block_forecast, estate_forecast
 from app.services.future_dev import future_mrt, future_supply
 from app.services.lifestyle import block_lifestyle
 from app.services.recommendation import recommend
+from app.services import score_ranking as score_ranking_svc
+from app.analysis import appreciation_rankings as appreciation_rankings_svc
+from app.services import bto as bto_svc
+from app.services import bto_compare as bto_compare_svc
+from app.services import recommend_path as recommend_path_svc
+from app.services import amenities as amenities_svc
 from app.services.search import search_blocks
 from app.services.undervalued import detect_undervalued
 
@@ -78,7 +86,17 @@ from contextlib import asynccontextmanager
 async def _lifespan(application):
     from app.homeos.wiring import setup as homeos_setup
     homeos_setup()
-    yield
+    from app.analysis.scheduler import start_ranking_refresh
+    refresh_task = start_ranking_refresh()
+    # Warm the shared estate-comparison cache in the background so the first
+    # request is already instant (PostGIS only — mock mode is tiny/fast).
+    if get_engine_or_none() is not None:
+        warm_comparison_cache(get_repository())
+    try:
+        yield
+    finally:
+        if refresh_task is not None:
+            refresh_task.cancel()
 
 
 app = FastAPI(title="HDB Match API", version="0.1.0",
@@ -275,7 +293,7 @@ def comparison_estates(
             ids = [int(x) for x in estates.split(",") if x.strip()]
         except ValueError:
             raise HTTPException(status_code=400, detail="invalid estates list")
-    return {"estates": compare_estates(repo, ids, flat_type)}
+    return {"estates": compare_estates_cached(repo, ids, flat_type)}
 
 
 @app.post("/homeos/investigate")
@@ -414,21 +432,27 @@ def commute_heatmap_endpoint(req: CommuteRequest,
 
 @app.get("/geocode")
 def geocode_address(q: str = Query(..., min_length=2)):
-    from app.config import settings
     from app.data.fetch_live import ONEMAP_SEARCH_URL
+    from app.services.commute import onemap_auth
     import requests
 
-    if not settings.onemap_token:
-        raise HTTPException(status_code=503, detail="ONEMAP_TOKEN is not configured")
+    token = onemap_auth.current_token()
+    if not token:
+        raise HTTPException(
+            status_code=503,
+            detail="OneMap not configured (set ONEMAP_EMAIL/ONEMAP_PASSWORD or ONEMAP_TOKEN)")
+    params = {"searchVal": q, "returnGeom": "Y", "getAddrDetails": "Y", "pageNum": 1}
     try:
         session = requests.Session()
         session.trust_env = False
-        response = session.get(
-            ONEMAP_SEARCH_URL,
-            params={"searchVal": q, "returnGeom": "Y", "getAddrDetails": "Y", "pageNum": 1},
-            headers={"Authorization": settings.onemap_token},
-            timeout=10,
-        )
+        response = session.get(ONEMAP_SEARCH_URL, params=params,
+                               headers={"Authorization": token}, timeout=10)
+        # Token expired/invalid: re-mint once and retry.
+        if response.status_code == 401:
+            token = onemap_auth.refresh()
+            if token:
+                response = session.get(ONEMAP_SEARCH_URL, params=params,
+                                       headers={"Authorization": token}, timeout=10)
         response.raise_for_status()
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"OneMap address search unavailable: {exc}") from exc
@@ -553,6 +577,141 @@ def recommendations(req: RecommendationRequest,
     return recommend(repo, provider=provider,
                      destinations=req.domain_destinations(),
                      weights=req.weights, limit=req.limit)
+
+
+@app.get("/score-ranking/fields")
+def score_ranking_fields():
+    """The scoring factors available to weight (drives the slider UI)."""
+    return {"fields": score_ranking_svc.list_fields()}
+
+
+@app.post("/score-ranking")
+def score_ranking(req: ScoreRankingRequest,
+                  repo: Repository = Depends(get_repository)):
+    dests = req.domain_destinations()
+    provider = get_commute_provider() if dests else None
+    return score_ranking_svc.rank(repo, weights=req.weights, provider=provider,
+                                  destinations=dests, limit=req.limit)
+
+
+@app.get("/bto/exercises")
+def bto_exercises():
+    """All BTO sales exercises with summary (units, applicants, overall rate)."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    return {"results": bto_svc.list_exercises(engine)}
+
+
+@app.get("/bto/trends")
+def bto_trends():
+    """Subscription trend across exercises (overall + per flat type)."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    return bto_svc.trends(engine)
+
+
+@app.get("/amenities")
+def amenities_list():
+    """Available amenity layers (drives the map's toggle chips)."""
+    return {"amenities": amenities_svc.list_amenities()}
+
+
+@app.get("/amenities/{key}")
+def amenities_points(key: str, repo: Repository = Depends(get_repository)):
+    """POIs for one amenity layer (schools from our data; rest via OneMap)."""
+    data = amenities_svc.amenities(repo, key)
+    if data is None:
+        raise HTTPException(status_code=404, detail="unknown amenity")
+    return {"key": key, "count": len(data), "results": data}
+
+
+@app.get("/compare/options")
+def compare_options(repo: Repository = Depends(get_repository)):
+    """Towns + flat types available for the BTO-vs-resale comparison."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Comparison requires PostGIS")
+    return bto_compare_svc.options(repo, engine)
+
+
+@app.get("/compare/bto-resale")
+def compare_bto_resale(town: str, flat_type: str,
+                       repo: Repository = Depends(get_repository)):
+    """BTO vs resale for one town + flat type: price gap, ballot odds, trend."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Comparison requires PostGIS")
+    return bto_compare_svc.compare(repo, engine, town, flat_type)
+
+
+@app.get("/compare/recommend/questions")
+def recommend_questions():
+    """The questionnaire schema (drives the recommendation form)."""
+    return {"questions": recommend_path_svc.questions()}
+
+
+@app.post("/compare/recommend")
+def recommend_path(req: RecommendRequest,
+                   repo: Repository = Depends(get_repository)):
+    """Recommend BTO vs Resale from questionnaire answers (+ optional town)."""
+    engine = get_engine_or_none()
+    return recommend_path_svc.recommend(req.answers, repo=repo, engine=engine,
+                                        town=req.town, flat_type=req.flat_type)
+
+
+@app.get("/bto/price-trends")
+def bto_price_trends(town: str | None = None):
+    """BTO selling-price midpoint per financial year, by room type."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    return bto_svc.price_trends(engine, town)
+
+
+@app.get("/bto/price-ranges")
+def bto_price_ranges(town: str | None = None, room_type: str | None = None):
+    """Raw BTO price-range rows (financial year / town / room type)."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    return {"results": bto_svc.price_ranges(engine, town, room_type)}
+
+
+@app.get("/bto/exercises/{exercise_id}")
+def bto_exercise_detail(exercise_id: str):
+    """One exercise: flat supply, applications and rates by estate + flat type."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    data = bto_svc.exercise_detail(engine, exercise_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="exercise not found")
+    return data
+
+
+@app.get("/rankings/regions")
+def rankings_regions(limit: int = Query(50, ge=1, le=100)):
+    """Planning areas ranked by 10-year appreciation (precomputed)."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Rankings require PostGIS")
+    rows = appreciation_rankings_svc.read_region_rankings(engine, limit)
+    return {"count": len(rows), "results": rows,
+            "computed_at": rows[0]["computed_at"] if rows else None}
+
+
+@app.get("/rankings/blocks")
+def rankings_blocks(planning_area_id: int | None = None,
+                    limit: int = Query(50, ge=1, le=200)):
+    """Blocks ranked by 10-year appreciation (precomputed), optionally by area."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Rankings require PostGIS")
+    rows = appreciation_rankings_svc.read_block_rankings(engine, planning_area_id, limit)
+    return {"count": len(rows), "results": rows,
+            "computed_at": rows[0]["computed_at"] if rows else None}
 
 
 def _points_geojson(features):

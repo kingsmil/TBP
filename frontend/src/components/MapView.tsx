@@ -660,11 +660,11 @@ export default function MapView({
               <Fragment key={`${service.service_no}-${service.direction}`}>
                 <Polyline
                   positions={positions}
-                  pathOptions={{ pane: "bus-routes", color: "#ffffff", weight: 9, opacity: 0.9 }}
+                  pathOptions={{ pane: "bus-routes", color: "#ffffff", weight: 7, opacity: 0.85, dashArray: "9 8", lineCap: "round" }}
                 />
                 <Polyline
                   positions={positions}
-                  pathOptions={{ pane: "bus-routes", color, weight: 6, opacity: 0.95 }}
+                  pathOptions={{ pane: "bus-routes", color, weight: 4, opacity: 0.95, dashArray: "9 8", lineCap: "round" }}
                 >
                   <Tooltip sticky opacity={0.95}>
                     Bus {service.service_no}, direction {service.direction}
@@ -684,12 +684,12 @@ export default function MapView({
                 <Polyline
                   positions={positions}
                   interactive={false}
-                  pathOptions={{ pane: "nearby-bus-routes", color: "#ffffff", weight: 7, opacity: 0.75 }}
+                  pathOptions={{ pane: "nearby-bus-routes", color: "#ffffff", weight: 5.5, opacity: 0.7, dashArray: "8 7", lineCap: "round" }}
                 />
                 <Polyline
                   positions={positions}
                   interactive={false}
-                  pathOptions={{ pane: "nearby-bus-routes", color, weight: 4, opacity: 0.9 }}
+                  pathOptions={{ pane: "nearby-bus-routes", color, weight: 3, opacity: 0.9, dashArray: "8 7", lineCap: "round" }}
                 />
               </Fragment>
             );
@@ -703,12 +703,12 @@ export default function MapView({
                 <Polyline
                   positions={positions}
                   interactive={false}
-                  pathOptions={{ pane: "nearby-bus-routes", color: "#ffffff", weight: 9, opacity: 0.8 }}
+                  pathOptions={{ pane: "nearby-bus-routes", color: "#ffffff", weight: 11, opacity: 0.9, lineCap: "round", lineJoin: "round" }}
                 />
                 <Polyline
                   positions={positions}
                   interactive={false}
-                  pathOptions={{ pane: "nearby-bus-routes", color, weight: 6, opacity: 0.95 }}
+                  pathOptions={{ pane: "nearby-bus-routes", color, weight: 7, opacity: 1, lineCap: "round", lineJoin: "round" }}
                 />
               </Fragment>
             );
@@ -978,6 +978,23 @@ export default function MapView({
               <span className="text-xs text-foreground">{label}</span>
             </div>
           ))}
+        </div>
+        <p className="mb-2 mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Lines
+        </p>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <svg width="20" height="8" className="shrink-0" aria-hidden>
+              <line x1="0" y1="4" x2="20" y2="4" stroke="#d42e12" strokeWidth="4" strokeLinecap="round" />
+            </svg>
+            <span className="text-xs text-foreground">MRT line (solid)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <svg width="20" height="8" className="shrink-0" aria-hidden>
+              <line x1="0" y1="4" x2="20" y2="4" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeDasharray="4 4" />
+            </svg>
+            <span className="text-xs text-foreground">Bus route (dashed)</span>
+          </div>
         </div>
       </div>}
     </div>

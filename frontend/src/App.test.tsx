@@ -69,6 +69,8 @@ vi.mock("./lib/api", () => ({
   getBtoPriceTrends: vi.fn(async () => ({ years: [], by_room_type: [], towns: [], room_types: [] })),
   getCompareOptions: vi.fn(async () => ({ towns: [], flat_types: [] })),
   getBtoResaleCompare: vi.fn(async () => ({ town: "", flat_type: "", bto: {}, resale: {}, gap: {}, price_series: [] })),
+  getRecommendQuestions: vi.fn(async () => ({ questions: [] })),
+  postRecommend: vi.fn(async () => ({ recommendation: "either", confidence: "lean", score: { bto: 0, resale: 0, net: 0 }, reasons: [], comparison: null })),
   geocodeAddress: vi.fn(async () => ({ results: [] })),
   getHomeOSCaseFile: vi.fn(),
   getRecommendations: vi.fn(),

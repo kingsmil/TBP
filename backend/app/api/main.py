@@ -39,6 +39,7 @@ from app.api.schemas import (
     HomeOSStreamRequest,
     LifestyleRequest,
     RecommendationRequest,
+    RecommendRequest,
     ScoreRankingRequest,
     DirectTransitRequest,
 )
@@ -73,6 +74,7 @@ from app.services import score_ranking as score_ranking_svc
 from app.analysis import appreciation_rankings as appreciation_rankings_svc
 from app.services import bto as bto_svc
 from app.services import bto_compare as bto_compare_svc
+from app.services import recommend_path as recommend_path_svc
 from app.services.search import search_blocks
 from app.services.undervalued import detect_undervalued
 
@@ -626,6 +628,21 @@ def compare_bto_resale(town: str, flat_type: str,
     if engine is None:
         raise HTTPException(status_code=503, detail="Comparison requires PostGIS")
     return bto_compare_svc.compare(repo, engine, town, flat_type)
+
+
+@app.get("/compare/recommend/questions")
+def recommend_questions():
+    """The questionnaire schema (drives the recommendation form)."""
+    return {"questions": recommend_path_svc.questions()}
+
+
+@app.post("/compare/recommend")
+def recommend_path(req: RecommendRequest,
+                   repo: Repository = Depends(get_repository)):
+    """Recommend BTO vs Resale from questionnaire answers (+ optional town)."""
+    engine = get_engine_or_none()
+    return recommend_path_svc.recommend(req.answers, repo=repo, engine=engine,
+                                        town=req.town, flat_type=req.flat_type)
 
 
 @app.get("/bto/price-trends")

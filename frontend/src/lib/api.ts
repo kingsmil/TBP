@@ -35,6 +35,8 @@ import type {
   BtoPriceTrends,
   CompareOptions,
   BtoResaleCompare,
+  RecommendQuestion,
+  RecommendResult,
   ScoreField,
   ScoreRankingResponse,
   SearchFilters,
@@ -271,6 +273,14 @@ export function getBtoPriceTrends(town?: string): Promise<BtoPriceTrends> {
 }
 export function getCompareOptions(): Promise<CompareOptions> {
   return getJSON<CompareOptions>("/compare/options");
+}
+export function getRecommendQuestions(): Promise<{ questions: RecommendQuestion[] }> {
+  return getJSON<{ questions: RecommendQuestion[] }>("/compare/recommend/questions");
+}
+export function postRecommend(body: {
+  answers: Record<string, string>; town?: string; flat_type?: string;
+}): Promise<RecommendResult> {
+  return postJSON<RecommendResult>("/compare/recommend", body);
 }
 export function getBtoResaleCompare(town: string, flatType: string): Promise<BtoResaleCompare> {
   return getJSON<BtoResaleCompare>(

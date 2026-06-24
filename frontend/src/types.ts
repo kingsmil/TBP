@@ -405,6 +405,20 @@ export interface BtoResaleCompare {
   price_series: { year: number; bto: number | null; resale: number | null }[];
 }
 
+export interface RecommendQuestion {
+  id: string;
+  label: string;
+  options: { value: string; label: string }[];
+}
+
+export interface RecommendResult {
+  recommendation: "bto" | "resale" | "either";
+  confidence: "strong" | "moderate" | "lean";
+  score: { bto: number; resale: number; net: number };
+  reasons: string[];
+  comparison: BtoResaleCompare | null;
+}
+
 // --- HomeOS Agent ---
 export interface HomeOSPreferences {
   flat_type: string | null;

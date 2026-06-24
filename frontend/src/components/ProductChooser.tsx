@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Building2, KeyRound, HelpCircle } from "lucide-react";
+import { Building2, KeyRound, Scale, Wand2 } from "lucide-react";
 import BtoResaleCompare from "./BtoResaleCompare";
+import RecommendWizard from "./RecommendWizard";
 
 interface Props {
   onSelect: (product: "resale" | "bto") => void;
@@ -15,7 +16,7 @@ const COMPARE: { label: string; bto: string; resale: string }[] = [
 ];
 
 export default function ProductChooser({ onSelect }: Props) {
-  const [showCompare, setShowCompare] = useState(false);
+  const [helpMode, setHelpMode] = useState<"" | "compare" | "recommend">("");
 
   return (
     <div className="flex h-full items-center justify-center bg-background p-6">
@@ -49,16 +50,37 @@ export default function ProductChooser({ onSelect }: Props) {
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowCompare((v) => !v)}
-          className="mt-5 flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-        >
-          <HelpCircle className="h-4 w-4" /> {showCompare ? "Hide comparison" : "Not sure? Compare BTO vs Resale"}
-        </button>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setHelpMode((m) => (m === "recommend" ? "" : "recommend"))}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+              helpMode === "recommend" ? "bg-primary text-primary-foreground" : "border border-border hover:bg-muted"
+            }`}
+          >
+            <Wand2 className="h-4 w-4" /> Help me decide
+          </button>
+          <button
+            type="button"
+            onClick={() => setHelpMode((m) => (m === "compare" ? "" : "compare"))}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+              helpMode === "compare" ? "bg-primary text-primary-foreground" : "border border-border hover:bg-muted"
+            }`}
+          >
+            <Scale className="h-4 w-4" /> Compare the numbers
+          </button>
+        </div>
 
-        {showCompare && (
-          <div className="mt-3 space-y-5">
+        {helpMode === "recommend" && (
+          <div className="mt-4">
+            <h2 className="text-base font-semibold">Answer a few questions</h2>
+            <p className="mb-3 text-xs text-muted-foreground">We'll suggest BTO or resale based on what matters to you.</p>
+            <RecommendWizard onSelect={onSelect} />
+          </div>
+        )}
+
+        {helpMode === "compare" && (
+          <div className="mt-4 space-y-5">
             <div className="overflow-hidden rounded-xl border border-border">
               <table className="w-full text-sm">
                 <thead>

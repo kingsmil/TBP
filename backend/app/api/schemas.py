@@ -89,6 +89,13 @@ class ScoreRankingRequest(BaseModel):
         return [d.to_domain() for d in self.destinations] if self.destinations else None
 
 
+class RecommendRequest(BaseModel):
+    """Body for POST /compare/recommend — questionnaire answers + optional town."""
+    answers: dict[str, str] = Field(default_factory=dict)
+    town: str | None = None
+    flat_type: str | None = None
+
+
 class HomeOSInvestigationRequest(BaseModel):
     profile_text: str = Field(..., min_length=10)
     limit: int = Field(5, ge=1, le=20)

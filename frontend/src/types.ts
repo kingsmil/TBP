@@ -405,6 +405,45 @@ export interface BtoResaleCompare {
   price_series: { year: number; bto: number | null; resale: number | null }[];
 }
 
+export interface BtoResaleSupplyRow {
+  id: number;
+  project_name: string;
+  town: string | null;
+  estate: string | null;
+  launch_exercise: string | null;
+  flat_classification: string;
+  flat_types: string | null;
+  estimated_completion_date: string | null;
+  estimated_key_collection_date: string | null;
+  mop_years: number;
+  estimated_resale_eligible_date: string | null;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  confidence_reason: string | null;
+  source_url: string | null;
+  source_type: string;
+  last_verified_at: string | null;
+}
+
+export interface BtoResaleSupply {
+  count: number;
+  results: BtoResaleSupplyRow[];
+  facets: {
+    towns: string[];
+    classifications: string[];
+    confidences: string[];
+    sorts: string[];
+  };
+}
+
+export interface BtoResaleSupplyFilters {
+  town?: string;
+  classification?: string;
+  flat_type?: string;
+  earliest_year?: number;
+  confidence?: string;
+  sort?: string;
+}
+
 export interface RecommendQuestion {
   id: string;
   label: string;

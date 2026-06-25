@@ -1,0 +1,49 @@
+{
+  "_README": "Manual seed for Estimated BTO Resale Availability. Each entry is a BTO project (or estate-level group) with a KNOWN or best-estimate completion / key-collection date. The compute step (app.data.bto_mop) applies MOP policy on top of these to derive the estimated resale-eligible date. Edit this file when HDB publishes new completion/key-collection dates. See docs/BTO_MOP_ESTIMATION_RULES.md for the rules a human or AI agent must follow before adding/editing rows. Entries here OVERRIDE anything derived automatically from launch data for the same (project_name, town, flat_classification).",
+  "_schema": {
+    "project_name": "string (required)",
+    "town": "string",
+    "estate": "string (optional, e.g. precinct)",
+    "launch_exercise": "string 'YYYYMM' (optional)",
+    "flat_classification": "STANDARD | PLUS | PRIME | PLH | UNCLASSIFIED | UNKNOWN",
+    "flat_types": "string e.g. '3 ROOM, 4 ROOM' (optional)",
+    "estimated_completion_date": "'YYYY-MM' or 'YYYY-MM-DD' or 'YYYY' (year-only lowers confidence to MEDIUM)",
+    "estimated_key_collection_date": "same format as completion; if present and has a month -> confidence HIGH",
+    "confidence": "optional explicit override: HIGH | MEDIUM | LOW",
+    "source_url": "string",
+    "source_type": "HDB_LAUNCH_PAGE | DATA_GOV_HDB_PROPERTY_INFO | DATA_GOV_COMPLETION_STATUS | MANUAL_SEED",
+    "last_verified_at": "'YYYY-MM-DD'"
+  },
+  "projects": [
+    {
+      "project_name": "Tampines GreenVerge",
+      "town": "TAMPINES",
+      "flat_classification": "STANDARD",
+      "flat_types": "2 ROOM, 3 ROOM, 4 ROOM, 5 ROOM",
+      "estimated_key_collection_date": "2023-09",
+      "source_url": "https://www.hdb.gov.sg",
+      "source_type": "MANUAL_SEED",
+      "last_verified_at": "2026-06-26"
+    },
+    {
+      "project_name": "Dakota Crest",
+      "town": "KALLANG/WHAMPOA",
+      "flat_classification": "PRIME",
+      "flat_types": "3 ROOM, 4 ROOM",
+      "estimated_completion_date": "2028",
+      "source_url": "https://www.hdb.gov.sg",
+      "source_type": "MANUAL_SEED",
+      "last_verified_at": "2026-06-26"
+    },
+    {
+      "project_name": "Bayshore Palms",
+      "town": "BEDOK",
+      "flat_classification": "PLUS",
+      "flat_types": "2 ROOM, 3 ROOM, 4 ROOM",
+      "estimated_completion_date": "2029-06",
+      "source_url": "https://www.hdb.gov.sg",
+      "source_type": "MANUAL_SEED",
+      "last_verified_at": "2026-06-26"
+    }
+  ]
+}

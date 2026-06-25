@@ -35,6 +35,8 @@ import type {
   BtoPriceTrends,
   CompareOptions,
   BtoResaleCompare,
+  BtoResaleSupply,
+  BtoResaleSupplyFilters,
   RecommendQuestion,
   RecommendResult,
   AmenityType,
@@ -291,6 +293,17 @@ export function postRecommend(body: {
   answers: Record<string, string>; town?: string; flat_type?: string;
 }): Promise<RecommendResult> {
   return postJSON<RecommendResult>("/compare/recommend", body);
+}
+export function getBtoResaleSupply(f: BtoResaleSupplyFilters = {}): Promise<BtoResaleSupply> {
+  const p = new URLSearchParams();
+  if (f.town) p.set("town", f.town);
+  if (f.classification) p.set("classification", f.classification);
+  if (f.flat_type) p.set("flat_type", f.flat_type);
+  if (f.earliest_year) p.set("earliest_year", String(f.earliest_year));
+  if (f.confidence) p.set("confidence", f.confidence);
+  if (f.sort) p.set("sort", f.sort);
+  const qs = p.toString();
+  return getJSON<BtoResaleSupply>(`/bto/resale-supply${qs ? `?${qs}` : ""}`);
 }
 export function getBtoResaleCompare(town: string, flatType: string): Promise<BtoResaleCompare> {
   return getJSON<BtoResaleCompare>(

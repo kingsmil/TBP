@@ -73,6 +73,7 @@ from app.services.recommendation import recommend
 from app.services import score_ranking as score_ranking_svc
 from app.analysis import appreciation_rankings as appreciation_rankings_svc
 from app.services import bto as bto_svc
+from app.services import bto_mop as bto_mop_svc
 from app.services import bto_compare as bto_compare_svc
 from app.services import recommend_path as recommend_path_svc
 from app.services import amenities as amenities_svc
@@ -689,6 +690,27 @@ def bto_exercise_detail(exercise_id: str):
     if data is None:
         raise HTTPException(status_code=404, detail="exercise not found")
     return data
+
+
+@app.get("/bto/resale-supply")
+def bto_resale_supply(
+    town: str | None = None,
+    classification: str | None = None,
+    flat_type: str | None = None,
+    earliest_year: int | None = None,
+    confidence: str | None = None,
+    sort: str = "soonest",
+    limit: int = Query(500, ge=1, le=2000),
+):
+    """Estimated BTO Resale Availability — projects/estates ranked by the soonest
+    estimated date they may enter the resale market (completion + MOP). Estimates,
+    not confirmed resale dates. See docs/BTO_MOP_ESTIMATION_RULES.md."""
+    engine = get_engine_or_none()
+    if engine is None:
+        raise HTTPException(status_code=503, detail="BTO data requires PostGIS")
+    return bto_mop_svc.resale_supply(engine, town=town, classification=classification,
+                                     flat_type=flat_type, earliest_year=earliest_year,
+                                     confidence=confidence, sort=sort, limit=limit)
 
 
 @app.get("/rankings/regions")

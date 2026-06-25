@@ -105,6 +105,13 @@ def _refresh_bto() -> None:
         log.info("Auto-refreshed BTO price ranges: %d row(s).", len(prices))
     except Exception as exc:
         log.warning("BTO price-range refresh failed: %s", exc)
+    # MOP resale-availability estimates depend on the launch data just ingested.
+    try:
+        from app.data import bto_mop
+        records = bto_mop.rebuild(engine)
+        log.info("Rebuilt BTO MOP resale-availability estimates: %d row(s).", len(records))
+    except Exception as exc:
+        log.warning("BTO MOP estimate rebuild failed: %s", exc)
 
 
 async def _loop() -> None:

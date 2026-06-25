@@ -7,6 +7,7 @@ import {
 import { ArrowLeft, Building2, Users, Layers, Flame, Moon, Sun } from "lucide-react";
 import { getBtoExercises, getBtoTrends, getBtoExercise, getBtoPriceTrends } from "../lib/api";
 import type { BtoRate } from "../types";
+import BtoResaleSupply from "./BtoResaleSupply";
 
 const ROOM_COLORS: Record<string, string> = {
   "2-room": "#0ea5e9", "3-room": "#22c55e", "4-room": "#f59e0b", "5-room": "#ef4444",
@@ -50,6 +51,7 @@ export default function BtoDashboard({ onBack, theme, onToggleTheme }: Props) {
     staleTime: 6e5,
   });
 
+  const [tab, setTab] = useState<"exercises" | "supply">("exercises");
   const list = exercises.data?.results ?? [];
   const [selected, setSelected] = useState<string | null>(null);
   const activeId = selected ?? list[0]?.exercise_id ?? null;
@@ -90,12 +92,26 @@ export default function BtoDashboard({ onBack, theme, onToggleTheme }: Props) {
             <ArrowLeft className="h-3.5 w-3.5" /> Change
           </button>
           <div>
-            <h1 className="text-base font-bold leading-tight">BTO Sales Exercises</h1>
-            <p className="text-xs text-muted-foreground">Flat supply, applications & subscription rates</p>
+            <h1 className="text-base font-bold leading-tight">
+              {tab === "exercises" ? "BTO Sales Exercises" : "Upcoming HDB Resale Supply"}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {tab === "exercises"
+                ? "Flat supply, applications & subscription rates"
+                : "Estimated BTO resale availability — when newer estates may enter the resale market"}
+            </p>
+          </div>
+          <div className="ml-2 flex rounded-md border border-border p-0.5 text-xs">
+            {([["exercises", "Sales Exercises"], ["supply", "Resale Availability"]] as const).map(([k, label]) => (
+              <button key={k} type="button" onClick={() => setTab(k)}
+                className={`rounded px-2.5 py-1 font-medium ${tab === k ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+                {label}
+              </button>
+            ))}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {list.length > 0 && (
+          {tab === "exercises" && list.length > 0 && (
             <select
               value={activeId ?? ""}
               onChange={(e) => setSelected(e.target.value)}
@@ -112,7 +128,9 @@ export default function BtoDashboard({ onBack, theme, onToggleTheme }: Props) {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        {notReady ? (
+        {tab === "supply" ? (
+          <div className="mx-auto max-w-5xl"><BtoResaleSupply /></div>
+        ) : notReady ? (
           <div className="rounded-md border border-dashed border-border bg-muted/40 p-4 text-sm text-muted-foreground">
             No BTO data yet. Run <code className="rounded bg-muted px-1 py-0.5 text-xs">python -m app.data.bto</code> on the server (needs PostGIS).
           </div>

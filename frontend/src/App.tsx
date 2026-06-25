@@ -19,6 +19,7 @@ import {
   ListOrdered,
   Info,
   ChevronDown,
+  MapPin,
 } from "lucide-react";
 import CasesPanel from "./components/CasesPanel";
 import DirectTransitFilter from "./components/DirectTransitFilter";
@@ -38,6 +39,7 @@ import ProductChooser from "./components/ProductChooser";
 import BtoDashboard from "./components/BtoDashboard";
 import StatCard from "./components/StatCard";
 import AuthModal from "./components/AuthModal";
+import SavedPlacesPanel from "./components/SavedPlacesPanel";
 import UpgradeModal from "./components/UpgradeModal";
 import { Separator } from "./components/ui/separator";
 import {
@@ -123,6 +125,7 @@ export default function App() {
   // ── Auth state ──────────────────────────────────────────────────────────────
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => getStoredUser());
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showSavedModal, setShowSavedModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Re-check subscription status on mount (in case it changed after Stripe redirect)
@@ -467,15 +470,29 @@ export default function App() {
     cases.find((c) => c.case_id === activeCaseId)?.profile_text ??
     "";
 
-  const authOverlays = !AI_MODE_ENABLED ? null : (
+  // Login + saved state are available regardless of AI mode (Feature 1); only
+  // the AI upgrade flow is gated behind AI_MODE_ENABLED.
+  const authOverlays = (
     <>
       {showAuthModal && (
         <AuthModal
-          onSuccess={(user) => { setAuthUser(user); setShowAuthModal(false); }}
+          onSuccess={(user) => {
+            setAuthUser(user);
+            setShowAuthModal(false);
+            // Migrate any anonymous local state into the new account.
+            import("./lib/userState").then((m) => m.pushLocalStateToServer().catch(() => {}));
+          }}
           onClose={() => setShowAuthModal(false)}
         />
       )}
-      {showUpgradeModal && (
+      {showSavedModal && (
+        <SavedPlacesPanel
+          authUser={authUser}
+          onClose={() => setShowSavedModal(false)}
+          onSignIn={() => { setShowSavedModal(false); setShowAuthModal(true); }}
+        />
+      )}
+      {AI_MODE_ENABLED && showUpgradeModal && (
         <UpgradeModal
           isLoggedIn={!!authUser}
           onClose={() => setShowUpgradeModal(false)}
@@ -535,14 +552,13 @@ export default function App() {
               <RailIcon icon={Table2}            label="Estate Comparison" onClick={() => { setExploreTab("explore"); setSidebarOpen(true); }} />
               <RailIcon icon={ListOrdered}       label="Scoring"           onClick={() => { setExploreTab("scoring"); setSidebarOpen(true); }} />
               <RailIcon icon={Info}              label="Info / rankings"   onClick={() => { setExploreTab("info"); setSidebarOpen(true); }} />
+              <RailIcon icon={MapPin}            label="Saved places"      onClick={() => setShowSavedModal(true)} />
               <Separator className="w-7 my-1" />
               {AI_MODE_ENABLED && (
                 <RailIcon icon={Sparkles} label="AI mode" onClick={() => handleModeSwitch("ai")} />
               )}
               <RailIcon icon={theme === "light" ? Moon : Sun} label={`${theme === "light" ? "Dark" : "Light"} mode`} onClick={() => setTheme((current) => current === "light" ? "dark" : "light")} />
-              {AI_MODE_ENABLED && (
-                <RailIcon icon={authUser ? LogOut : LogIn} label={authUser ? "Sign out" : "Sign in"} onClick={authUser ? handleLogout : () => setShowAuthModal(true)} />
-              )}
+              <RailIcon icon={authUser ? LogOut : LogIn} label={authUser ? "Sign out" : "Sign in"} onClick={authUser ? handleLogout : () => setShowAuthModal(true)} />
             </div>
           )}
           {sidebarOpen && (
@@ -569,6 +585,24 @@ export default function App() {
                   >
                     Resale
                     <ChevronDown className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowSavedModal(true)}
+                    title="Saved places & preferences"
+                    className="flex h-9 items-center gap-1 rounded-lg border border-border bg-muted/50 px-2.5 text-[11px] font-semibold text-foreground hover:bg-muted"
+                  >
+                    <MapPin className="h-3.5 w-3.5" />
+                    Saved
+                  </button>
+                  <button
+                    type="button"
+                    onClick={authUser ? handleLogout : () => setShowAuthModal(true)}
+                    title={authUser ? `Signed in as ${authUser.email}` : "Sign in"}
+                    className="flex h-9 items-center gap-1 rounded-lg border border-border bg-muted/50 px-2.5 text-[11px] font-semibold text-foreground hover:bg-muted"
+                  >
+                    {authUser ? <LogOut className="h-3.5 w-3.5" /> : <LogIn className="h-3.5 w-3.5" />}
+                    {authUser ? "Sign out" : "Sign in"}
                   </button>
                   {themeButton}
                 </div>

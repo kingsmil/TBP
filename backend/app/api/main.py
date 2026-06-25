@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.deps import get_commute_provider, get_engine_or_none, get_repository
 from app.api.auth import router as auth_router, require_subscribed
+from app.api.user_state import router as user_state_router
 import json
 
 from fastapi.responses import StreamingResponse
@@ -109,6 +110,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(user_state_router)
 
 
 @app.get("/health")

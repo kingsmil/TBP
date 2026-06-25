@@ -405,6 +405,36 @@ export interface BtoResaleCompare {
   price_series: { year: number; bto: number | null; resale: number | null }[];
 }
 
+export type SavedLocationType = "home" | "work" | "school" | "partner" | "family" | "custom";
+
+export interface SavedLocation {
+  id: number;
+  label: string;
+  address: string | null;
+  postal_code: string | null;
+  lat: number | null;
+  lng: number | null;
+  location_type: SavedLocationType;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface UserPreferences {
+  preferred_property_modes?: string | null;
+  last_search_mode?: string | null;
+  commute_weight?: number | null;
+  lifestyle_weight?: number | null;
+  affordability_weight?: number | null;
+  schools_weight?: number | null;
+  mrt_weight?: number | null;
+  future_mrt_weight?: number | null;
+  max_budget?: number | null;
+  preferred_towns?: string | null;
+  preferred_flat_types?: string | null;
+  preferred_private_property_types?: string | null;
+  metadata_json?: Record<string, unknown> | null;
+}
+
 export interface BtoResaleSupplyRow {
   id: number;
   project_name: string;

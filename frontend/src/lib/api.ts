@@ -37,6 +37,8 @@ import type {
   BtoResaleCompare,
   BtoResaleSupply,
   BtoResaleSupplyFilters,
+  SavedLocation,
+  UserPreferences,
   RecommendQuestion,
   RecommendResult,
   AmenityType,
@@ -72,6 +74,39 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
     throw Object.assign(new Error(detail?.detail ?? `API ${res.status}: ${path}`), { status: res.status });
   }
   return (await res.json()) as T;
+}
+
+async function sendJSON<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(detail?.detail ?? `API ${res.status}: ${path}`), { status: res.status });
+  }
+  return (await res.json()) as T;
+}
+
+// ── Saved user state (Feature 1) ───────────────────────────────────────────────
+export function getMyPreferences(): Promise<UserPreferences> {
+  return getJSON<UserPreferences>("/me/preferences");
+}
+export function putMyPreferences(prefs: UserPreferences): Promise<UserPreferences> {
+  return sendJSON<UserPreferences>("PUT", "/me/preferences", prefs);
+}
+export function getMyLocations(): Promise<{ results: SavedLocation[] }> {
+  return getJSON<{ results: SavedLocation[] }>("/me/locations");
+}
+export function createMyLocation(loc: Omit<SavedLocation, "id">): Promise<SavedLocation> {
+  return postJSON<SavedLocation>("/me/locations", loc);
+}
+export function updateMyLocation(id: number, patch: Partial<SavedLocation>): Promise<SavedLocation> {
+  return sendJSON<SavedLocation>("PATCH", `/me/locations/${id}`, patch);
+}
+export function deleteMyLocation(id: number): Promise<{ deleted: number }> {
+  return sendJSON<{ deleted: number }>("DELETE", `/me/locations/${id}`);
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────

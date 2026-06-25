@@ -147,6 +147,33 @@ first-class component from day one.
 - JWT (python-jose) + bcrypt, **Stripe Checkout + webhooks** for subscription
   lifecycle, gating AI mode behind an active subscription
 - `AUTH_REQUIRED` flag to toggle gating for local development
+- **Saved user state** — logged-in users save locations (home/work/school/
+  partner/family/custom) and preferences so they don't re-key them; anonymous
+  visitors keep state on-device and can push it to their account on login
+
+### Login & saved state (env + flow)
+
+Browsing and search are open to everyone. Only **saving** locations/preferences
+needs an account — mirrored on both tiers:
+
+| Concern | Backend env | Frontend env |
+|---|---|---|
+| Require login to save | `AUTH_REQUIRED=true` (prod default) | `VITE_AUTH_REQUIRED=true` |
+| Dev bypass (no login) | `AUTH_REQUIRED=false` | `VITE_AUTH_REQUIRED=false` |
+
+- **Anonymous** (prod, not logged in): saved places/preferences live in
+  `localStorage`. The "Saved places" panel shows a *Sign in to save permanently*
+  prompt; on login the local state is migrated into the account
+  (`pushLocalStateToServer`).
+- **Logged-in**: state persists via `GET/PUT /me/preferences` and
+  `GET/POST/PATCH/DELETE /me/locations` (gated by `require_user`).
+- **Dev bypass** (`AUTH_REQUIRED=false`): a stable seeded dev user (id 0) lets
+  saving work locally without registering — the panel shows a "Dev mode" banner.
+
+Data model: `saved_locations`, `user_preferences` (migration `0014_user_state`,
+FK → existing `users`). See `docs/DATA_SOURCES.md`. Manual test: open **Saved
+places** (map-pin in the Explore rail) → add Home/Work → reload (persists) →
+in prod, sign in to migrate guest data.
 
 **Infrastructure & delivery**
 - Dockerized backend on **AWS EC2**, images in **ECR**

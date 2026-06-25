@@ -215,8 +215,9 @@ describe("App", () => {
     window.localStorage.setItem("hdb-product", "resale");
     renderApp();
 
-    await waitFor(() => screen.getByRole("button", { name: /^sign in$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+    await waitFor(() => screen.getAllByRole("button", { name: /^sign in$/i }));
+    // Multiple entry points (sidebar header + content); any opens the modal.
+    fireEvent.click(screen.getAllByRole("button", { name: /^sign in$/i })[0]);
 
     expect(screen.getByText("Sign in to your account")).toBeInTheDocument();
   });

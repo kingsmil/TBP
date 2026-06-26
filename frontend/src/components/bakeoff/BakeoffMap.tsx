@@ -57,12 +57,20 @@ function Recenter({ item }: { item: CardItem | null }) {
   return null;
 }
 
-function FitOnce({ pts }: { pts: [number, number][] }) {
+/** Fit to the pins once per `fitKey` (e.g. the mode), when they first arrive —
+ *  so switching modes re-centres on that mode's pins instead of staying put. */
+function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) {
   const map = useMap();
+  const lastKey = useRef<string | undefined>(undefined);
+  const fitted = useRef(false);
   useEffect(() => {
-    if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { padding: [60, 60], maxZoom: 15 });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pts.length > 0]);
+    if (fitKey !== lastKey.current) { lastKey.current = fitKey; fitted.current = false; }
+    if (!fitted.current && pts.length > 0) {
+      fitted.current = true;
+      if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { padding: [50, 50], maxZoom: 15 });
+      else map.setView(pts[0], 15, { animate: true });
+    }
+  }, [fitKey, pts, map]);
   return null;
 }
 
@@ -70,9 +78,10 @@ interface Props {
   items: CardItem[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  fitKey?: string;
 }
 
-function Clusters({ items, selectedId, onSelect }: Props) {
+function Clusters({ items, selectedId, onSelect }: Omit<Props, "fitKey">) {
   const map = useMap();
   const [bounds, setBounds] = useState<[number, number, number, number]>([103.6, 1.13, 104.01, 1.48]);
   const [zoom, setZoom] = useState(12);
@@ -123,7 +132,7 @@ function Clusters({ items, selectedId, onSelect }: Props) {
   );
 }
 
-export default function BakeoffMap({ items, selectedId, onSelect }: Props) {
+export default function BakeoffMap({ items, selectedId, onSelect, fitKey }: Props) {
   const pts = useMemo(
     () => items.filter((i) => i.lat != null && i.lon != null).map((i) => [i.lat!, i.lon!] as [number, number]),
     [items],
@@ -134,7 +143,7 @@ export default function BakeoffMap({ items, selectedId, onSelect }: Props) {
     <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
       className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
       <TileLayer url={GREY_TILES} />
-      <FitOnce pts={pts} />
+      <FitOnce pts={pts} fitKey={fitKey} />
       <Recenter item={selected} />
       <Clusters items={items} selectedId={selectedId} onSelect={onSelect} />
     </MapContainer>

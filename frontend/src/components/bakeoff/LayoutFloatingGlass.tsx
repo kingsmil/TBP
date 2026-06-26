@@ -15,7 +15,7 @@ export default function LayoutFloatingGlass(p: ShellProps) {
   return (
     <div className="fixed inset-0">
       {/* Map canvas */}
-      <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} />
+      <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.mode} />
 
       {/* Top floating controls */}
       <div className="bo-fade-up pointer-events-none absolute inset-x-0 top-0 z-[1000] p-3 sm:p-4">

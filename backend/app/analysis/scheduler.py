@@ -131,6 +131,23 @@ def _refresh_ura() -> None:
         log.info("Auto-refreshed private (URA) transactions: %d rows.", n)
 
 
+def _amenity_age_days(engine) -> float | None:
+    from app.services import amenities as amenities_svc
+    return amenities_svc.db_age_days(engine)
+
+
+def _refresh_amenities() -> None:
+    """Seed / refresh OneMap amenity POIs — runs in a worker thread."""
+    from app.api.deps import get_engine_or_none
+    from app.data import amenities as amenities_data
+    engine = get_engine_or_none()
+    if engine is None:
+        return
+    total = amenities_data.rebuild(engine)
+    if total:
+        log.info("Auto-refreshed amenity POIs: %d.", total)
+
+
 async def _loop() -> None:
     from app.api.deps import get_engine_or_none
     while True:
@@ -158,6 +175,14 @@ async def _loop() -> None:
                         await asyncio.to_thread(_refresh_ura)
                 except Exception as exc:
                     log.warning("URA refresh check failed: %s", exc)
+                try:
+                    am_age = _amenity_age_days(engine)
+                    if am_age is None or am_age >= _stale_days():
+                        log.info("Amenity POIs %s — refreshing in background…",
+                                 "missing" if am_age is None else f"are {am_age:.0f} days old")
+                        await asyncio.to_thread(_refresh_amenities)
+                except Exception as exc:
+                    log.warning("Amenity refresh check failed: %s", exc)
         except Exception as exc:  # never let the loop die
             log.warning("Ranking refresh check failed: %s", exc)
         await asyncio.sleep(CHECK_INTERVAL_S)

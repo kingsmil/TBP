@@ -4,6 +4,14 @@ What is **official data** and what is **estimated**, per feature. Secrets are
 never committed — all credentials come from environment variables (`.env`,
 gitignored).
 
+## Amenity POIs — parks, hawker, hospitals, sports, community, libraries (OneMap)
+- **Source:** OneMap Themes API (official reference data). Schools come from our
+  own reference layer, not this.
+- **Seeding / refresh:** fetched once into `amenity_pois` (migration `0016`) by
+  `app.data.amenities` and refreshed **monthly** by the scheduler, so the map
+  doesn't re-hit OneMap on every restart. Falls back to a live (24h-cached)
+  fetch when the table is empty / no DB. CLI: `python -m app.data.amenities`.
+
 ## HDB resale transactions & blocks (existing)
 - **Source:** data.gov.sg HDB resale datasets + OneMap geocoding (official).
 - **Status:** official transaction records. Geocoded coordinates are official

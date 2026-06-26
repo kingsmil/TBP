@@ -729,7 +729,7 @@ def private_transactions(
     district: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
-    limit: int = Query(200, ge=1, le=1000),
+    limit: int = Query(200, ge=1, le=5000),
 ):
     """Private (non-HDB) residential transactions from URA, filtered + summarised.
     Falls back to bundled fixtures when URA credentials are absent (mock=true)."""

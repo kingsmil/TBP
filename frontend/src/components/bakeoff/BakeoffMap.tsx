@@ -62,14 +62,30 @@ function clusterIcon(count: number, from?: number) {
   });
 }
 
-function Recenter({ item }: { item: CardItem | null }) {
+/** Zoom in + centre on the selected property; restore the previous view (centre
+ *  + zoom) on deselect. */
+function FocusView({ item }: { item: CardItem | null }) {
   const map = useMap();
-  const last = useRef<string | null>(null);
+  const lastId = useRef<string | null>(null);
+  const prevView = useRef<{ center: [number, number]; zoom: number } | null>(null);
   useEffect(() => {
-    if (!item) { last.current = null; return; }
-    if (item.id === last.current || item.lat == null || item.lon == null) return;
-    last.current = item.id;
-    map.panTo([item.lat, item.lon], { animate: true, duration: 0.5 });
+    const id = item?.id ?? null;
+    if (id === lastId.current) return;
+    if (id && item && item.lat != null && item.lon != null) {
+      // Save the view before the first selection (not when switching A -> B).
+      if (lastId.current === null) {
+        const c = map.getCenter();
+        prevView.current = { center: [c.lat, c.lng], zoom: map.getZoom() };
+      }
+      lastId.current = id;
+      map.flyTo([item.lat, item.lon], Math.max(map.getZoom(), 16), { duration: 0.6 });
+    } else {
+      lastId.current = null;
+      if (prevView.current) {
+        map.flyTo(prevView.current.center, prevView.current.zoom, { duration: 0.6 });
+        prevView.current = null;
+      }
+    }
   }, [item, map]);
   return null;
 }
@@ -339,7 +355,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey }: Prop
         className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
         <TileLayer url={GREY_TILES} />
         <FitOnce pts={pts} fitKey={fitKey} />
-        <Recenter item={selected} />
+        <FocusView item={selected} />
         <Clusters items={items} selectedId={selectedId} onSelect={onSelect} />
         {selected && selected.lat != null && selected.lon != null && <TransitLayer item={selected} />}
         {activeAmenities.length > 0 && (

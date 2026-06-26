@@ -42,6 +42,12 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
   const [imgLoaded, setImgLoaded] = useState(false);
   // Reset image state when the property changes so it never sticks on the old one.
   useEffect(() => { setImgOk(true); setImgLoaded(false); }, [item.id]);
+  // Esc deselects the property (closes the panel).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const b = item.block;
   const hasCoords = item.lat != null && item.lon != null;
   const canImage = imgOk && (b?.block_id != null || hasCoords);

@@ -50,6 +50,11 @@ gitignored).
 - **Property types:** `CONDO`, `APARTMENT`, `EC`, `LANDED`, `STRATA_LANDED`
   (landed vs strata-landed disambiguated by URA `typeOfArea`). Sale types:
   `NEW_SALE`, `RESALE`, `SUB_SALE`.
+- **Seeding / refresh:** pulled once into `private_transactions` (migration
+  `0015`) by `app.data.ura` and refreshed **monthly** by the background
+  scheduler — so URA is not called per request or per restart. SQL-side
+  filtering/aggregation via `private_property/store.py`. Daily URA token is
+  auto-renewed in `ura_client`.
 
 ## Auth / saved user state (Feature 1)
 - **Source:** the app's own PostGIS database (`users`, `saved_locations`,

@@ -47,6 +47,19 @@ class Normalisation(unittest.TestCase):
         self.assertIsNone(normalise.normalise_transaction("X", None, None, None, None,
             {"area": "100", "contractDate": "", "price": "100"}))
 
+    def test_batch_ids_unique_even_for_identical_caveats(self):
+        # Two indistinguishable caveats (same project/date/price/area/floor/units)
+        # must still get distinct ids (PK + UI key safety).
+        proj = {"project": "X", "transaction": [
+            {"area": "100", "contractDate": "0324", "price": "2000000",
+             "typeOfSale": "1", "propertyType": "Condominium", "floorRange": "06-10", "noOfUnits": "1"},
+            {"area": "100", "contractDate": "0324", "price": "2000000",
+             "typeOfSale": "1", "propertyType": "Condominium", "floorRange": "06-10", "noOfUnits": "1"},
+        ]}
+        rows = normalise.normalise_batch([proj])
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len({r["id"] for r in rows}), 2)
+
     def test_stable_id(self):
         t = {"area": "100", "contractDate": "0324", "price": "2000000",
              "typeOfSale": "1", "propertyType": "Condominium"}
@@ -60,12 +73,15 @@ class ServiceFilters(unittest.TestCase):
         # Pin mock mode so the suite is deterministic + offline even when a real
         # URA_ACCESS_KEY is configured in the environment.
         self._is_mock = ura_client.is_mock
+        self._db_engine = service._db_engine
         ura_client.is_mock = lambda: True
+        service._db_engine = lambda: None  # exercise the in-memory fixture path
         ura_client.refresh()  # reload fixtures under mock mode
         self.assertTrue(ura_client.is_mock())
 
     def tearDown(self):
         ura_client.is_mock = self._is_mock
+        service._db_engine = self._db_engine
         ura_client._cache.invalidate()  # drop fixtures; reload lazily, no network here
 
     def test_summary_and_trend(self):

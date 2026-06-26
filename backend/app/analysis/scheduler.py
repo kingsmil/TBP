@@ -114,6 +114,23 @@ def _refresh_bto() -> None:
         log.warning("BTO MOP estimate rebuild failed: %s", exc)
 
 
+def _ura_age_days(engine) -> float | None:
+    from app.services.private_property import store
+    return store.age_days(engine)
+
+
+def _refresh_ura() -> None:
+    """Seed / refresh private (URA) transactions — runs in a worker thread."""
+    from app.api.deps import get_engine_or_none
+    from app.data import ura
+    engine = get_engine_or_none()
+    if engine is None:
+        return
+    n = ura.rebuild(engine)
+    if n:
+        log.info("Auto-refreshed private (URA) transactions: %d rows.", n)
+
+
 async def _loop() -> None:
     from app.api.deps import get_engine_or_none
     while True:
@@ -133,6 +150,14 @@ async def _loop() -> None:
                         await asyncio.to_thread(_refresh_bto)
                 except Exception as exc:
                     log.warning("BTO refresh check failed: %s", exc)
+                try:
+                    ura_age = _ura_age_days(engine)
+                    if ura_age is None or ura_age >= _stale_days():
+                        log.info("Private (URA) transactions %s — refreshing in background…",
+                                 "missing" if ura_age is None else f"are {ura_age:.0f} days old")
+                        await asyncio.to_thread(_refresh_ura)
+                except Exception as exc:
+                    log.warning("URA refresh check failed: %s", exc)
         except Exception as exc:  # never let the loop die
             log.warning("Ranking refresh check failed: %s", exc)
         await asyncio.sleep(CHECK_INTERVAL_S)

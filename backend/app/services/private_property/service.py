@@ -1,12 +1,29 @@
-"""Query / filter / aggregate over normalised URA private transactions."""
+"""Query / filter / aggregate over normalised URA private transactions.
+
+Prefers the seeded PostGIS table (app.data.ura) when it's populated — so we
+don't re-pull from URA per request — and falls back to the in-memory fetch
+(bundled fixtures in mock mode, or a direct live fetch) when there's no DB.
+"""
 from __future__ import annotations
 
 import statistics
 
-from app.services.private_property import ura_client
+from app.services.private_property import ura_client, store
 
 PROPERTY_TYPES = ["CONDO", "APARTMENT", "EC", "LANDED", "STRATA_LANDED"]
 SALE_TYPES = ["NEW_SALE", "RESALE", "SUB_SALE"]
+
+
+def _db_engine():
+    """Return an engine only when the seeded table actually has rows."""
+    try:
+        from app.api.deps import get_engine_or_none
+        engine = get_engine_or_none()
+        if engine is not None and store.count(engine) > 0:
+            return engine
+    except Exception:
+        pass
+    return None
 
 
 def _filtered(
@@ -51,6 +68,9 @@ def _stats(rows: list[dict]) -> dict:
 
 def transactions(limit: int = 200, **filters) -> dict:
     """Filtered transactions (newest first) + summary metrics."""
+    engine = _db_engine()
+    if engine is not None:
+        return store.transactions(engine, limit=limit, **filters)
     rows = _filtered(**filters)
     rows.sort(key=lambda r: r["sale_date"], reverse=True)
     stats = _stats(rows)
@@ -80,6 +100,9 @@ def _monthly_trend(rows: list[dict]) -> list[dict]:
 
 def projects(query: str | None = None, limit: int = 50) -> dict:
     """Distinct projects with txn counts + median PSF, for search/autocomplete."""
+    engine = _db_engine()
+    if engine is not None:
+        return store.projects(engine, query=query, limit=limit)
     rows = ura_client.all_transactions()
     agg: dict[str, dict] = {}
     for r in rows:

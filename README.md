@@ -200,6 +200,19 @@ sale_type, district, date range) and `GET /private/projects`. The UI surfaces
 median/avg/min/max PSF, transaction count, a monthly PSF trend, and a filtered
 transactions table, with a visible URA-caveat note. No secrets are committed.
 
+**Seeded, not re-fetched.** The ~137k-row dataset is pulled from URA **once** and
+stored in PostGIS (`private_transactions`, migration `0015`); filtering and
+aggregation then run in SQL, so client requests and server restarts never re-hit
+URA. The background scheduler refreshes it **monthly** (and seeds it on first
+boot if empty). The daily URA token is auto-minted/renewed by `ura_client`. Force
+a manual seed/refresh with:
+
+```bash
+cd backend && python -m app.data.ura      # needs DATABASE_URL + URA_ACCESS_KEY
+```
+
+Without a database (or URA key) it transparently falls back to bundled fixtures.
+
 **Live data sources**
 - **data.gov.sg** — HDB resale transactions, school directory
 - **OneMap** — map tiles, geocoding, public-transport routing, planning areas

@@ -96,8 +96,12 @@ def normalise_transaction(project_name: str, street: str | None, market_segment:
 
 
 def normalise_batch(result: list[dict]) -> list[dict]:
-    """Flatten a URA `Result` array (projects -> transactions) into our rows."""
+    """Flatten a URA `Result` array (projects -> transactions) into our rows.
+
+    Near-identical caveats can hash to the same id; we suffix collisions so every
+    transaction keeps a unique, stable id (used as a PK and as a UI key)."""
     out: list[dict] = []
+    seen: dict[str, int] = {}
     for proj in result or []:
         name = proj.get("project")
         street = proj.get("street")
@@ -105,6 +109,12 @@ def normalise_batch(result: list[dict]) -> list[dict]:
         x, y = proj.get("x"), proj.get("y")
         for t in proj.get("transaction") or []:
             row = normalise_transaction(name, street, seg, x, y, t)
-            if row is not None:
-                out.append(row)
+            if row is None:
+                continue
+            base = row["id"]
+            n = seen.get(base, 0)
+            seen[base] = n + 1
+            if n:
+                row["id"] = f"{base}-{n}"
+            out.append(row)
     return out

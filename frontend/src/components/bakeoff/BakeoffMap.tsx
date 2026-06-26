@@ -89,7 +89,15 @@ function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) 
   return null;
 }
 
-/** Amenity POIs (schools, parks, hawker, …) for the active layers. */
+function amenityIcon(color: string, delayMs: number) {
+  return divIcon({
+    className: "bo-pin-wrap",
+    html: `<div class="bo-amenity" style="background:${color};animation-delay:${delayMs}ms"></div>`,
+    iconSize: [13, 13], iconAnchor: [0, 0],
+  });
+}
+
+/** Amenity POIs (schools, parks, hawker, …) as pins that drop in. */
 function AmenityMarkers({ active, colorOf }: { active: string[]; colorOf: (k: string) => string }) {
   const queries = useQueries({
     queries: active.map((key) => ({
@@ -97,14 +105,13 @@ function AmenityMarkers({ active, colorOf }: { active: string[]; colorOf: (k: st
     })),
   });
   return (
-    <Pane name="bo-amenities" style={{ zIndex: 560 }}>
+    <Pane name="bo-amenities" style={{ zIndex: 590 }}>
       {queries.map((q, i) =>
         (q.data?.results ?? []).map((poi, j) => (
-          <CircleMarker key={`${active[i]}-${j}`} center={[poi.lat, poi.lon]} radius={5}
-            pane="bo-amenities"
-            pathOptions={{ color: "#fff", weight: 1.5, fillColor: colorOf(active[i]), fillOpacity: 0.9 }}>
+          <Marker key={`${active[i]}-${j}`} position={[poi.lat, poi.lon]} pane="bo-amenities"
+            icon={amenityIcon(colorOf(active[i]), (j % 12) * 28)}>
             <Tooltip direction="top">{AMENITY_EMOJI[active[i]] ?? ""} {poi.name}</Tooltip>
-          </CircleMarker>
+          </Marker>
         )),
       )}
     </Pane>
@@ -161,7 +168,8 @@ function TransitLayer({ item }: { item: CardItem }) {
   const routes = reachQueries.flatMap((q) => q.data?.services ?? []);
 
   return (
-    <Pane name="bo-transit" style={{ zIndex: 620, pointerEvents: "none" }}>
+    // Below the property pins (markerPane z600) so the selected estate sits on top.
+    <Pane name="bo-transit" style={{ zIndex: 560, pointerEvents: "none" }}>
       <Circle center={[origin.lat, origin.lon]} radius={TRANSIT_RADIUS_M} interactive={false}
         pathOptions={{ color: "#2563eb", fillColor: "#60a5fa", fillOpacity: 0.06, dashArray: "6 5", weight: 1.5 }} />
       {nearbyMrtLines.map((line) => {
@@ -169,8 +177,8 @@ function TransitLayer({ item }: { item: CardItem }) {
         const color = MRT_COLORS[line] ?? "#334155";
         return (
           <Fragment key={`mrt-${line}`}>
-            <Polyline positions={positions} interactive={false} pathOptions={{ color: "#fff", weight: 9, opacity: 0.85, lineCap: "round", lineJoin: "round" }} />
-            <Polyline positions={positions} interactive={false} pathOptions={{ color, weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }} />
+            <Polyline positions={positions} interactive={false} pathOptions={{ color: "#fff", weight: 14, opacity: 0.9, lineCap: "round", lineJoin: "round" }} />
+            <Polyline positions={positions} interactive={false} pathOptions={{ color, weight: 9, opacity: 1, lineCap: "round", lineJoin: "round" }} />
           </Fragment>
         );
       })}
@@ -179,13 +187,13 @@ function TransitLayer({ item }: { item: CardItem }) {
         const color = BUS_COLORS[i % BUS_COLORS.length];
         return (
           <Fragment key={`bus-${svc.service_no}-${svc.direction}-${i}`}>
-            <Polyline positions={positions} interactive={false} pathOptions={{ color: "#fff", weight: 5, opacity: 0.6, dashArray: "8 7", lineCap: "round" }} />
-            <Polyline positions={positions} interactive={false} pathOptions={{ color, weight: 2.5, opacity: 0.85, dashArray: "8 7", lineCap: "round" }} />
+            <Polyline positions={positions} interactive={false} pathOptions={{ color: "#fff", weight: 8, opacity: 0.75, dashArray: "10 8", lineCap: "round" }} />
+            <Polyline positions={positions} interactive={false} pathOptions={{ color, weight: 4.5, opacity: 0.95, dashArray: "10 8", lineCap: "round" }} />
           </Fragment>
         );
       })}
       {nearbyStops.map((s) => (
-        <CircleMarker key={`stop-${s.code}`} center={[s.lat, s.lon]} radius={6} interactive={false}
+        <CircleMarker key={`stop-${s.code}`} center={[s.lat, s.lon]} radius={7} interactive={false}
           pathOptions={{ pane: "bo-transit", color: "#1e3a8a", fillColor: "#facc15", fillOpacity: 0.95, weight: 2 }} />
       ))}
     </Pane>

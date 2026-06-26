@@ -32,6 +32,21 @@
 }
 @keyframes bo-pop { from { transform: translate(-50%, -50%) scale(0); opacity: 0; } to { opacity: 1; } }
 
+/* amenity pin — drops in from above with a soft bounce */
+.bo-amenity {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.4);
+  transform: translate(-50%, -50%);
+  animation: bo-drop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes bo-drop {
+  0%   { transform: translate(-50%, -180%) scale(0.5); opacity: 0; }
+  60%  { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
 /* per-mode colour dot inside a pin (combined view legend) */
 .bo-pin-dot {
   display: inline-block;
@@ -92,6 +107,7 @@
 .bo-stagger > *:nth-child(6) { animation-delay: 0.17s; }
 
 @media (prefers-reduced-motion: reduce) {
-  .bo-pin, .bo-cluster, .bo-fade-up, .bo-spring-up, .bo-stagger > * { animation: none !important; }
+  .bo-pin, .bo-cluster, .bo-amenity, .bo-fade-up, .bo-spring-up, .bo-stagger > * { animation: none !important; }
   .bo-pin, .bo-cluster { transition: none; }
+  .bo-amenity { transform: translate(-50%, -50%); }
 }

@@ -97,10 +97,13 @@ function amenityIcon(color: string, delayMs: number) {
   });
 }
 
-/** Amenity POIs (schools, parks, hawker, …) as pins that drop in. Rendered in the
- *  default marker pane (z600) — same as the property pins — so they're above the
- *  transit overlay (z560) and reliably visible. */
-function AmenityMarkers({ active, colorOf }: { active: string[]; colorOf: (k: string) => string }) {
+/** Amenity POIs (schools, parks, hawker, …) as pins that drop in. When a property
+ *  is selected (origin set), only the ones within the radius of it are shown —
+ *  "what's near this estate"; otherwise all of that type island-wide. Default
+ *  marker pane (z600), above the transit overlay (z560). */
+function AmenityMarkers({ active, colorOf, origin }: {
+  active: string[]; colorOf: (k: string) => string; origin: { lat: number; lon: number } | null;
+}) {
   const queries = useQueries({
     queries: active.map((key) => ({
       queryKey: ["bo-amenity", key], queryFn: () => getAmenities(key), staleTime: 6e5,
@@ -108,14 +111,16 @@ function AmenityMarkers({ active, colorOf }: { active: string[]; colorOf: (k: st
   });
   return (
     <>
-      {queries.map((q, i) =>
-        (q.data?.results ?? []).map((poi, j) => (
+      {queries.map((q, i) => {
+        let results = q.data?.results ?? [];
+        if (origin) results = results.filter((poi) => distanceMetres(origin, { lat: poi.lat, lon: poi.lon }) <= TRANSIT_RADIUS_M);
+        return results.map((poi, j) => (
           <Marker key={`${active[i]}-${poi.lat}-${poi.lon}`} position={[poi.lat, poi.lon]}
             icon={amenityIcon(colorOf(active[i]), (j % 12) * 28)}>
             <Tooltip direction="top">{AMENITY_EMOJI[active[i]] ?? ""} {poi.name}</Tooltip>
           </Marker>
-        )),
-      )}
+        ));
+      })}
     </>
   );
 }
@@ -327,7 +332,10 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey }: Prop
         <Recenter item={selected} />
         <Clusters items={items} selectedId={selectedId} onSelect={onSelect} />
         {selected && selected.lat != null && selected.lon != null && <TransitLayer item={selected} />}
-        {activeAmenities.length > 0 && <AmenityMarkers active={activeAmenities} colorOf={colorOf} />}
+        {activeAmenities.length > 0 && (
+          <AmenityMarkers active={activeAmenities} colorOf={colorOf}
+            origin={selected && selected.lat != null && selected.lon != null ? { lat: selected.lat, lon: selected.lon } : null} />
+        )}
       </MapContainer>
       <AmenityToggle active={activeAmenities} onToggle={toggleAmenity} />
     </div>

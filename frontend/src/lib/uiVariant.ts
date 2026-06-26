@@ -1,44 +1,32 @@
 /**
- * UI bake-off switch. Three redesign shells (A/B/C) are mounted when `?ui=a|b|c`
- * is present (or persisted). This is a temporary evaluation harness — once a
- * direction is chosen, delete src/components/bakeoff/, this file, and the guard
- * in App.tsx. Nothing else depends on it.
+ * Toggle for the in-progress "Floating Glass" redesign (full-screen map shell).
+ * Opt-in while it's built out so the existing app keeps working: `?ui=on`
+ * enables it (persisted), `?ui=off` returns to the classic app.
+ *
+ * Once the redesign reaches parity it becomes the default and this flag + the
+ * old App branches can be removed.
  */
-export type UiVariant = "a" | "b" | "c";
+const KEY = "hdb_ui_redesign";
 
-const KEY = "hdb_ui_variant";
-const VALID: UiVariant[] = ["a", "b", "c"];
-
-export function getUiVariant(): UiVariant | null {
+export function isRedesignEnabled(): boolean {
   const fromUrl = new URLSearchParams(window.location.search).get("ui");
+  if (fromUrl === "on") {
+    try { localStorage.setItem(KEY, "on"); } catch { /* ignore */ }
+    return true;
+  }
   if (fromUrl === "off") {
     try { localStorage.removeItem(KEY); } catch { /* ignore */ }
-    return null;
+    return false;
   }
-  if (fromUrl && VALID.includes(fromUrl as UiVariant)) {
-    try { localStorage.setItem(KEY, fromUrl); } catch { /* ignore */ }
-    return fromUrl as UiVariant;
-  }
-  try {
-    const saved = localStorage.getItem(KEY);
-    if (saved && VALID.includes(saved as UiVariant)) return saved as UiVariant;
-  } catch { /* ignore */ }
-  return null;
+  try { return localStorage.getItem(KEY) === "on"; } catch { return false; }
 }
 
-export function setUiVariant(v: UiVariant | null): void {
+export function setRedesign(on: boolean): void {
   try {
-    if (v) localStorage.setItem(KEY, v);
+    if (on) localStorage.setItem(KEY, "on");
     else localStorage.removeItem(KEY);
   } catch { /* ignore */ }
   const url = new URL(window.location.href);
-  if (v) url.searchParams.set("ui", v);
-  else url.searchParams.set("ui", "off");
+  url.searchParams.set("ui", on ? "on" : "off");
   window.location.href = url.toString();
 }
-
-export const VARIANT_META: Record<UiVariant, { name: string; tagline: string }> = {
-  a: { name: "Floating Glass", tagline: "Map canvas · frosted panels float on top" },
-  b: { name: "Minimal Command", tagline: "Bare map · one command bar, collapses away" },
-  c: { name: "Immersive Explorer", tagline: "Map + price pins · Airbnb-style sheet/panel" },
-};

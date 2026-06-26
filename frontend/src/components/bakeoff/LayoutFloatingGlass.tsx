@@ -7,8 +7,8 @@ import BakeoffMap from "./BakeoffMap";
 import DetailCard from "./DetailCard";
 import { type ShellProps, SearchBar, ResultsCount, CardList } from "./shell";
 
-/** Variant A — Floating Glass. Full-screen map; frosted panels float on top. */
-export default function LayoutCalm(p: ShellProps) {
+/** Floating Glass — full-screen map canvas; frosted panels float on top. */
+export default function LayoutFloatingGlass(p: ShellProps) {
   const [railOpen, setRailOpen] = useState(true);
   const selected = p.items.find((i) => i.id === p.selectedId) ?? null;
 
@@ -47,7 +47,7 @@ export default function LayoutCalm(p: ShellProps) {
           {railOpen && (
             <div className="bo-stagger min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3"
               onMouseLeave={() => p.setHoveredId(null)}>
-              <CardList p={p} variant="c" />
+              <CardList p={p} />
             </div>
           )}
         </div>
@@ -77,7 +77,7 @@ function MobileSheet({ p }: { p: ShellProps }) {
         <span className="h-1 w-10 rounded-full bg-muted-foreground/40" />
       </button>
       <div className="-mt-2 px-4 pb-2 text-center text-sm font-semibold"><ResultsCount n={p.items.length} mode={p.mode} /></div>
-      {open && <div className="bo-stagger h-[calc(100%-5rem)] space-y-2 overflow-y-auto px-3 pb-6"><CardList p={p} variant="c" /></div>}
+      {open && <div className="bo-stagger h-[calc(100%-5rem)] space-y-2 overflow-y-auto px-3 pb-6"><CardList p={p} /></div>}
     </div>
   );
 }

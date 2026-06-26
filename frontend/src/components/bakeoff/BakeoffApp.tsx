@@ -1,20 +1,18 @@
 import { useMemo, useState } from "react";
 import "./bakeoff.css";
-import type { UiVariant } from "../../lib/uiVariant";
+import { Undo2 } from "lucide-react";
 import type { SearchFilters } from "../../types";
 import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
+import { setRedesign } from "../../lib/uiVariant";
 import type { Mode } from "./types";
 import { useListings } from "./useListings";
 import { useIsDesktop } from "./useMediaQuery";
 import { type ShellProps, CompareBar } from "./shell";
-import VariantPicker from "./VariantPicker";
-import LayoutCalm from "./LayoutCalm";
-import LayoutPremium from "./LayoutPremium";
-import LayoutMapFirst from "./LayoutMapFirst";
+import LayoutFloatingGlass from "./LayoutFloatingGlass";
 
-/** Bake-off shell. Owns shared state, fetches real data, renders one of three
- *  candidate layouts. Self-contained — delete this folder to remove. */
-export default function BakeoffApp({ variant }: { variant: UiVariant }) {
+/** The "Floating Glass" redesign shell (full-screen map + floating UI). Owns
+ *  shared state + live data. Mounted opt-in (?ui=on) while it's built out. */
+export default function BakeoffApp() {
   const [mode, setMode] = useState<Mode>("resale");
   const [filters, setFilters] = useState<SearchFilters>({ limit: MAP_SEARCH_LIMIT });
   const [query, setQuery] = useState("");
@@ -51,13 +49,15 @@ export default function BakeoffApp({ variant }: { variant: UiVariant }) {
     filterOpen, setFilterOpen, isDesktop,
   };
 
-  const Layout = variant === "b" ? LayoutPremium : variant === "c" ? LayoutMapFirst : LayoutCalm;
-
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Layout {...props} />
+      <LayoutFloatingGlass {...props} />
       <CompareBar saved={savedIds.size} comparing={compareIds.size} />
-      <VariantPicker current={variant} />
+      <button type="button" onClick={() => setRedesign(false)}
+        title="Back to the classic app"
+        className="bo-glass fixed bottom-4 right-4 z-[3000] flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold sm:bottom-6 sm:right-6">
+        <Undo2 className="h-4 w-4" /> Classic
+      </button>
     </div>
   );
 }

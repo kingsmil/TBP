@@ -2,7 +2,6 @@ import { Search, Heart, GitCompareArrows } from "lucide-react";
 import type { SearchFilters } from "../../types";
 import type { CardItem, Mode } from "./types";
 import type { BlockSummary } from "../../types";
-import type { UiVariant } from "../../lib/uiVariant";
 import PropertyCard from "./PropertyCard";
 
 /** Everything a layout needs. BakeoffApp builds this; each variant arranges it. */
@@ -72,10 +71,8 @@ export function EmptyState({ error }: { error?: boolean }) {
   );
 }
 
-/** Shared card list, wired to ShellProps. Used by all three layouts. */
-export function CardList({ p, variant, grid = false }: {
-  p: ShellProps; variant: UiVariant; grid?: boolean;
-}) {
+/** Shared result list, wired to ShellProps. */
+export function CardList({ p, grid = false }: { p: ShellProps; grid?: boolean }) {
   if (p.isLoading) return <SkeletonList grid={grid} />;
   if (p.isError || p.items.length === 0) return <EmptyState error={p.isError} />;
   const LIST_CAP = 150; // map shows everything (clustered); the list stays snappy
@@ -85,7 +82,7 @@ export function CardList({ p, variant, grid = false }: {
     <div className={grid ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "space-y-3"}>
       {shown.map((it) => (
         <PropertyCard
-          key={it.id} item={it} variant={variant}
+          key={it.id} item={it}
           selected={p.selectedId === it.id}
           saved={p.savedIds.has(it.id)}
           comparing={p.compareIds.has(it.id)}

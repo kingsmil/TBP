@@ -92,6 +92,12 @@ def normalise_transaction(project_name: str, street: str | None, market_segment:
         "tenure": (t.get("tenure") or None),
         "floor_range": (t.get("floorRange") or None),
         "source": "URA",
+        # SVY21 (EPSG:3414) coords from the project; converted to lat/lon on
+        # persist (PostGIS ST_Transform). lat/lon stay None on the in-memory path.
+        "svy_x": _to_float(x),
+        "svy_y": _to_float(y),
+        "lat": None,
+        "lon": None,
     }
 
 

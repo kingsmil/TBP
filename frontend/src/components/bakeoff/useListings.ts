@@ -53,7 +53,7 @@ export function useListings(mode: Mode, filters: SearchFilters) {
   });
   const priv = useQuery({
     queryKey: ["bo-private", filters.flat_type],
-    queryFn: () => getPrivateTransactions({ limit: 60 }),
+    queryFn: () => getPrivateTransactions({ limit: 2000 }),
     enabled: mode === "private",
   });
   const bto = useQuery({
@@ -85,6 +85,8 @@ export function useListings(mode: Mode, filters: SearchFilters) {
           { label: "Tenure", value: t.tenure ? (t.tenure.includes("Freehold") ? "Freehold" : "Leasehold") : "—" },
           { label: "Sold", value: t.sale_date.slice(0, 7) },
         ],
+        lat: t.lat ?? undefined,
+        lon: t.lon ?? undefined,
       }));
     }
     return (bto.data?.results ?? []).map((r) => ({

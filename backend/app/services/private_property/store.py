@@ -38,17 +38,26 @@ def persist(engine, rows: list[dict]) -> int:
     from sqlalchemy import text
     if not rows:
         return 0
-    payload = [{c: r.get(c) for c in _COLS} for r in rows]
+    payload = [{**{c: r.get(c) for c in _COLS},
+                "svy_x": r.get("svy_x"), "svy_y": r.get("svy_y")} for r in rows]
     cols = ", ".join(_COLS)
     placeholders = ", ".join(f":{c}" for c in _COLS)
+    # Convert SVY21 (3414) x/y -> WGS84 (4326) lat/lon in PostGIS at insert time.
+    # Params are cast explicitly so Postgres can infer their type.
+    x, y = "CAST(:svy_x AS double precision)", "CAST(:svy_y AS double precision)"
+    geom = f"ST_Transform(ST_SetSRID(ST_MakePoint({x}, {y}), 3414), 4326)"
+    have_xy = f"({x} IS NOT NULL AND {y} IS NOT NULL)"
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE private_transactions"))
         # Chunk to keep parameter counts sane for 100k+ rows.
         CHUNK = 5000
         for i in range(0, len(payload), CHUNK):
             conn.execute(text(
-                f"INSERT INTO private_transactions ({cols}, fetched_at) "
-                f"VALUES ({placeholders}, NOW()) ON CONFLICT (id) DO NOTHING"),
+                f"INSERT INTO private_transactions ({cols}, lat, lon, fetched_at) VALUES "
+                f"({placeholders}, "
+                f"CASE WHEN {have_xy} THEN ST_Y({geom}) END, "
+                f"CASE WHEN {have_xy} THEN ST_X({geom}) END, "
+                f"NOW()) ON CONFLICT (id) DO NOTHING"),
                 payload[i:i + CHUNK])
     return len(payload)
 

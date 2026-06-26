@@ -424,6 +424,8 @@ export interface PrivateTransaction {
   tenure: string | null;
   floor_range: string | null;
   source: "URA";
+  lat?: number | null;
+  lon?: number | null;
 }
 
 export interface PrivateTransactionsResponse {

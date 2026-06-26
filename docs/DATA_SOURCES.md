@@ -67,6 +67,10 @@ gitignored).
   scheduler — so URA is not called per request or per restart. SQL-side
   filtering/aggregation via `private_property/store.py`. Daily URA token is
   auto-renewed in `ura_client`.
+- **Coordinates (lat/lon):** URA gives SVY21 (EPSG:3414) x/y per project;
+  converted to WGS84 (EPSG:4326) via PostGIS `ST_Transform` at persist time
+  (migration `0018`). ~80% of transactions have coordinates (URA omits them for
+  some projects); the rest have no map pin.
 
 ## Auth / saved user state (Feature 1)
 - **Source:** the app's own PostGIS database (`users`, `saved_locations`,

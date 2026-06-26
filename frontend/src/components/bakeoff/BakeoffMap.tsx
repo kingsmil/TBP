@@ -89,11 +89,11 @@ function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) 
   return null;
 }
 
-function amenityIcon(color: string, delayMs: number) {
+function amenityIcon(emoji: string, color: string, delayMs: number) {
   return divIcon({
     className: "bo-pin-wrap",
-    html: `<div class="bo-amenity" style="background:${color};animation-delay:${delayMs}ms"></div>`,
-    iconSize: [13, 13], iconAnchor: [0, 0],
+    html: `<div class="bo-amenity-bubble" style="--c:${color};animation-delay:${delayMs}ms"><span>${emoji}</span></div>`,
+    iconSize: [24, 24], iconAnchor: [0, 0],
   });
 }
 
@@ -104,11 +104,17 @@ function amenityIcon(color: string, delayMs: number) {
 function AmenityMarkers({ active, colorOf, origin }: {
   active: string[]; colorOf: (k: string) => string; origin: { lat: number; lon: number } | null;
 }) {
+  const map = useMap();
+  const [zoom, setZoom] = useState(() => map.getZoom());
+  useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
   const queries = useQueries({
     queries: active.map((key) => ({
       queryKey: ["bo-amenity", key], queryFn: () => getAmenities(key), staleTime: 6e5,
     })),
   });
+  // With a property selected -> show its nearby amenities always. Otherwise show
+  // island-wide only once zoomed into a neighbourhood (else it's ~1k pins).
+  if (!origin && zoom < 14) return null;
   return (
     <>
       {queries.map((q, i) => {
@@ -116,8 +122,8 @@ function AmenityMarkers({ active, colorOf, origin }: {
         if (origin) results = results.filter((poi) => distanceMetres(origin, { lat: poi.lat, lon: poi.lon }) <= TRANSIT_RADIUS_M);
         return results.map((poi, j) => (
           <Marker key={`${active[i]}-${poi.lat}-${poi.lon}`} position={[poi.lat, poi.lon]}
-            icon={amenityIcon(colorOf(active[i]), (j % 12) * 28)}>
-            <Tooltip direction="top">{AMENITY_EMOJI[active[i]] ?? ""} {poi.name}</Tooltip>
+            icon={amenityIcon(AMENITY_EMOJI[active[i]] ?? "📍", colorOf(active[i]), (j % 12) * 28)}>
+            <Tooltip direction="top" offset={[0, -10]}>{AMENITY_EMOJI[active[i]] ?? ""} {poi.name}</Tooltip>
           </Marker>
         ));
       })}
@@ -314,6 +320,14 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey }: Prop
   const [activeAmenities, setActiveAmenities] = useState<string[]>([]);
   const types = useQuery({ queryKey: ["amenity-types"], queryFn: getAmenityTypes, staleTime: 6e5 });
   const colorOf = (key: string) => types.data?.amenities.find((a) => a.key === key)?.color ?? "#475569";
+  // All amenity layers on by default (once the types load).
+  const amenitiesInited = useRef(false);
+  useEffect(() => {
+    if (!amenitiesInited.current && types.data?.amenities?.length) {
+      amenitiesInited.current = true;
+      setActiveAmenities(types.data.amenities.map((a) => a.key));
+    }
+  }, [types.data]);
   const toggleAmenity = (key: string) =>
     setActiveAmenities((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 

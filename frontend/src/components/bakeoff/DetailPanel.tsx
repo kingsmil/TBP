@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, Heart, GitCompareArrows, MapPin, TrendingUp, Train, GraduationCap, Tag } from "lucide-react";
 import type { CardItem } from "./types";
@@ -39,6 +39,9 @@ function SubScore({ icon: Icon, label, score }: { icon: typeof Train; label: str
 
 export default function DetailPanel({ item, saved, comparing, onClose, onSave, onCompare }: Props) {
   const [imgOk, setImgOk] = useState(true);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  // Reset image state when the property changes so it never sticks on the old one.
+  useEffect(() => { setImgOk(true); setImgLoaded(false); }, [item.id]);
   const b = item.block;
   const hasCoords = item.lat != null && item.lon != null;
   const canImage = imgOk && (b?.block_id != null || hasCoords);
@@ -68,10 +71,14 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
   return (
     <div className="bo-glass bo-spring-up pointer-events-auto fixed inset-x-0 bottom-0 z-[1200] flex max-h-[86vh] flex-col overflow-hidden rounded-t-2xl sm:inset-x-auto sm:right-3 sm:top-3 sm:bottom-3 sm:w-[380px] sm:max-h-none sm:rounded-2xl">
       {/* Image header */}
-      <div className="relative h-44 shrink-0 bg-gradient-to-br from-primary/25 via-primary/10 to-transparent">
+      <div className="relative h-44 shrink-0 overflow-hidden bg-gradient-to-br from-primary/25 via-primary/10 to-transparent">
         {canImage && (
-          <img src={imgUrl} alt={item.title} loading="lazy" onError={() => setImgOk(false)}
-            className="absolute inset-0 h-full w-full object-cover" />
+          <img key={item.id} src={imgUrl} alt={item.title}
+            onLoad={() => setImgLoaded(true)} onError={() => setImgOk(false)}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`} />
+        )}
+        {canImage && !imgLoaded && (
+          <div className="absolute inset-0 animate-pulse bg-muted/50" />
         )}
         <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 to-transparent" />
         <button type="button" onClick={onClose}

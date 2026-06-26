@@ -54,10 +54,20 @@ def _streetview(lat: float, lon: float) -> bytes | None:
     return None
 
 
-@functools.lru_cache(maxsize=2048)
-def _mapillary(lat: float, lon: float) -> bytes | None:
-    """Nearest crowd-sourced street photo within ~100 m, or None."""
+# Cache only *successful* lookups, so a transient failure/rate-limit doesn't get
+# pinned as "no image" (an lru_cache would cache the None forever).
+_ml_cache: dict[tuple[float, float], str] = {}
+
+
+def mapillary_url(lat: float, lon: float) -> str | None:
+    """Resolve the nearest crowd-sourced street photo URL within ~100 m. We only
+    do the (small, fast) Graph API call here and return the CDN URL so the caller
+    can 302-redirect to it — the browser then loads the image straight from
+    Mapillary's CDN (fast, no byte-proxying through us)."""
     import requests
+    key = (round(lat, 5), round(lon, 5))
+    if key in _ml_cache:
+        return _ml_cache[key]
     token = os.environ.get("MAPILLARY_TOKEN")
     if not token:
         return None
@@ -67,23 +77,23 @@ def _mapillary(lat: float, lon: float) -> bytes | None:
             "fields": "id,thumb_1024_url",
             "bbox": f"{lon - d},{lat - d},{lon + d},{lat + d}",
             "limit": 1,
-        }, headers={"Authorization": f"OAuth {token}"}, timeout=15)
+        }, headers={"Authorization": f"OAuth {token}"}, timeout=10)
         if r.status_code != 200:
             return None
         data = (r.json() or {}).get("data") or []
         url = data[0].get("thumb_1024_url") if data else None
-        if not url:
-            return None
-        img = requests.get(url, timeout=15)  # pre-signed CDN URL, no token needed
-        if img.status_code == 200 and img.headers.get("content-type", "").startswith("image"):
-            return img.content
     except Exception as exc:
-        log.warning("Mapillary fetch failed: %s", exc)
-    return None
+        log.warning("Mapillary lookup failed: %s", exc)
+        return None
+    if url:
+        if len(_ml_cache) > 8192:
+            _ml_cache.clear()
+        _ml_cache[key] = url
+    return url
 
 
 @functools.lru_cache(maxsize=2048)
-def _onemap_static(lat: float, lon: float) -> bytes | None:
+def onemap_static_bytes(lat: float, lon: float) -> bytes | None:
     import requests
     token = onemap_auth.current_token()
     if not token:
@@ -101,16 +111,9 @@ def _onemap_static(lat: float, lon: float) -> bytes | None:
     return None
 
 
-def location_image(lat: float, lon: float) -> tuple[bytes, str] | None:
-    """Street View → Mapillary → OneMap static map. Returns (bytes, mime)."""
-    lat, lon = round(lat, 5), round(lon, 5)
-    sv = _streetview(lat, lon)
-    if sv is not None:
-        return sv, "image/jpeg"
-    ml = _mapillary(lat, lon)
-    if ml is not None:
-        return ml, "image/jpeg"
-    om = _onemap_static(lat, lon)
-    if om is not None:
-        return om, "image/png"
-    return None
+def streetview_bytes(lat: float, lon: float) -> bytes | None:
+    return _streetview(round(lat, 5), round(lon, 5))
+
+
+def onemap_bytes(lat: float, lon: float) -> bytes | None:
+    return onemap_static_bytes(round(lat, 5), round(lon, 5))

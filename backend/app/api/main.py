@@ -707,12 +707,17 @@ def property_image(block_id: int | None = None, lat: float | None = None,
     if block_id is not None:
         url = images_svc.listing_photo_url(repo, block_id)
         if url:
-            return RedirectResponse(url)
+            return RedirectResponse(url)  # real listing photo (public CDN)
     if lat is not None and lon is not None:
-        img = images_svc.location_image(lat, lon)
-        if img is not None:
-            data, mime = img
-            return Response(content=data, media_type=mime, headers=cache)
+        sv = images_svc.streetview_bytes(lat, lon)
+        if sv is not None:
+            return Response(content=sv, media_type="image/jpeg", headers=cache)
+        murl = images_svc.mapillary_url(lat, lon)
+        if murl:
+            return RedirectResponse(murl)  # browser loads straight from Mapillary CDN
+        om = images_svc.onemap_bytes(lat, lon)
+        if om is not None:
+            return Response(content=om, media_type="image/png", headers=cache)
     raise HTTPException(status_code=404, detail="no image")
 
 

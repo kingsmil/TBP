@@ -109,12 +109,13 @@ function AmenityMarkers({ active, colorOf, origin }: {
       queryKey: ["bo-amenity", key], queryFn: () => getAmenities(key), staleTime: 6e5,
     })),
   });
-  // Shown at every zoom. With a property selected, filtered to its surroundings.
+  // Only show amenities when a property is selected — and only the ones near it.
+  if (!origin) return null;
   return (
     <>
       {queries.map((q, i) => {
-        let results = q.data?.results ?? [];
-        if (origin) results = results.filter((poi) => distanceMetres(origin, { lat: poi.lat, lon: poi.lon }) <= TRANSIT_RADIUS_M);
+        const results = (q.data?.results ?? []).filter(
+          (poi) => distanceMetres(origin, { lat: poi.lat, lon: poi.lon }) <= TRANSIT_RADIUS_M);
         return results.map((poi, j) => (
           <Marker key={`${active[i]}-${poi.lat}-${poi.lon}`} position={[poi.lat, poi.lon]}
             icon={amenityIcon(AMENITY_EMOJI[active[i]] ?? "📍", colorOf(active[i]), (j % 12) * 28)}>

@@ -10,7 +10,8 @@ const KEY = "hdb_ui_redesign";
 
 export function isRedesignEnabled(): boolean {
   const fromUrl = new URLSearchParams(window.location.search).get("ui");
-  if (fromUrl === "on") {
+  // "on" enables it; "a" is kept as an alias for the old bake-off URL.
+  if (fromUrl === "on" || fromUrl === "a") {
     try { localStorage.setItem(KEY, "on"); } catch { /* ignore */ }
     return true;
   }

@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-lea
 import { divIcon, type LatLngBoundsExpression } from "leaflet";
 import useSupercluster from "use-supercluster";
 import type { CardItem } from "./types";
+import { MODE_META } from "./types";
 
 const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
@@ -26,9 +27,10 @@ function priceLabel(it: CardItem): string {
 }
 
 function pinIcon(it: CardItem, selected: boolean) {
+  const dot = `<span class="bo-pin-dot" style="background:${MODE_META[it.mode].color}"></span>`;
   return divIcon({
     className: "bo-pin-wrap",
-    html: `<div class="bo-pin ${selected ? "bo-pin--selected" : ""}">${priceLabel(it)}</div>`,
+    html: `<div class="bo-pin ${selected ? "bo-pin--selected" : ""}">${dot}${priceLabel(it)}</div>`,
     iconSize: [10, 10], iconAnchor: [0, 0],
   });
 }

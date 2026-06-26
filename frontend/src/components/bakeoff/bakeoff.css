@@ -32,6 +32,17 @@
 }
 @keyframes bo-pop { from { transform: translate(-50%, -50%) scale(0); opacity: 0; } to { opacity: 1; } }
 
+/* per-mode colour dot inside a pin (combined view legend) */
+.bo-pin-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+  box-shadow: 0 0 0 1.5px #fff;
+}
+.bo-pin--selected .bo-pin-dot { box-shadow: 0 0 0 1.5px hsl(var(--primary)); }
+
 /* ── cluster bubbles ───────────────────────────────────────────────────────── */
 .bo-cluster {
   display: flex;

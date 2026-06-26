@@ -1,5 +1,6 @@
 import { Heart, GitCompareArrows } from "lucide-react";
 import type { CardItem } from "./types";
+import { MODE_META } from "./types";
 import ScoreBar from "./ScoreBar";
 
 interface Props {
@@ -45,7 +46,10 @@ export default function PropertyCard(p: Props) {
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="truncate text-sm font-semibold">{item.title}</h3>
+          <h3 className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: MODE_META[item.mode].color }} />
+            <span className="truncate">{item.title}</span>
+          </h3>
           <div className="shrink-0 text-sm font-bold tabular-nums">{sgd(item.price)}</div>
         </div>
         <p className="truncate text-xs text-muted-foreground">

@@ -23,7 +23,7 @@ function saveSet(key: string, set: Set<string>) {
 /** The "Floating Glass" redesign shell (full-screen map + floating UI). Owns
  *  shared state + live data. Mounted opt-in (?ui=on) while it's built out. */
 export default function BakeoffApp() {
-  const [mode, setMode] = useState<Mode>("resale");
+  const [modes, setModes] = useState<Mode[]>(["resale"]);
   const [filters, setFilters] = useState<SearchFilters>({ limit: MAP_SEARCH_LIMIT });
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -38,7 +38,15 @@ export default function BakeoffApp() {
   const [filterOpen, setFilterOpen] = useState(false);
   const isDesktop = useIsDesktop();
 
-  const { items: allItems, blocks, isLoading, isError } = useListings(mode, filters);
+  const toggleMode = (m: Mode) => setModes((prev) => {
+    if (prev.includes(m)) {
+      const next = prev.filter((x) => x !== m);
+      return next.length ? next : prev; // keep at least one active
+    }
+    return [...prev, m];
+  });
+
+  const { items: allItems, blocks, isLoading, isError } = useListings(modes, filters);
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -55,7 +63,7 @@ export default function BakeoffApp() {
     });
 
   const props: ShellProps = {
-    mode, setMode, filters, setFilters, query, setQuery,
+    modes, toggleMode, filters, setFilters, query, setQuery,
     items, blocks, isLoading, isError,
     selectedId, setSelectedId,
     savedIds, toggleSave: toggle(setSavedIds),

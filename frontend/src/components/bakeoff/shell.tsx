@@ -6,8 +6,8 @@ import PropertyCard from "./PropertyCard";
 
 /** Everything a layout needs. BakeoffApp builds this; each variant arranges it. */
 export interface ShellProps {
-  mode: Mode;
-  setMode: (m: Mode) => void;
+  modes: Mode[];
+  toggleMode: (m: Mode) => void;
   filters: SearchFilters;
   setFilters: (f: SearchFilters) => void;
   query: string;
@@ -43,9 +43,8 @@ export function SearchBar({ value, onChange, placeholder }: {
   );
 }
 
-export function ResultsCount({ n, mode }: { n: number; mode: Mode }) {
-  const noun = mode === "private" ? "transactions" : mode === "bto" ? "projects" : "blocks";
-  return <p className="text-sm text-muted-foreground"><span className="font-semibold text-foreground">{n}</span> {noun}</p>;
+export function ResultsCount({ n }: { n: number }) {
+  return <p className="text-sm text-muted-foreground"><span className="font-semibold text-foreground">{n.toLocaleString()}</span> results</p>;
 }
 
 export function SkeletonList({ count = 5, grid = false }: { count?: number; grid?: boolean }) {

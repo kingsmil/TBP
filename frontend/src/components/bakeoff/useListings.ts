@@ -4,7 +4,7 @@ import {
   searchProperties, getPrivateTransactions, getBtoResaleSupply, getBlockScores,
 } from "../../lib/api";
 import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
-import type { SearchFilters, BlockSummary } from "../../types";
+import type { SearchFilters, BlockSummary, PrivateTransaction, BtoResaleSupplyRow } from "../../types";
 import type { CardItem, Mode } from "./types";
 
 const sgd = (n?: number | null) => (n != null ? `$${Math.round(n).toLocaleString()}` : "—");
@@ -30,6 +30,7 @@ function walk(m?: number | null): string {
 function fromResale(b: BlockSummary, scores: Record<string, number>): CardItem {
   return {
     id: `r-${b.block_id}`,
+    mode: "resale",
     title: `Blk ${b.block_number} ${b.street_name}`,
     subtitle: b.town,
     badge: undefined,
@@ -48,79 +49,98 @@ function fromResale(b: BlockSummary, scores: Record<string, number>): CardItem {
   };
 }
 
-export function useListings(mode: Mode, filters: SearchFilters) {
+function fromPrivate(t: PrivateTransaction): CardItem {
+  return {
+    id: `p-${t.id}`,
+    mode: "private",
+    title: t.project_name ?? t.address ?? "Private home",
+    subtitle: `District ${t.district ?? "—"} · ${t.planning_region ?? ""}`.trim(),
+    badge: t.property_type,
+    price: t.price,
+    priceLabel: t.sale_type.replace("_", " ").toLowerCase(),
+    psf: t.psf,
+    metrics: [
+      { label: "Area", value: t.area_sqft ? `${t.area_sqft} sqft` : "—" },
+      { label: "Tenure", value: t.tenure ? (t.tenure.includes("Freehold") ? "Freehold" : "Leasehold") : "—" },
+      { label: "Sold", value: t.sale_date.slice(0, 7) },
+    ],
+    lat: t.lat ?? undefined,
+    lon: t.lon ?? undefined,
+  };
+}
+
+function fromBto(r: BtoResaleSupplyRow): CardItem {
+  return {
+    id: `b-${r.id}`,
+    mode: "bto",
+    title: r.project_name,
+    subtitle: r.town ?? "—",
+    badge: r.flat_classification,
+    price: null,
+    psf: null,
+    metrics: [
+      { label: "Flat types", value: r.flat_types ?? "—" },
+      { label: "MOP", value: `${r.mop_years} yrs` },
+      { label: "Resale est.", value: r.estimated_resale_eligible_date?.slice(0, 7) ?? "—" },
+    ],
+    pinLabel: r.estimated_resale_eligible_date
+      ? `Resale '${r.estimated_resale_eligible_date.slice(2, 4)}` : undefined,
+    lat: r.lat ?? undefined,
+    lon: r.lon ?? undefined,
+  };
+}
+
+/** Fetches every selected mode and merges them into one tagged list, so one or
+ *  more property types can be shown together on the map + list. */
+export function useListings(modes: Mode[], filters: SearchFilters) {
+  const want = (m: Mode) => modes.includes(m);
+  const key = modes.join(",");
+
   const resale = useQuery({
     queryKey: ["bo-resale", filters],
     queryFn: () => searchProperties({ ...filters, limit: MAP_SEARCH_LIMIT }),
-    enabled: mode === "resale",
+    enabled: want("resale"),
   });
   const priv = useQuery({
-    queryKey: ["bo-private", filters.flat_type],
+    queryKey: ["bo-private"],
     queryFn: () => getPrivateTransactions({ limit: 2000 }),
-    enabled: mode === "private",
+    enabled: want("private"),
   });
   const bto = useQuery({
     queryKey: ["bo-bto"],
     queryFn: () => getBtoResaleSupply({ sort: "soonest" }),
-    enabled: mode === "bto",
+    enabled: want("bto"),
   });
   const scoresQ = useQuery({
     queryKey: ["bo-block-scores"],
     queryFn: getBlockScores,
-    enabled: mode === "resale",
+    enabled: want("resale"),
     staleTime: 36e5,
   });
 
-  // Memoised so identity is stable across renders — otherwise the map rebuilds
-  // every marker/cluster each render (flicker + fly-to loop).
   const blocks = useMemo<BlockSummary[]>(
-    () => (mode === "resale" ? resale.data?.results ?? [] : []),
-    [mode, resale.data],
+    () => (want("resale") ? resale.data?.results ?? [] : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key, resale.data],
   );
 
   const items = useMemo<CardItem[]>(() => {
     const scores = scoresQ.data?.scores ?? {};
-    if (mode === "resale") return blocks.map((b) => fromResale(b, scores));
-    if (mode === "private") {
-      return (priv.data?.results ?? []).map((t) => ({
-        id: `p-${t.id}`,
-        title: t.project_name ?? t.address ?? "Private home",
-        subtitle: `District ${t.district ?? "—"} · ${t.planning_region ?? ""}`.trim(),
-        badge: t.property_type,
-        price: t.price,
-        priceLabel: t.sale_type.replace("_", " ").toLowerCase(),
-        psf: t.psf,
-        metrics: [
-          { label: "Area", value: t.area_sqft ? `${t.area_sqft} sqft` : "—" },
-          { label: "Tenure", value: t.tenure ? (t.tenure.includes("Freehold") ? "Freehold" : "Leasehold") : "—" },
-          { label: "Sold", value: t.sale_date.slice(0, 7) },
-        ],
-        lat: t.lat ?? undefined,
-        lon: t.lon ?? undefined,
-      }));
-    }
-    return (bto.data?.results ?? []).map((r) => ({
-      id: `b-${r.id}`,
-      title: r.project_name,
-      subtitle: r.town ?? "—",
-      badge: r.flat_classification,
-      price: null,
-      psf: null,
-      metrics: [
-        { label: "Flat types", value: r.flat_types ?? "—" },
-        { label: "MOP", value: `${r.mop_years} yrs` },
-        { label: "Resale est.", value: r.estimated_resale_eligible_date?.slice(0, 7) ?? "—" },
-      ],
-      // Pin shows when it may enter the resale market, e.g. "Resale '31".
-      pinLabel: r.estimated_resale_eligible_date
-        ? `Resale '${r.estimated_resale_eligible_date.slice(2, 4)}` : undefined,
-      lat: r.lat ?? undefined,
-      lon: r.lon ?? undefined,
-    }));
-  }, [mode, blocks, priv.data, bto.data, scoresQ.data]);
+    const out: CardItem[] = [];
+    if (want("resale")) out.push(...blocks.map((b) => fromResale(b, scores)));
+    if (want("private")) out.push(...(priv.data?.results ?? []).map(fromPrivate));
+    if (want("bto")) out.push(...(bto.data?.results ?? []).map(fromBto));
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, blocks, priv.data, bto.data, scoresQ.data]);
 
-  const isLoading = mode === "resale" ? resale.isLoading : mode === "private" ? priv.isLoading : bto.isLoading;
-  const isError = mode === "resale" ? resale.isError : mode === "private" ? priv.isError : bto.isError;
+  const active = [
+    want("resale") ? resale : null,
+    want("private") ? priv : null,
+    want("bto") ? bto : null,
+  ].filter(Boolean) as { isLoading: boolean; isError: boolean }[];
+  const isLoading = active.some((q) => q.isLoading);
+  const isError = items.length === 0 && active.length > 0 && active.every((q) => q.isError);
 
   return { items, blocks, isLoading, isError, sgd };
 }

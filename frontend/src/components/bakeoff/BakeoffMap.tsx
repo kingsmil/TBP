@@ -97,7 +97,9 @@ function amenityIcon(color: string, delayMs: number) {
   });
 }
 
-/** Amenity POIs (schools, parks, hawker, …) as pins that drop in. */
+/** Amenity POIs (schools, parks, hawker, …) as pins that drop in. Rendered in the
+ *  default marker pane (z600) — same as the property pins — so they're above the
+ *  transit overlay (z560) and reliably visible. */
 function AmenityMarkers({ active, colorOf }: { active: string[]; colorOf: (k: string) => string }) {
   const queries = useQueries({
     queries: active.map((key) => ({
@@ -105,16 +107,16 @@ function AmenityMarkers({ active, colorOf }: { active: string[]; colorOf: (k: st
     })),
   });
   return (
-    <Pane name="bo-amenities" style={{ zIndex: 590 }}>
+    <>
       {queries.map((q, i) =>
         (q.data?.results ?? []).map((poi, j) => (
-          <Marker key={`${active[i]}-${j}`} position={[poi.lat, poi.lon]} pane="bo-amenities"
+          <Marker key={`${active[i]}-${poi.lat}-${poi.lon}`} position={[poi.lat, poi.lon]}
             icon={amenityIcon(colorOf(active[i]), (j % 12) * 28)}>
             <Tooltip direction="top">{AMENITY_EMOJI[active[i]] ?? ""} {poi.name}</Tooltip>
           </Marker>
         )),
       )}
-    </Pane>
+    </>
   );
 }
 

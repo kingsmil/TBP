@@ -24,7 +24,7 @@ from app.api.auth import router as auth_router, require_subscribed
 from app.api.user_state import router as user_state_router
 import json
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
 
 from app.api.schemas import (
     NewsItem,
@@ -79,6 +79,7 @@ from app.services import bto_compare as bto_compare_svc
 from app.services import recommend_path as recommend_path_svc
 from app.services import amenities as amenities_svc
 from app.services.private_property import service as private_svc
+from app.services import images as images_svc
 from app.services.search import search_blocks
 from app.services.undervalued import detect_undervalued
 
@@ -693,6 +694,26 @@ def bto_exercise_detail(exercise_id: str):
     if data is None:
         raise HTTPException(status_code=404, detail="exercise not found")
     return data
+
+
+@app.get("/image/property")
+def property_image(block_id: int | None = None, lat: float | None = None,
+                   lon: float | None = None,
+                   repo: Repository = Depends(get_repository)):
+    """Best image for a property: real listing photo → Street View → OneMap map.
+    Keeps the OneMap token + Google key server-side. 404 when nothing is found
+    (the frontend hides the <img> on error)."""
+    cache = {"Cache-Control": "public, max-age=86400"}
+    if block_id is not None:
+        url = images_svc.listing_photo_url(repo, block_id)
+        if url:
+            return RedirectResponse(url)
+    if lat is not None and lon is not None:
+        img = images_svc.location_image(lat, lon)
+        if img is not None:
+            data, mime = img
+            return Response(content=data, media_type=mime, headers=cache)
+    raise HTTPException(status_code=404, detail="no image")
 
 
 @app.get("/private/transactions")

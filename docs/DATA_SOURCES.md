@@ -12,6 +12,17 @@ gitignored).
   doesn't re-hit OneMap on every restart. Falls back to a live (24h-cached)
   fetch when the table is empty / no DB. CLI: `python -m app.data.amenities`.
 
+## Property images (detail view)
+Layered fallback in `app.services.images`, served via `GET /image/property`
+(keeps tokens/keys server-side, in-process cached):
+1. **Real HDB listing photo** — `https://static.homes.hdb.gov.sg/` + the block's
+   active-listing `photo_path` (HDB Flat Portal). Only for blocks with a current
+   listing.
+2. **Google Street View Static** — real façade from lat/lon. Optional; needs
+   `GOOGLE_MAPS_API_KEY` (cost applies). Absent → skipped.
+3. **OneMap Static Map** — free location thumbnail for any lat/lon (token managed
+   server-side). The always-available fallback.
+
 ## HDB resale transactions & blocks (existing)
 - **Source:** data.gov.sg HDB resale datasets + OneMap geocoding (official).
 - **Status:** official transaction records. Geocoded coordinates are official

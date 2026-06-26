@@ -51,6 +51,9 @@ class Settings:
         "URA_TOKEN_URL", "https://eservice.ura.gov.sg/uraDataService/insertNewToken/v1")
     ura_api_url: str = os.environ.get(
         "URA_API_URL", "https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1")
+    # Optional: Google Street View Static API key for real façade photos in the
+    # detail view. Absent -> falls back to the free OneMap location thumbnail.
+    google_maps_api_key: str | None = os.environ.get("GOOGLE_MAPS_API_KEY") or None
     private_property_mock_mode: bool = (
         os.environ.get("PRIVATE_PROPERTY_MOCK_MODE", "").lower() in ("true", "1", "yes")
         or not (os.environ.get("URA_ACCESS_KEY") or "").strip())

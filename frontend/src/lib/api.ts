@@ -92,6 +92,16 @@ async function sendJSON<T>(method: string, path: string, body?: unknown): Promis
   return (await res.json()) as T;
 }
 
+/** URL for a property image (listing photo → Street View → OneMap map). The
+ *  <img> hides itself on 404 (no coords / nothing found). */
+export function propertyImageUrl(o: { blockId?: number; lat?: number | null; lon?: number | null }): string {
+  const p = new URLSearchParams();
+  if (o.blockId != null) p.set("block_id", String(o.blockId));
+  if (o.lat != null) p.set("lat", String(o.lat));
+  if (o.lon != null) p.set("lon", String(o.lon));
+  return `${BASE}/image/property?${p.toString()}`;
+}
+
 export function getBlockScores(): Promise<{ scores: Record<string, number> }> {
   return getJSON<{ scores: Record<string, number> }>("/rankings/block-scores");
 }

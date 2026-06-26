@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { X, Heart, GitCompareArrows, MapPin } from "lucide-react";
 import type { CardItem } from "./types";
+import { propertyImageUrl } from "../../lib/api";
 import ScoreBar from "./ScoreBar";
 
 const sgd = (n?: number | null) => (n != null ? `$${Math.round(n).toLocaleString()}` : "—");
@@ -16,10 +18,19 @@ interface Props {
 /** Floating glass detail card that springs up over the map when a pin/result
  *  is selected. Shared by all three map-first variants. */
 export default function DetailCard({ item, saved, comparing, onClose, onSave, onCompare }: Props) {
+  const [imgOk, setImgOk] = useState(true);
+  const hasCoords = item.lat != null && item.lon != null;
+  const canImage = imgOk && (item.block?.block_id != null || hasCoords);
+  const imgUrl = propertyImageUrl({ blockId: item.block?.block_id, lat: item.lat, lon: item.lon });
   return (
     <div className="bo-glass bo-spring-up pointer-events-auto w-[min(92vw,380px)] overflow-hidden rounded-2xl">
-      {/* Photo placeholder band */}
-      <div className="relative h-28 bg-gradient-to-br from-primary/25 via-primary/10 to-transparent">
+      {/* Photo: real listing photo → Street View → OneMap map; gradient fallback */}
+      <div className="relative h-32 bg-gradient-to-br from-primary/25 via-primary/10 to-transparent">
+        {canImage && (
+          <img src={imgUrl} alt={item.title} loading="lazy"
+            onError={() => setImgOk(false)}
+            className="absolute inset-0 h-full w-full object-cover" />
+        )}
         <button type="button" onClick={onClose}
           className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-card/80 text-foreground shadow-sm hover:bg-card">
           <X className="h-4 w-4" />

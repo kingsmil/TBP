@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   searchProperties, getPrivateTransactions, getBtoResaleSupply,
 } from "../../lib/api";
+import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
 import type { SearchFilters, BlockSummary } from "../../types";
 import type { CardItem, Mode } from "./types";
 
@@ -46,7 +47,7 @@ function fromResale(b: BlockSummary): CardItem {
 export function useListings(mode: Mode, filters: SearchFilters) {
   const resale = useQuery({
     queryKey: ["bo-resale", filters],
-    queryFn: () => searchProperties({ ...filters, limit: 60 }),
+    queryFn: () => searchProperties({ ...filters, limit: MAP_SEARCH_LIMIT }),
     enabled: mode === "resale",
   });
   const priv = useQuery({

@@ -78,9 +78,12 @@ export function CardList({ p, variant, grid = false }: {
 }) {
   if (p.isLoading) return <SkeletonList grid={grid} />;
   if (p.isError || p.items.length === 0) return <EmptyState error={p.isError} />;
+  const LIST_CAP = 150; // map shows everything (clustered); the list stays snappy
+  const shown = p.items.slice(0, LIST_CAP);
+  const extra = p.items.length - shown.length;
   return (
     <div className={grid ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "space-y-3"}>
-      {p.items.map((it) => (
+      {shown.map((it) => (
         <PropertyCard
           key={it.id} item={it} variant={variant}
           selected={p.selectedId === it.id}
@@ -92,6 +95,11 @@ export function CardList({ p, variant, grid = false }: {
           onHover={(h) => p.setHoveredId(h ? it.id : null)}
         />
       ))}
+      {extra > 0 && (
+        <p className="px-1 py-2 text-center text-xs text-muted-foreground">
+          +{extra.toLocaleString()} more on the map — zoom in to explore
+        </p>
+      )}
     </div>
   );
 }

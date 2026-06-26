@@ -99,6 +99,8 @@ export function useListings(mode: Mode, filters: SearchFilters) {
         { label: "MOP", value: `${r.mop_years} yrs` },
         { label: "Resale est.", value: r.estimated_resale_eligible_date?.slice(0, 7) ?? "—" },
       ],
+      lat: r.lat ?? undefined,
+      lon: r.lon ?? undefined,
     }));
   }, [mode, blocks, priv.data, bto.data]);
 

@@ -508,6 +508,8 @@ export interface BtoResaleSupplyRow {
   source_url: string | null;
   source_type: string;
   last_verified_at: string | null;
+  lat: number | null;
+  lon: number | null;
 }
 
 export interface BtoResaleSupply {

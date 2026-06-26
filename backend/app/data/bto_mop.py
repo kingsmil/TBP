@@ -28,6 +28,7 @@ See:  docs/BTO_MOP_ESTIMATION_RULES.md
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 import logging
 import pathlib
@@ -180,6 +181,8 @@ def make_record(
         "source_url": source_url,
         "source_type": source_type,
         "last_verified_at": verified,
+        "lat": None,
+        "lon": None,
     }
 
 
@@ -322,6 +325,72 @@ def fetch_launch_rows(engine) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+# ── geocoding: place each project on the map ──────────────────────────────────
+
+_ONEMAP_SEARCH = "https://www.onemap.gov.sg/api/common/elastic/search"
+
+
+def geocode_onemap(query: str) -> tuple[float, float] | None:
+    """Best-effort lat/lon for a project name via OneMap's public search."""
+    import requests
+    if not query:
+        return None
+    try:
+        r = requests.get(_ONEMAP_SEARCH, params={
+            "searchVal": query, "returnGeom": "Y", "getAddrDetails": "N", "pageNum": 1,
+        }, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        if r.status_code != 200:
+            return None
+        results = (r.json() or {}).get("results") or []
+        if results:
+            return float(results[0]["LATITUDE"]), float(results[0]["LONGITUDE"])
+    except Exception:
+        return None
+    return None
+
+
+def town_centroids(engine) -> dict[str, tuple[float, float]]:
+    """Centroid (lat, lon) per town from hdb_blocks — the geocoding fallback."""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT UPPER(town) AS town,
+                   ST_Y(ST_Centroid(ST_Collect(geom))) AS lat,
+                   ST_X(ST_Centroid(ST_Collect(geom))) AS lon
+            FROM hdb_blocks WHERE geom IS NOT NULL GROUP BY UPPER(town)
+        """)).all()
+    return {r.town: (float(r.lat), float(r.lon)) for r in rows if r.lat is not None}
+
+
+def _jitter(name: str) -> tuple[float, float]:
+    """Small deterministic offset so same-town projects don't stack exactly."""
+    h = int(hashlib.md5(name.encode()).hexdigest(), 16)
+    return ((h % 1000) / 1000 - 0.5) * 0.012, ((h // 1000 % 1000) / 1000 - 0.5) * 0.012
+
+
+def geocode_records(engine, records: list[dict]) -> None:
+    """Fill lat/lon on each record: OneMap by project name, town-centroid fallback."""
+    import time
+    centroids = town_centroids(engine)
+    located = 0
+    for rec in records:
+        try:
+            name = (rec.get("project_name") or "").split(",")[0].strip()
+            coord = geocode_onemap(name)
+            if coord is None:
+                base = centroids.get((rec.get("town") or "").upper().strip())
+                if base is not None:
+                    dlat, dlon = _jitter(rec.get("project_name") or name)
+                    coord = (base[0] + dlat, base[1] + dlon)
+            if coord is not None:
+                rec["lat"], rec["lon"] = coord
+                located += 1
+        except Exception as exc:
+            log.warning("Geocode failed for %s: %s", rec.get("project_name"), exc)
+        time.sleep(0.12)  # be gentle with OneMap
+    log.info("Geocoded %d/%d BTO projects.", located, len(records))
+
+
 def persist(engine, records: list[dict]) -> None:
     from sqlalchemy import text
     if not records:
@@ -332,15 +401,15 @@ def persist(engine, records: list[dict]) -> None:
               (project_name, town, estate, launch_exercise, flat_classification,
                flat_types, estimated_completion_date, estimated_key_collection_date,
                mop_years, estimated_resale_eligible_date, confidence, confidence_reason,
-               source_url, source_type, last_verified_at, updated_at)
+               source_url, source_type, last_verified_at, lat, lon, updated_at)
             VALUES
               (:project_name, :town, :estate, :launch_exercise, :flat_classification,
                :flat_types, :estimated_completion_date, :estimated_key_collection_date,
                :mop_years, :estimated_resale_eligible_date, :confidence, :confidence_reason,
-               :source_url, :source_type, :last_verified_at, NOW())
+               :source_url, :source_type, :last_verified_at, :lat, :lon, NOW())
             ON CONFLICT (project_name, town, flat_classification) DO UPDATE SET
               estate=EXCLUDED.estate, launch_exercise=EXCLUDED.launch_exercise,
-              flat_types=EXCLUDED.flat_types,
+              flat_types=EXCLUDED.flat_types, lat=EXCLUDED.lat, lon=EXCLUDED.lon,
               estimated_completion_date=EXCLUDED.estimated_completion_date,
               estimated_key_collection_date=EXCLUDED.estimated_key_collection_date,
               mop_years=EXCLUDED.mop_years,
@@ -356,6 +425,7 @@ def rebuild(engine) -> list[dict]:
     seed = load_seed()
     launch_rows = fetch_launch_rows(engine)
     records = build_estimates(seed, launch_rows)
+    geocode_records(engine, records)
     persist(engine, records)
     return records
 

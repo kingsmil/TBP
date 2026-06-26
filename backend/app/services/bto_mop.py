@@ -93,4 +93,6 @@ def _row(r) -> dict:
         "source_url": r["source_url"],
         "source_type": r["source_type"],
         "last_verified_at": iso(r["last_verified_at"]),
+        "lat": r["lat"],
+        "lon": r["lon"],
     }

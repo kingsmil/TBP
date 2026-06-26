@@ -39,6 +39,10 @@ gitignored).
   Information* (`year_completed` per block) and *HDB Completion Status*
   (town/estate completion). Set `source_type` to
   `DATA_GOV_HDB_PROPERTY_INFO` / `DATA_GOV_COMPLETION_STATUS` when added.
+- **Coordinates (lat/lon):** geocoded by `app.data.bto_mop` so projects show on
+  the map — OneMap public search by project name, with a town-centroid fallback
+  (computed from `hdb_blocks`) + small deterministic jitter so same-town projects
+  don't stack. Approximate by nature; nullable when neither resolves.
 
 ## Private Property transactions (Feature 2 — official, with mock fallback)
 - **Source:** URA Private Residential Property Transactions API (official; rolling

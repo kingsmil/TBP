@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   searchProperties, getPrivateTransactions, getBtoResaleSupply,
@@ -61,33 +62,32 @@ export function useListings(mode: Mode, filters: SearchFilters) {
     enabled: mode === "bto",
   });
 
-  let items: CardItem[] = [];
-  let blocks: BlockSummary[] = [];
-  let isLoading = false;
-  let isError = false;
+  // Memoised so identity is stable across renders — otherwise the map rebuilds
+  // every marker/cluster each render (flicker + fly-to loop).
+  const blocks = useMemo<BlockSummary[]>(
+    () => (mode === "resale" ? resale.data?.results ?? [] : []),
+    [mode, resale.data],
+  );
 
-  if (mode === "resale") {
-    blocks = resale.data?.results ?? [];
-    items = blocks.map(fromResale);
-    isLoading = resale.isLoading; isError = resale.isError;
-  } else if (mode === "private") {
-    items = (priv.data?.results ?? []).map((t) => ({
-      id: `p-${t.id}`,
-      title: t.project_name ?? t.address ?? "Private home",
-      subtitle: `District ${t.district ?? "—"} · ${t.planning_region ?? ""}`.trim(),
-      badge: t.property_type,
-      price: t.price,
-      priceLabel: t.sale_type.replace("_", " ").toLowerCase(),
-      psf: t.psf,
-      metrics: [
-        { label: "Area", value: t.area_sqft ? `${t.area_sqft} sqft` : "—" },
-        { label: "Tenure", value: t.tenure ? (t.tenure.includes("Freehold") ? "Freehold" : "Leasehold") : "—" },
-        { label: "Sold", value: t.sale_date.slice(0, 7) },
-      ],
-    }));
-    isLoading = priv.isLoading; isError = priv.isError;
-  } else {
-    items = (bto.data?.results ?? []).map((r) => ({
+  const items = useMemo<CardItem[]>(() => {
+    if (mode === "resale") return blocks.map(fromResale);
+    if (mode === "private") {
+      return (priv.data?.results ?? []).map((t) => ({
+        id: `p-${t.id}`,
+        title: t.project_name ?? t.address ?? "Private home",
+        subtitle: `District ${t.district ?? "—"} · ${t.planning_region ?? ""}`.trim(),
+        badge: t.property_type,
+        price: t.price,
+        priceLabel: t.sale_type.replace("_", " ").toLowerCase(),
+        psf: t.psf,
+        metrics: [
+          { label: "Area", value: t.area_sqft ? `${t.area_sqft} sqft` : "—" },
+          { label: "Tenure", value: t.tenure ? (t.tenure.includes("Freehold") ? "Freehold" : "Leasehold") : "—" },
+          { label: "Sold", value: t.sale_date.slice(0, 7) },
+        ],
+      }));
+    }
+    return (bto.data?.results ?? []).map((r) => ({
       id: `b-${r.id}`,
       title: r.project_name,
       subtitle: r.town ?? "—",
@@ -100,8 +100,10 @@ export function useListings(mode: Mode, filters: SearchFilters) {
         { label: "Resale est.", value: r.estimated_resale_eligible_date?.slice(0, 7) ?? "—" },
       ],
     }));
-    isLoading = bto.isLoading; isError = bto.isError;
-  }
+  }, [mode, blocks, priv.data, bto.data]);
+
+  const isLoading = mode === "resale" ? resale.isLoading : mode === "private" ? priv.isLoading : bto.isLoading;
+  const isError = mode === "resale" ? resale.isError : mode === "private" ? priv.isError : bto.isError;
 
   return { items, blocks, isLoading, isError, sgd };
 }

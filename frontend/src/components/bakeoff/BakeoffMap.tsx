@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import { divIcon, type LatLngBoundsExpression } from "leaflet";
 import useSupercluster from "use-supercluster";
@@ -15,10 +15,10 @@ function priceLabel(it: CardItem): string {
   return it.price == null ? (it.badge ?? "View") : fmt(it.price);
 }
 
-function pinIcon(it: CardItem, state: "" | "selected" | "hover") {
+function pinIcon(it: CardItem, selected: boolean) {
   return divIcon({
     className: "bo-pin-wrap",
-    html: `<div class="bo-pin ${state ? `bo-pin--${state}` : ""}">${priceLabel(it)}</div>`,
+    html: `<div class="bo-pin ${selected ? "bo-pin--selected" : ""}">${priceLabel(it)}</div>`,
     iconSize: [10, 10], iconAnchor: [0, 0],
   });
 }
@@ -36,8 +36,13 @@ function clusterIcon(count: number, from?: number) {
 
 function Recenter({ item }: { item: CardItem | null }) {
   const map = useMap();
+  const last = useRef<string | null>(null);
+  // Pan only when the *selection* changes — not on every render.
   useEffect(() => {
-    if (item?.lat != null && item?.lon != null) map.panTo([item.lat, item.lon], { animate: true, duration: 0.5 });
+    if (!item) { last.current = null; return; }
+    if (item.id === last.current || item.lat == null || item.lon == null) return;
+    last.current = item.id;
+    map.panTo([item.lat, item.lon], { animate: true, duration: 0.5 });
   }, [item, map]);
   return null;
 }
@@ -54,11 +59,10 @@ function FitOnce({ pts }: { pts: [number, number][] }) {
 interface Props {
   items: CardItem[];
   selectedId: string | null;
-  hoveredId: string | null;
   onSelect: (id: string | null) => void;
 }
 
-function Clusters({ items, selectedId, hoveredId, onSelect }: Props) {
+function Clusters({ items, selectedId, onSelect }: Props) {
   const map = useMap();
   const [bounds, setBounds] = useState<[number, number, number, number]>([103.6, 1.13, 104.01, 1.48]);
   const [zoom, setZoom] = useState(12);
@@ -105,9 +109,8 @@ function Clusters({ items, selectedId, hoveredId, onSelect }: Props) {
           );
         }
         const it: CardItem = item;
-        const state = it.id === selectedId ? "selected" : it.id === hoveredId ? "hover" : "";
         return (
-          <Marker key={it.id} position={[lat, lon]} icon={pinIcon(it, state)}
+          <Marker key={it.id} position={[lat, lon]} icon={pinIcon(it, it.id === selectedId)}
             eventHandlers={{ click: () => onSelect(it.id === selectedId ? null : it.id) }} />
         );
       })}
@@ -115,7 +118,7 @@ function Clusters({ items, selectedId, hoveredId, onSelect }: Props) {
   );
 }
 
-export default function BakeoffMap({ items, selectedId, hoveredId, onSelect }: Props) {
+export default function BakeoffMap({ items, selectedId, onSelect }: Props) {
   const pts = useMemo(
     () => items.filter((i) => i.lat != null && i.lon != null).map((i) => [i.lat!, i.lon!] as [number, number]),
     [items],
@@ -128,7 +131,7 @@ export default function BakeoffMap({ items, selectedId, hoveredId, onSelect }: P
       <TileLayer url={GREY_TILES} />
       <FitOnce pts={pts} />
       <Recenter item={selected} />
-      <Clusters items={items} selectedId={selectedId} hoveredId={hoveredId} onSelect={onSelect} />
+      <Clusters items={items} selectedId={selectedId} onSelect={onSelect} />
     </MapContainer>
   );
 }

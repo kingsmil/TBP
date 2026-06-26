@@ -15,7 +15,7 @@ export default function LayoutPremium(p: ShellProps) {
 
   return (
     <div className="fixed inset-0">
-      <BakeoffMap items={p.items} selectedId={p.selectedId} hoveredId={p.hoveredId} onSelect={p.setSelectedId} />
+      <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} />
 
       {/* Centered command bar */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-[1000] flex justify-center p-3 sm:p-5">

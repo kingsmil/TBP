@@ -1,12 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
-import { MapContainer, TileLayer, Marker, CircleMarker, Tooltip, Pane, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, CircleMarker, Circle, Polyline, Tooltip, Pane, useMap, useMapEvents } from "react-leaflet";
 import { divIcon, type LatLngBoundsExpression } from "leaflet";
 import useSupercluster from "use-supercluster";
 import { Layers, X } from "lucide-react";
 import type { CardItem } from "./types";
 import { MODE_META } from "./types";
-import { getAmenityTypes, getAmenities } from "../../lib/api";
+import { getAmenityTypes, getAmenities, getReferenceLayer, getBusStopReach } from "../../lib/api";
+import { distanceMetres } from "../../lib/geo";
+
+const TRANSIT_RADIUS_M = 500;
+const BUS_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#0891b2"];
+// Keyed by the short line code used in the reference data (line_name = "EW" etc.)
+const MRT_COLORS: Record<string, string> = {
+  EW: "#009645", NS: "#d42e12", NE: "#9900aa", CC: "#fa9e0d",
+  DT: "#005ec4", TE: "#9d5b25", CG: "#009645", BP: "#748477",
+};
 
 const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
@@ -98,6 +107,87 @@ function AmenityMarkers({ active, colorOf }: { active: string[]; colorOf: (k: st
           </CircleMarker>
         )),
       )}
+    </Pane>
+  );
+}
+
+/** On-select transit: nearby bus stops + where their buses go + nearby MRT lines,
+ *  within a radius of the selected property. */
+function TransitLayer({ item }: { item: CardItem }) {
+  const origin = { lat: item.lat!, lon: item.lon! };
+  const busStops = useQuery({ queryKey: ["reference", "bus_stops"], queryFn: () => getReferenceLayer("bus_stops"), staleTime: 6e5 });
+  const mrt = useQuery({ queryKey: ["reference", "mrt"], queryFn: () => getReferenceLayer("mrt"), staleTime: 6e5 });
+
+  const nearbyStops = useMemo(() => {
+    const out: { code: string; lat: number; lon: number; d: number }[] = [];
+    for (const f of busStops.data?.features ?? []) {
+      const [lon, lat] = f.geometry.coordinates;
+      const d = distanceMetres(origin, { lat, lon });
+      if (d <= TRANSIT_RADIUS_M) out.push({ code: String(f.properties.code ?? ""), lat, lon, d });
+    }
+    return out.filter((s) => s.code).sort((a, b) => a.d - b.d).slice(0, 8);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busStops.data, item.lat, item.lon]);
+
+  const mrtLines = useMemo(() => {
+    const lines = new Map<string, { sid: number; lat: number; lon: number }[]>();
+    for (const f of mrt.data?.features ?? []) {
+      const line = String(f.properties.line_name ?? "");
+      const sid = Number(f.properties.station_id);
+      if (!line || !Number.isFinite(sid)) continue;
+      const [lon, lat] = f.geometry.coordinates;
+      const arr = lines.get(line) ?? [];
+      arr.push({ sid, lat, lon });
+      lines.set(line, arr);
+    }
+    for (const arr of lines.values()) arr.sort((a, b) => a.sid - b.sid);
+    return lines;
+  }, [mrt.data]);
+
+  const nearbyMrtLines = useMemo(() => {
+    const names: string[] = [];
+    for (const [line, stations] of mrtLines) {
+      if (stations.some((s) => distanceMetres(origin, s) <= TRANSIT_RADIUS_M)) names.push(line);
+    }
+    return names;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mrtLines, item.lat, item.lon]);
+
+  const reachQueries = useQueries({
+    queries: nearbyStops.map((s) => ({
+      queryKey: ["bo-reach", s.code], queryFn: () => getBusStopReach(s.code), staleTime: 3e5,
+    })),
+  });
+  const routes = reachQueries.flatMap((q) => q.data?.services ?? []);
+
+  return (
+    <Pane name="bo-transit" style={{ zIndex: 620, pointerEvents: "none" }}>
+      <Circle center={[origin.lat, origin.lon]} radius={TRANSIT_RADIUS_M} interactive={false}
+        pathOptions={{ color: "#2563eb", fillColor: "#60a5fa", fillOpacity: 0.06, dashArray: "6 5", weight: 1.5 }} />
+      {nearbyMrtLines.map((line) => {
+        const positions = (mrtLines.get(line) ?? []).map((s) => [s.lat, s.lon] as [number, number]);
+        const color = MRT_COLORS[line] ?? "#334155";
+        return (
+          <Fragment key={`mrt-${line}`}>
+            <Polyline positions={positions} interactive={false} pathOptions={{ color: "#fff", weight: 9, opacity: 0.85, lineCap: "round", lineJoin: "round" }} />
+            <Polyline positions={positions} interactive={false} pathOptions={{ color, weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }} />
+          </Fragment>
+        );
+      })}
+      {routes.map((svc, i) => {
+        const positions = svc.stops.map((s) => [s.lat, s.lon] as [number, number]);
+        const color = BUS_COLORS[i % BUS_COLORS.length];
+        return (
+          <Fragment key={`bus-${svc.service_no}-${svc.direction}-${i}`}>
+            <Polyline positions={positions} interactive={false} pathOptions={{ color: "#fff", weight: 5, opacity: 0.6, dashArray: "8 7", lineCap: "round" }} />
+            <Polyline positions={positions} interactive={false} pathOptions={{ color, weight: 2.5, opacity: 0.85, dashArray: "8 7", lineCap: "round" }} />
+          </Fragment>
+        );
+      })}
+      {nearbyStops.map((s) => (
+        <CircleMarker key={`stop-${s.code}`} center={[s.lat, s.lon]} radius={6} interactive={false}
+          pathOptions={{ pane: "bo-transit", color: "#1e3a8a", fillColor: "#facc15", fillOpacity: 0.95, weight: 2 }} />
+      ))}
     </Pane>
   );
 }
@@ -226,6 +316,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey }: Prop
         <FitOnce pts={pts} fitKey={fitKey} />
         <Recenter item={selected} />
         <Clusters items={items} selectedId={selectedId} onSelect={onSelect} />
+        {selected && selected.lat != null && selected.lon != null && <TransitLayer item={selected} />}
         {activeAmenities.length > 0 && <AmenityMarkers active={activeAmenities} colorOf={colorOf} />}
       </MapContainer>
       <AmenityToggle active={activeAmenities} onToggle={toggleAmenity} />

@@ -750,6 +750,15 @@ def rankings_regions(limit: int = Query(50, ge=1, le=100)):
             "computed_at": rows[0]["computed_at"] if rows else None}
 
 
+@app.get("/rankings/block-scores")
+def rankings_block_scores():
+    """All block_id -> appreciation_score (precomputed), for client-side blending."""
+    engine = get_engine_or_none()
+    if engine is None:
+        return {"scores": {}}
+    return {"scores": appreciation_rankings_svc.block_scores(engine)}
+
+
 @app.get("/rankings/blocks")
 def rankings_blocks(planning_area_id: int | None = None,
                     limit: int = Query(50, ge=1, le=200)):

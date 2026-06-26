@@ -17,6 +17,7 @@ export interface CardItem {
   priceLabel?: string;     // e.g. "median", "from"
   psf?: number | null;
   metrics: CardMetric[];   // up to 3 friendly chips
+  pinLabel?: string;       // overrides the map-pin text (else price / badge)
   score?: number | null;   // 0–100 "match" for the score bar (resale only)
   lat?: number;
   lon?: number;

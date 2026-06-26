@@ -21,6 +21,7 @@ function fmt(n: number): string {
   return `$${Math.round(n / 1000)}k`;
 }
 function priceLabel(it: CardItem): string {
+  if (it.pinLabel) return it.pinLabel;
   return it.price == null ? (it.badge ?? "View") : fmt(it.price);
 }
 

@@ -92,6 +92,10 @@ async function sendJSON<T>(method: string, path: string, body?: unknown): Promis
   return (await res.json()) as T;
 }
 
+export function getBlockScores(): Promise<{ scores: Record<string, number> }> {
+  return getJSON<{ scores: Record<string, number> }>("/rankings/block-scores");
+}
+
 // ── Private property (Feature 2) ───────────────────────────────────────────────
 export function getPrivateTransactions(f: PrivateTransactionFilters = {}): Promise<PrivateTransactionsResponse> {
   const p = new URLSearchParams();

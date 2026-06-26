@@ -263,6 +263,26 @@ def read_region_rankings(engine, limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def block_scores(engine) -> dict[int, float]:
+    """All block_id -> appreciation sub-score (0-100), precomputed. Cheap bulk
+    read for blending a per-block match score on the client. Prefers the composite
+    appreciation_score (top-N per region); falls back to normalised CAGR so the
+    full set of ranked blocks is covered."""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT block_id, appreciation_score, cagr_pct "
+            "FROM block_appreciation_ranking")).all()
+    out: dict[int, float] = {}
+    for r in rows:
+        if r.appreciation_score is not None:
+            out[int(r.block_id)] = float(r.appreciation_score)
+        elif r.cagr_pct is not None:
+            # ~0%/yr -> 50, +12.5%/yr -> 100, -12.5%/yr -> 0
+            out[int(r.block_id)] = max(0.0, min(100.0, 50 + float(r.cagr_pct) * 4))
+    return out
+
+
 def read_block_rankings(engine, planning_area_id: int | None = None,
                         limit: int = 50) -> list[dict]:
     from sqlalchemy import text

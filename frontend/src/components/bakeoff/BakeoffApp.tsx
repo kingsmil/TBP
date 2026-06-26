@@ -24,6 +24,7 @@ function saveSet(key: string, set: Set<string>) {
  *  shared state + live data. Mounted opt-in (?ui=on) while it's built out. */
 export default function BakeoffApp() {
   const [modes, setModes] = useState<Mode[]>(["resale"]);
+  const [combine, setCombineState] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({ limit: MAP_SEARCH_LIMIT });
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -38,13 +39,19 @@ export default function BakeoffApp() {
   const [filterOpen, setFilterOpen] = useState(false);
   const isDesktop = useIsDesktop();
 
+  // Single-tap = focused view; in Combine mode, tap toggles a mode in/out.
   const toggleMode = (m: Mode) => setModes((prev) => {
+    if (!combine) return [m];
     if (prev.includes(m)) {
       const next = prev.filter((x) => x !== m);
       return next.length ? next : prev; // keep at least one active
     }
     return [...prev, m];
   });
+  const setCombine = (on: boolean) => {
+    setCombineState(on);
+    if (!on) setModes((prev) => (prev.length > 1 ? [prev[0]] : prev)); // collapse to one
+  };
 
   const { items: allItems, blocks, isLoading, isError } = useListings(modes, filters);
 
@@ -63,7 +70,7 @@ export default function BakeoffApp() {
     });
 
   const props: ShellProps = {
-    modes, toggleMode, filters, setFilters, query, setQuery,
+    modes, toggleMode, combine, setCombine, filters, setFilters, query, setQuery,
     items, blocks, isLoading, isError,
     selectedId, setSelectedId,
     savedIds, toggleSave: toggle(setSavedIds),

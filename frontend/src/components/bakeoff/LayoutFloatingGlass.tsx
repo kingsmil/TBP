@@ -29,7 +29,7 @@ export default function LayoutFloatingGlass(p: ShellProps) {
             </button>
           </div>
           <div className="pointer-events-auto flex justify-center">
-            <ModeSwitch active={p.modes} onToggle={p.toggleMode} size="sm" />
+            <ModeSwitch active={p.modes} onToggle={p.toggleMode} combine={p.combine} onCombine={p.setCombine} size="sm" />
           </div>
         </div>
       </div>

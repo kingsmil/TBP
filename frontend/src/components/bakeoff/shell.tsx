@@ -8,6 +8,8 @@ import PropertyCard from "./PropertyCard";
 export interface ShellProps {
   modes: Mode[];
   toggleMode: (m: Mode) => void;
+  combine: boolean;
+  setCombine: (on: boolean) => void;
   filters: SearchFilters;
   setFilters: (f: SearchFilters) => void;
   query: string;

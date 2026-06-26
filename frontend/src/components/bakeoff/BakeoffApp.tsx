@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./bakeoff.css";
 import { Undo2 } from "lucide-react";
 import type { SearchFilters } from "../../types";
 import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
 import { setRedesign } from "../../lib/uiVariant";
+import { getStoredUser, clearAuth, type AuthUser } from "../../lib/auth";
+import { getMyPreferences, putMyPreferences } from "../../lib/api";
+import AuthModal from "../AuthModal";
 import type { Mode } from "./types";
 import { useListings } from "./useListings";
 import { useIsDesktop } from "./useMediaQuery";
@@ -31,10 +34,46 @@ export default function BakeoffApp() {
   const [savedIds, setSavedIds] = useState<Set<string>>(() => loadSet("hdb_saved"));
   const [compareIds, setCompareIds] = useState<Set<string>>(() => loadSet("hdb_compare"));
 
-  // Persist saved + compare locally so they survive reloads (real persistence;
-  // account sync can layer on later via the saved-state APIs).
+  // Persist saved + compare locally so they survive reloads (anon cache).
   useEffect(() => saveSet("hdb_saved", savedIds), [savedIds]);
   useEffect(() => saveSet("hdb_compare", compareIds), [compareIds]);
+
+  // ── Auth + account-synced shortlist ───────────────────────────────────────
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [showAuth, setShowAuth] = useState(false);
+  const synced = useRef(false);
+
+  // On login: merge the account's saved/compare (stored in preferences metadata)
+  // with whatever was saved anonymously, so nothing is lost.
+  useEffect(() => {
+    if (!authUser) { synced.current = false; return; }
+    let cancelled = false;
+    getMyPreferences()
+      .then((prefs) => {
+        if (cancelled) return;
+        const meta = (prefs?.metadata_json ?? {}) as { saved?: string[]; compare?: string[] };
+        if (meta.saved?.length) setSavedIds((prev) => new Set([...prev, ...meta.saved!]));
+        if (meta.compare?.length) setCompareIds((prev) => new Set([...prev, ...meta.compare!]));
+      })
+      .catch(() => { /* not reachable / not authed — stay local */ })
+      .finally(() => { if (!cancelled) synced.current = true; });
+    return () => { cancelled = true; };
+  }, [authUser]);
+
+  // While logged in, push changes to the account (debounced).
+  useEffect(() => {
+    if (!authUser || !synced.current) return;
+    const t = setTimeout(() => {
+      putMyPreferences({ metadata_json: { saved: [...savedIds], compare: [...compareIds] } }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(t);
+  }, [savedIds, compareIds, authUser]);
+
+  const onAccount = () => {
+    if (authUser) { clearAuth(); setAuthUser(null); }
+    else setShowAuth(true);
+  };
+
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const isDesktop = useIsDesktop();
@@ -77,12 +116,19 @@ export default function BakeoffApp() {
     compareIds, toggleCompare: toggle(setCompareIds),
     hoveredId, setHoveredId,
     filterOpen, setFilterOpen, isDesktop,
+    authEmail: authUser?.email ?? null, onAccount,
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <LayoutFloatingGlass {...props} />
       <CompareBar saved={savedIds.size} comparing={compareIds.size} />
+      {showAuth && (
+        <AuthModal
+          onSuccess={(u) => { setAuthUser(u); setShowAuth(false); }}
+          onClose={() => setShowAuth(false)}
+        />
+      )}
       <button type="button" onClick={() => setRedesign(false)}
         title="Back to the classic app"
         className="bo-glass fixed bottom-4 right-4 z-[3000] flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold sm:bottom-6 sm:right-6">

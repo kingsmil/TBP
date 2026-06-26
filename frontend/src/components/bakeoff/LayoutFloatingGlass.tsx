@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, User, LogOut } from "lucide-react";
 import ModeSwitch from "./ModeSwitch";
 import FilterSheet from "./FilterSheet";
 import BakeoffMap from "./BakeoffMap";
@@ -26,6 +26,12 @@ export default function LayoutFloatingGlass(p: ShellProps) {
             <button type="button" onClick={() => p.setFilterOpen(true)}
               className="bo-glass flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
               <SlidersHorizontal className="h-4 w-4" /> <span className="hidden sm:inline">Filters</span>
+            </button>
+            <button type="button" onClick={p.onAccount}
+              title={p.authEmail ? `${p.authEmail} — sign out` : "Sign in"}
+              className="bo-glass flex h-11 items-center gap-2 rounded-full px-3.5 text-sm font-semibold">
+              {p.authEmail ? <LogOut className="h-4 w-4" /> : <User className="h-4 w-4" />}
+              <span className="hidden max-w-[120px] truncate sm:inline">{p.authEmail ?? "Sign in"}</span>
             </button>
           </div>
           <div className="pointer-events-auto flex justify-center">

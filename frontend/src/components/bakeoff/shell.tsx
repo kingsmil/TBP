@@ -29,6 +29,8 @@ export interface ShellProps {
   filterOpen: boolean;
   setFilterOpen: (open: boolean) => void;
   isDesktop: boolean;
+  authEmail: string | null;
+  onAccount: () => void;
 }
 
 export function SearchBar({ value, onChange, placeholder }: {

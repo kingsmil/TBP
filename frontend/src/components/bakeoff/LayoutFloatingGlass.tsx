@@ -4,7 +4,7 @@ import { MODE_META } from "./types";
 import ModeSwitch from "./ModeSwitch";
 import FilterSheet from "./FilterSheet";
 import BakeoffMap from "./BakeoffMap";
-import DetailCard from "./DetailCard";
+import DetailPanel from "./DetailPanel";
 import { type ShellProps, SearchBar, ResultsCount, CardList } from "./shell";
 
 /** Floating Glass — full-screen map canvas; frosted panels float on top. */
@@ -56,12 +56,10 @@ export default function LayoutFloatingGlass(p: ShellProps) {
       {/* Mobile results sheet (peek) */}
       <MobileSheet p={p} />
 
-      {/* Floating detail card */}
+      {/* Detail panel (self-positioning: right rail on desktop, sheet on mobile) */}
       {selected && (
-        <div className="pointer-events-none absolute bottom-4 left-1/2 z-[1100] -translate-x-1/2 sm:left-[22rem] sm:translate-x-0">
-          <DetailCard item={selected} saved={p.savedIds.has(selected.id)} comparing={p.compareIds.has(selected.id)}
-            onClose={() => p.setSelectedId(null)} onSave={() => p.toggleSave(selected.id)} onCompare={() => p.toggleCompare(selected.id)} />
-        </div>
+        <DetailPanel item={selected} saved={p.savedIds.has(selected.id)} comparing={p.compareIds.has(selected.id)}
+          onClose={() => p.setSelectedId(null)} onSave={() => p.toggleSave(selected.id)} onCompare={() => p.toggleCompare(selected.id)} />
       )}
 
       <FilterSheet filters={p.filters} onChange={p.setFilters} asSheet open={p.filterOpen} onClose={() => p.setFilterOpen(false)} />

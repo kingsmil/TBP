@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./bakeoff.css";
 import { Undo2 } from "lucide-react";
 import type { SearchFilters } from "../../types";
@@ -10,6 +10,16 @@ import { useIsDesktop } from "./useMediaQuery";
 import { type ShellProps, CompareBar } from "./shell";
 import LayoutFloatingGlass from "./LayoutFloatingGlass";
 
+function loadSet(key: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(key);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch { return new Set(); }
+}
+function saveSet(key: string, set: Set<string>) {
+  try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* ignore */ }
+}
+
 /** The "Floating Glass" redesign shell (full-screen map + floating UI). Owns
  *  shared state + live data. Mounted opt-in (?ui=on) while it's built out. */
 export default function BakeoffApp() {
@@ -17,8 +27,13 @@ export default function BakeoffApp() {
   const [filters, setFilters] = useState<SearchFilters>({ limit: MAP_SEARCH_LIMIT });
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
+  const [savedIds, setSavedIds] = useState<Set<string>>(() => loadSet("hdb_saved"));
+  const [compareIds, setCompareIds] = useState<Set<string>>(() => loadSet("hdb_compare"));
+
+  // Persist saved + compare locally so they survive reloads (real persistence;
+  // account sync can layer on later via the saved-state APIs).
+  useEffect(() => saveSet("hdb_saved", savedIds), [savedIds]);
+  useEffect(() => saveSet("hdb_compare", compareIds), [compareIds]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const isDesktop = useIsDesktop();

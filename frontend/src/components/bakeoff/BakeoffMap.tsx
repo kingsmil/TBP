@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
+import { useQuery, useQueries } from "@tanstack/react-query";
+import { MapContainer, TileLayer, Marker, CircleMarker, Tooltip, Pane, useMap, useMapEvents } from "react-leaflet";
 import { divIcon, type LatLngBoundsExpression } from "leaflet";
 import useSupercluster from "use-supercluster";
+import { Layers, X } from "lucide-react";
 import type { CardItem } from "./types";
 import { MODE_META } from "./types";
+import { getAmenityTypes, getAmenities } from "../../lib/api";
 
 const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
 
+const AMENITY_EMOJI: Record<string, string> = {
+  schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",
+  sports: "⚽", community: "🏛️", library: "📚",
+};
+
 // Stable module-level identity — a new options object each render makes
-// use-supercluster rebuild its index and emit a new clusters array every render,
-// which feeds a render loop (the flicker).
+// use-supercluster rebuild its index and emit a new clusters array every render.
 const CLUSTER_OPTIONS = {
   radius: 70, maxZoom: 17, minPoints: 4,
   map: (props: any) => ({ minPrice: props.price }),
@@ -49,7 +56,6 @@ function clusterIcon(count: number, from?: number) {
 function Recenter({ item }: { item: CardItem | null }) {
   const map = useMap();
   const last = useRef<string | null>(null);
-  // Pan only when the *selection* changes — not on every render.
   useEffect(() => {
     if (!item) { last.current = null; return; }
     if (item.id === last.current || item.lat == null || item.lon == null) return;
@@ -59,8 +65,6 @@ function Recenter({ item }: { item: CardItem | null }) {
   return null;
 }
 
-/** Fit to the pins once per `fitKey` (e.g. the mode), when they first arrive —
- *  so switching modes re-centres on that mode's pins instead of staying put. */
 function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) {
   const map = useMap();
   const lastKey = useRef<string | undefined>(undefined);
@@ -74,6 +78,28 @@ function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) 
     }
   }, [fitKey, pts, map]);
   return null;
+}
+
+/** Amenity POIs (schools, parks, hawker, …) for the active layers. */
+function AmenityMarkers({ active, colorOf }: { active: string[]; colorOf: (k: string) => string }) {
+  const queries = useQueries({
+    queries: active.map((key) => ({
+      queryKey: ["bo-amenity", key], queryFn: () => getAmenities(key), staleTime: 6e5,
+    })),
+  });
+  return (
+    <Pane name="bo-amenities" style={{ zIndex: 560 }}>
+      {queries.map((q, i) =>
+        (q.data?.results ?? []).map((poi, j) => (
+          <CircleMarker key={`${active[i]}-${j}`} center={[poi.lat, poi.lon]} radius={5}
+            pane="bo-amenities"
+            pathOptions={{ color: "#fff", weight: 1.5, fillColor: colorOf(active[i]), fillOpacity: 0.9 }}>
+            <Tooltip direction="top">{AMENITY_EMOJI[active[i]] ?? ""} {poi.name}</Tooltip>
+          </CircleMarker>
+        )),
+      )}
+    </Pane>
+  );
 }
 
 interface Props {
@@ -109,6 +135,16 @@ function Clusters({ items, selectedId, onSelect }: Omit<Props, "fitKey">) {
     points, bounds, zoom, options: CLUSTER_OPTIONS,
   });
 
+  // Focus mode: when a property is selected, show only its pin so you can focus
+  // on it + its surroundings (others hide, like the classic map).
+  const selected = selectedId ? items.find((i) => i.id === selectedId && i.lat != null) : null;
+  if (selected) {
+    return (
+      <Marker key={selected.id} position={[selected.lat!, selected.lon!]} icon={pinIcon(selected, true)}
+        eventHandlers={{ click: () => onSelect(null) }} />
+    );
+  }
+
   return (
     <>
       {clusters.map((c: any) => {
@@ -126,15 +162,56 @@ function Clusters({ items, selectedId, onSelect }: Omit<Props, "fitKey">) {
         }
         const it: CardItem = item;
         return (
-          <Marker key={it.id} position={[lat, lon]} icon={pinIcon(it, it.id === selectedId)}
-            eventHandlers={{ click: () => onSelect(it.id === selectedId ? null : it.id) }} />
+          <Marker key={it.id} position={[lat, lon]} icon={pinIcon(it, false)}
+            eventHandlers={{ click: () => onSelect(it.id) }} />
         );
       })}
     </>
   );
 }
 
+/** Floating glass panel of amenity-layer toggles. */
+function AmenityToggle({ active, onToggle }: { active: string[]; onToggle: (k: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const types = useQuery({ queryKey: ["amenity-types"], queryFn: getAmenityTypes, staleTime: 6e5 });
+  const list = types.data?.amenities ?? [];
+  return (
+    <div className="absolute bottom-24 left-3 z-[1000] sm:bottom-3 sm:left-[21rem]">
+      {open && list.length > 0 && (
+        <div className="bo-glass mb-2 w-52 rounded-2xl p-2">
+          <div className="mb-1 flex items-center justify-between px-1">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Amenities</span>
+            <button type="button" onClick={() => setOpen(false)} className="rounded p-0.5 hover:bg-muted"><X className="h-3.5 w-3.5" /></button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 p-1">
+            {list.map((a) => {
+              const on = active.includes(a.key);
+              return (
+                <button key={a.key} type="button" onClick={() => onToggle(a.key)}
+                  className={`rounded-full border px-2 py-1 text-xs font-medium transition-colors ${on ? "text-white" : "border-border bg-card hover:bg-muted"}`}
+                  style={on ? { background: a.color, borderColor: a.color } : undefined}>
+                  {AMENITY_EMOJI[a.key] ?? ""} {a.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        className="bo-glass flex items-center gap-2 rounded-full px-3.5 py-2.5 text-sm font-semibold shadow-sm">
+        <Layers className="h-4 w-4" /> Amenities{active.length > 0 ? ` · ${active.length}` : ""}
+      </button>
+    </div>
+  );
+}
+
 export default function BakeoffMap({ items, selectedId, onSelect, fitKey }: Props) {
+  const [activeAmenities, setActiveAmenities] = useState<string[]>([]);
+  const types = useQuery({ queryKey: ["amenity-types"], queryFn: getAmenityTypes, staleTime: 6e5 });
+  const colorOf = (key: string) => types.data?.amenities.find((a) => a.key === key)?.color ?? "#475569";
+  const toggleAmenity = (key: string) =>
+    setActiveAmenities((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+
   const pts = useMemo(
     () => items.filter((i) => i.lat != null && i.lon != null).map((i) => [i.lat!, i.lon!] as [number, number]),
     [items],
@@ -142,12 +219,16 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey }: Prop
   const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
 
   return (
-    <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
-      className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
-      <TileLayer url={GREY_TILES} />
-      <FitOnce pts={pts} fitKey={fitKey} />
-      <Recenter item={selected} />
-      <Clusters items={items} selectedId={selectedId} onSelect={onSelect} />
-    </MapContainer>
+    <div className="relative h-full w-full">
+      <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
+        className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
+        <TileLayer url={GREY_TILES} />
+        <FitOnce pts={pts} fitKey={fitKey} />
+        <Recenter item={selected} />
+        <Clusters items={items} selectedId={selectedId} onSelect={onSelect} />
+        {activeAmenities.length > 0 && <AmenityMarkers active={activeAmenities} colorOf={colorOf} />}
+      </MapContainer>
+      <AmenityToggle active={activeAmenities} onToggle={toggleAmenity} />
+    </div>
   );
 }

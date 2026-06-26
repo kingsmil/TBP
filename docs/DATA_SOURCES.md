@@ -19,8 +19,10 @@ Layered fallback in `app.services.images`, served via `GET /image/property`
    active-listing `photo_path` (HDB Flat Portal). Only for blocks with a current
    listing.
 2. **Google Street View Static** — real façade from lat/lon. Optional; needs
-   `GOOGLE_MAPS_API_KEY` (cost applies). Absent → skipped.
-3. **OneMap Static Map** — free location thumbnail for any lat/lon (token managed
+   `GOOGLE_MAPS_API_KEY` (billing account required, cost applies). Absent → skipped.
+3. **Mapillary** — free crowd-sourced street photo near the point. Optional; needs
+   `MAPILLARY_TOKEN` (free, no credit card). Absent → skipped.
+4. **OneMap Static Map** — free location thumbnail for any lat/lon (token managed
    server-side). The always-available fallback.
 
 ## HDB resale transactions & blocks (existing)

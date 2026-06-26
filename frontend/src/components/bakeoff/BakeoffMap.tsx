@@ -104,17 +104,12 @@ function amenityIcon(emoji: string, color: string, delayMs: number) {
 function AmenityMarkers({ active, colorOf, origin }: {
   active: string[]; colorOf: (k: string) => string; origin: { lat: number; lon: number } | null;
 }) {
-  const map = useMap();
-  const [zoom, setZoom] = useState(() => map.getZoom());
-  useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
   const queries = useQueries({
     queries: active.map((key) => ({
       queryKey: ["bo-amenity", key], queryFn: () => getAmenities(key), staleTime: 6e5,
     })),
   });
-  // With a property selected -> show its nearby amenities always. Otherwise show
-  // island-wide only once zoomed into a neighbourhood (else it's ~1k pins).
-  if (!origin && zoom < 14) return null;
+  // Shown at every zoom. With a property selected, filtered to its surroundings.
   return (
     <>
       {queries.map((q, i) => {

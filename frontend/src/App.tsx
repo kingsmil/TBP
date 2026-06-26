@@ -37,6 +37,7 @@ import ScoreRankingPanel from "./components/ScoreRankingPanel";
 import InfoPanel from "./components/InfoPanel";
 import ProductChooser from "./components/ProductChooser";
 import BtoDashboard from "./components/BtoDashboard";
+import PrivateDashboard from "./components/PrivateDashboard";
 import StatCard from "./components/StatCard";
 import AuthModal from "./components/AuthModal";
 import SavedPlacesPanel from "./components/SavedPlacesPanel";
@@ -101,12 +102,12 @@ export default function App() {
     AI_MODE_ENABLED && getStoredUser()?.is_subscribed ? "ai" : "explore",
   );
 
-  // Top-level product choice: resale / bto / unsure (the chooser).
-  const [product, setProductState] = useState<"resale" | "bto" | "unsure">(() => {
+  // Top-level product choice: resale / bto / private / unsure (the chooser).
+  const [product, setProductState] = useState<"resale" | "bto" | "private" | "unsure">(() => {
     const saved = window.localStorage.getItem("hdb-product");
-    return saved === "resale" || saved === "bto" ? saved : "unsure";
+    return saved === "resale" || saved === "bto" || saved === "private" ? saved : "unsure";
   });
-  const setProduct = useCallback((p: "resale" | "bto" | "unsure") => {
+  const setProduct = useCallback((p: "resale" | "bto" | "private" | "unsure") => {
     setProductState(p);
     try { window.localStorage.setItem("hdb-product", p); } catch { /* ignore */ }
   }, []);
@@ -522,6 +523,15 @@ export default function App() {
   if (product === "bto") {
     return (
       <BtoDashboard
+        onBack={() => setProduct("unsure")}
+        theme={theme}
+        onToggleTheme={() => setTheme((c) => (c === "light" ? "dark" : "light"))}
+      />
+    );
+  }
+  if (product === "private") {
+    return (
+      <PrivateDashboard
         onBack={() => setProduct("unsure")}
         theme={theme}
         onToggleTheme={() => setTheme((c) => (c === "light" ? "dark" : "light"))}

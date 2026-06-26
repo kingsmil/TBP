@@ -405,6 +405,62 @@ export interface BtoResaleCompare {
   price_series: { year: number; bto: number | null; resale: number | null }[];
 }
 
+export type PrivatePropertyType = "CONDO" | "APARTMENT" | "EC" | "LANDED" | "STRATA_LANDED";
+export type PrivateSaleType = "NEW_SALE" | "RESALE" | "SUB_SALE";
+
+export interface PrivateTransaction {
+  id: string;
+  project_name: string | null;
+  property_type: PrivatePropertyType;
+  sale_type: PrivateSaleType;
+  district: string | null;
+  planning_region: string | null;
+  address: string | null;
+  sale_date: string;
+  price: number;
+  area_sqm: number | null;
+  area_sqft: number | null;
+  psf: number | null;
+  tenure: string | null;
+  floor_range: string | null;
+  source: "URA";
+}
+
+export interface PrivateTransactionsResponse {
+  mock: boolean;
+  summary: {
+    count: number;
+    median_psf: number | null;
+    avg_psf: number | null;
+    min_psf: number | null;
+    max_psf: number | null;
+    median_price: number | null;
+  };
+  latest: PrivateTransaction | null;
+  trend: { month: string; median_psf: number; count: number }[];
+  results: PrivateTransaction[];
+  filters: { property_types: PrivatePropertyType[]; sale_types: PrivateSaleType[] };
+}
+
+export interface PrivateProject {
+  project_name: string;
+  property_type: PrivatePropertyType;
+  district: string | null;
+  planning_region: string | null;
+  count: number;
+  median_psf: number | null;
+}
+
+export interface PrivateTransactionFilters {
+  project?: string;
+  property_type?: string;
+  sale_type?: string;
+  district?: string;
+  date_from?: string;
+  date_to?: string;
+  limit?: number;
+}
+
 export type SavedLocationType = "home" | "work" | "school" | "partner" | "family" | "custom";
 
 export interface SavedLocation {

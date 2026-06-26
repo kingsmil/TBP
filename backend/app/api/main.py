@@ -78,6 +78,7 @@ from app.services import bto_mop as bto_mop_svc
 from app.services import bto_compare as bto_compare_svc
 from app.services import recommend_path as recommend_path_svc
 from app.services import amenities as amenities_svc
+from app.services.private_property import service as private_svc
 from app.services.search import search_blocks
 from app.services.undervalued import detect_undervalued
 
@@ -692,6 +693,29 @@ def bto_exercise_detail(exercise_id: str):
     if data is None:
         raise HTTPException(status_code=404, detail="exercise not found")
     return data
+
+
+@app.get("/private/transactions")
+def private_transactions(
+    project: str | None = None,
+    property_type: str | None = None,
+    sale_type: str | None = None,
+    district: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = Query(200, ge=1, le=1000),
+):
+    """Private (non-HDB) residential transactions from URA, filtered + summarised.
+    Falls back to bundled fixtures when URA credentials are absent (mock=true)."""
+    return private_svc.transactions(
+        limit=limit, project=project, property_type=property_type,
+        sale_type=sale_type, district=district, date_from=date_from, date_to=date_to)
+
+
+@app.get("/private/projects")
+def private_projects(query: str | None = None, limit: int = Query(50, ge=1, le=200)):
+    """Distinct private projects (txn count + median PSF) for search."""
+    return private_svc.projects(query=query, limit=limit)
 
 
 @app.get("/bto/resale-supply")

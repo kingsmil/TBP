@@ -39,6 +39,9 @@ import type {
   BtoResaleSupplyFilters,
   SavedLocation,
   UserPreferences,
+  PrivateTransactionsResponse,
+  PrivateTransactionFilters,
+  PrivateProject,
   RecommendQuestion,
   RecommendResult,
   AmenityType,
@@ -87,6 +90,23 @@ async function sendJSON<T>(method: string, path: string, body?: unknown): Promis
     throw Object.assign(new Error(detail?.detail ?? `API ${res.status}: ${path}`), { status: res.status });
   }
   return (await res.json()) as T;
+}
+
+// ── Private property (Feature 2) ───────────────────────────────────────────────
+export function getPrivateTransactions(f: PrivateTransactionFilters = {}): Promise<PrivateTransactionsResponse> {
+  const p = new URLSearchParams();
+  if (f.project) p.set("project", f.project);
+  if (f.property_type) p.set("property_type", f.property_type);
+  if (f.sale_type) p.set("sale_type", f.sale_type);
+  if (f.district) p.set("district", f.district);
+  if (f.date_from) p.set("date_from", f.date_from);
+  if (f.date_to) p.set("date_to", f.date_to);
+  if (f.limit) p.set("limit", String(f.limit));
+  const qs = p.toString();
+  return getJSON<PrivateTransactionsResponse>(`/private/transactions${qs ? `?${qs}` : ""}`);
+}
+export function getPrivateProjects(query?: string): Promise<{ mock: boolean; count: number; results: PrivateProject[] }> {
+  return getJSON(`/private/projects${query ? `?query=${encodeURIComponent(query)}` : ""}`);
 }
 
 // ── Saved user state (Feature 1) ───────────────────────────────────────────────

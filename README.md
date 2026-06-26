@@ -182,11 +182,30 @@ in prod, sign in to migrate guest data.
   baked into the pipeline
 - Terraform / Bedrock / SageMaker scaffolding under `infrastructure/`
 
+### Private Property mode (URA)
+
+A third **Private property** mode (condos, apartments, ECs, landed & strata
+landed) alongside BTO and Resale, backed by the URA Private Residential
+Transactions API with a **mock fallback** so dev/CI work without credentials.
+
+| Env var | Purpose |
+|---|---|
+| `URA_ACCESS_KEY` | URA API access key. **Absent ⇒ automatic mock mode.** |
+| `URA_TOKEN_URL` | Token endpoint (defaults to URA's `insertNewToken/v1`). |
+| `URA_API_URL` | Data endpoint (defaults to URA's `invokeUraDS/v1`). |
+| `PRIVATE_PROPERTY_MOCK_MODE` | Force fixtures even when a key is present (`true`/`false`). |
+
+Endpoints `GET /private/transactions` (filters: project, property_type,
+sale_type, district, date range) and `GET /private/projects`. The UI surfaces
+median/avg/min/max PSF, transaction count, a monthly PSF trend, and a filtered
+transactions table, with a visible URA-caveat note. No secrets are committed.
+
 **Live data sources**
 - **data.gov.sg** — HDB resale transactions, school directory
 - **OneMap** — map tiles, geocoding, public-transport routing, planning areas
 - **LTA DataMall** — MRT and bus network
 - **HDB Flat Portal** — live resale listings
+- **URA** — private residential property transactions (private property mode)
 
 ---
 

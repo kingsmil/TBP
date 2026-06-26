@@ -43,6 +43,17 @@ class Settings:
     datagov_api_key: str | None = os.environ.get("DATAGOV_API_KEY") or None
     lta_datamall_api_key: str | None = os.environ.get("LTA_DATAMALL_API_KEY") or None
     exa_api_key: str | None = os.environ.get("EXA_API_KEY") or None
+    # URA Private Residential Property Transactions API (Feature 2). When the
+    # access key is missing (or PRIVATE_PROPERTY_MOCK_MODE=true), the private
+    # property mode runs on bundled fixtures so dev/CI never break.
+    ura_access_key: str | None = os.environ.get("URA_ACCESS_KEY") or None
+    ura_token_url: str = os.environ.get(
+        "URA_TOKEN_URL", "https://eservice.ura.gov.sg/uraDataService/insertNewToken/v1")
+    ura_api_url: str = os.environ.get(
+        "URA_API_URL", "https://eservice.ura.gov.sg/uraDataService/invokeUraDS/v1")
+    private_property_mock_mode: bool = (
+        os.environ.get("PRIVATE_PROPERTY_MOCK_MODE", "").lower() in ("true", "1", "yes")
+        or not (os.environ.get("URA_ACCESS_KEY") or "").strip())
 
 
 settings = Settings()

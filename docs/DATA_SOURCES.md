@@ -41,7 +41,15 @@ gitignored).
   break.
 - **Caveat (shown in UI):** URA caveat data may not include every transaction —
   caveat lodging is not mandatory, so some resale/subsale deals are missing.
-- *(Implemented in the Private Property feature branch.)*
+- **Adapter:** `backend/app/services/private_property/` — `ura_client.py` (daily
+  token + 4 rolling batches, SWR-cached), `normalise.py` (raw → normalised
+  `PrivateTransaction`), `fixtures.py` (mock data), `service.py` (filters +
+  median/avg/min/max PSF + monthly trend + project search). Endpoints
+  `GET /private/transactions`, `GET /private/projects`. UI: a third
+  **Private property** mode in the chooser → `PrivateDashboard`.
+- **Property types:** `CONDO`, `APARTMENT`, `EC`, `LANDED`, `STRATA_LANDED`
+  (landed vs strata-landed disambiguated by URA `typeOfArea`). Sale types:
+  `NEW_SALE`, `RESALE`, `SUB_SALE`.
 
 ## Auth / saved user state (Feature 1)
 - **Source:** the app's own PostGIS database (`users`, `saved_locations`,

@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Building2, KeyRound, Scale, Wand2 } from "lucide-react";
+import { Building2, KeyRound, Scale, Wand2, Landmark } from "lucide-react";
 import BtoResaleCompare from "./BtoResaleCompare";
 import RecommendWizard from "./RecommendWizard";
 
 interface Props {
-  onSelect: (product: "resale" | "bto") => void;
+  onSelect: (product: "resale" | "bto" | "private") => void;
 }
 
 const COMPARE: { label: string; bto: string; resale: string }[] = [
@@ -28,7 +28,7 @@ export default function ProductChooser({ onSelect }: Props) {
         <h1 className="text-2xl font-bold">What kind of flat are you after?</h1>
         <p className="mt-1 text-sm text-muted-foreground">Pick a path — you can switch any time.</p>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <button
             type="button"
             onClick={() => onSelect("bto")}
@@ -47,6 +47,16 @@ export default function ProductChooser({ onSelect }: Props) {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><KeyRound className="h-5 w-5" /></span>
             <span className="text-base font-semibold">Resale flat</span>
             <span className="text-xs text-muted-foreground">Search the market on a map, score blocks by what matters to you, and see appreciation trends.</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onSelect("private")}
+            className="group flex flex-col items-start gap-2 rounded-2xl border border-border bg-card p-5 text-left transition-colors hover:border-primary hover:bg-muted"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Landmark className="h-5 w-5" /></span>
+            <span className="text-base font-semibold">Private property</span>
+            <span className="text-xs text-muted-foreground">Condos, apartments, ECs &amp; landed — browse URA transactions, PSF trends and prices by project or district.</span>
           </button>
         </div>
 

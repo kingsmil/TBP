@@ -117,10 +117,10 @@ export default function FilterSheet({ filters, onChange, asSheet, open, onClose 
   }
 
   return (
-    <div className={`fixed inset-0 z-[2000] sm:hidden ${open ? "" : "pointer-events-none"}`}>
+    <div className={`fixed inset-0 z-[2000] ${open ? "" : "pointer-events-none"}`}>
       <div className={`absolute inset-0 bg-black/40 transition-opacity ${open ? "opacity-100" : "opacity-0"}`}
         onClick={onClose} />
-      <div className={`absolute inset-x-0 bottom-0 max-h-[80vh] overflow-y-auto rounded-t-2xl border-t border-border bg-card p-5 pb-8 shadow-xl transition-transform duration-300 ease-out ${
+      <div className={`bo-glass absolute inset-x-0 bottom-0 mx-auto max-h-[80vh] max-w-md overflow-y-auto rounded-t-2xl p-5 pb-8 transition-transform duration-300 ease-out sm:bottom-4 sm:rounded-2xl ${
         open ? "translate-y-0" : "translate-y-full"
       }`}>
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted" />

@@ -1,0 +1,62 @@
+/* Bake-off (map-first) styles. Removed with src/components/bakeoff/. */
+
+/* ── price-bubble pins ─────────────────────────────────────────────────────── */
+.bo-pin-wrap { background: transparent !important; border: 0 !important; }
+.bo-pin {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  padding: 4px 9px;
+  border-radius: 9999px;
+  background: #fff;
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.22);
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s, background 0.15s;
+  animation: bo-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.bo-pin:hover,
+.bo-pin--hover { transform: translate(-50%, -50%) scale(1.08); z-index: 500; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.28); }
+.bo-pin--selected {
+  transform: translate(-50%, -50%) scale(1.15);
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+  z-index: 600;
+  box-shadow: 0 6px 18px hsl(var(--primary) / 0.45);
+}
+@keyframes bo-pop { from { transform: translate(-50%, -50%) scale(0); opacity: 0; } to { opacity: 1; } }
+
+/* ── frosted glass surface ─────────────────────────────────────────────────── */
+.bo-glass {
+  background: hsl(var(--card) / 0.72);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid hsl(var(--border) / 0.6);
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.16);
+}
+
+/* ── entrance / motion ─────────────────────────────────────────────────────── */
+.bo-fade-up { animation: bo-fade-up 0.34s ease-out both; }
+@keyframes bo-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.bo-spring-up { animation: bo-spring-up 0.32s cubic-bezier(0.34, 1.4, 0.64, 1) both; }
+@keyframes bo-spring-up { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+.bo-stagger > * { animation: bo-fade-up 0.3s ease-out both; }
+.bo-stagger > *:nth-child(1) { animation-delay: 0.02s; }
+.bo-stagger > *:nth-child(2) { animation-delay: 0.05s; }
+.bo-stagger > *:nth-child(3) { animation-delay: 0.08s; }
+.bo-stagger > *:nth-child(4) { animation-delay: 0.11s; }
+.bo-stagger > *:nth-child(5) { animation-delay: 0.14s; }
+.bo-stagger > *:nth-child(6) { animation-delay: 0.17s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bo-pin, .bo-fade-up, .bo-spring-up, .bo-stagger > * { animation: none !important; }
+  .bo-pin { transition: none; }
+}

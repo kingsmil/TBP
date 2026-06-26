@@ -17,8 +17,8 @@ export interface ShellProps {
   blocks: BlockSummary[];
   isLoading: boolean;
   isError: boolean;
-  selectedId: number | null;
-  setSelectedId: (id: number | null) => void;
+  selectedId: string | null;
+  setSelectedId: (id: string | null) => void;
   savedIds: Set<string>;
   toggleSave: (id: string) => void;
   compareIds: Set<string>;
@@ -83,10 +83,10 @@ export function CardList({ p, variant, grid = false }: {
       {p.items.map((it) => (
         <PropertyCard
           key={it.id} item={it} variant={variant}
-          selected={it.block ? p.selectedId === it.block.block_id : false}
+          selected={p.selectedId === it.id}
           saved={p.savedIds.has(it.id)}
           comparing={p.compareIds.has(it.id)}
-          onSelect={() => it.block && p.setSelectedId(it.block.block_id)}
+          onSelect={() => p.setSelectedId(p.selectedId === it.id ? null : it.id)}
           onSave={() => p.toggleSave(it.id)}
           onCompare={() => p.toggleCompare(it.id)}
           onHover={(h) => p.setHoveredId(h ? it.id : null)}

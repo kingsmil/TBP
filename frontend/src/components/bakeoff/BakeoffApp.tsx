@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import "./bakeoff.css";
 import type { UiVariant } from "../../lib/uiVariant";
 import type { SearchFilters } from "../../types";
 import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
@@ -17,7 +18,7 @@ export default function BakeoffApp({ variant }: { variant: UiVariant }) {
   const [mode, setMode] = useState<Mode>("resale");
   const [filters, setFilters] = useState<SearchFilters>({ limit: MAP_SEARCH_LIMIT });
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [hoveredId, setHoveredId] = useState<string | null>(null);

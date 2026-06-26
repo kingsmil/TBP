@@ -38,7 +38,7 @@ export function setUiVariant(v: UiVariant | null): void {
 }
 
 export const VARIANT_META: Record<UiVariant, { name: string; tagline: string }> = {
-  a: { name: "Calm Assistant", tagline: "List-first · quiet · companion map" },
-  b: { name: "Premium Cards", tagline: "Card grid · insight tiles · polished" },
-  c: { name: "Map Explorer", tagline: "Split map + list · Airbnb-style" },
+  a: { name: "Floating Glass", tagline: "Map canvas · frosted panels float on top" },
+  b: { name: "Minimal Command", tagline: "Bare map · one command bar, collapses away" },
+  c: { name: "Immersive Explorer", tagline: "Map + price pins · Airbnb-style sheet/panel" },
 };

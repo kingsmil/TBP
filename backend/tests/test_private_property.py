@@ -57,8 +57,16 @@ class Normalisation(unittest.TestCase):
 
 class ServiceFilters(unittest.TestCase):
     def setUp(self):
-        ura_client.refresh()  # ensure fixtures loaded
+        # Pin mock mode so the suite is deterministic + offline even when a real
+        # URA_ACCESS_KEY is configured in the environment.
+        self._is_mock = ura_client.is_mock
+        ura_client.is_mock = lambda: True
+        ura_client.refresh()  # reload fixtures under mock mode
         self.assertTrue(ura_client.is_mock())
+
+    def tearDown(self):
+        ura_client.is_mock = self._is_mock
+        ura_client._cache.invalidate()  # drop fixtures; reload lazily, no network here
 
     def test_summary_and_trend(self):
         data = service.transactions()
@@ -94,6 +102,43 @@ class ServiceFilters(unittest.TestCase):
         p = service.projects()
         self.assertGreaterEqual(p["count"], 1)
         self.assertIn("THE CONTINUUM", [x["project_name"] for x in p["results"]])
+
+
+class TokenRenewal(unittest.TestCase):
+    """Auto-renewal: cache a valid token, reuse it, renew when expired/forced."""
+
+    def setUp(self):
+        self._mint = ura_client._mint_token
+        self._tok = dict(ura_client._token)
+        self.calls = 0
+
+        def fake_mint():
+            self.calls += 1
+            return f"token-{self.calls}"
+
+        ura_client._mint_token = fake_mint
+        ura_client._token = {"value": None, "expires": 0.0}
+
+    def tearDown(self):
+        ura_client._mint_token = self._mint
+        ura_client._token = self._tok
+
+    def test_reuses_until_expiry_then_renews(self):
+        t1 = ura_client.current_token()
+        t2 = ura_client.current_token()
+        self.assertEqual(t1, t2)
+        self.assertEqual(self.calls, 1)  # cached, not re-minted
+
+        # Forced renewal (e.g. after a 401) mints a fresh token.
+        t3 = ura_client.current_token(force=True)
+        self.assertNotEqual(t3, t1)
+        self.assertEqual(self.calls, 2)
+
+        # Simulate expiry -> auto-renew on next call.
+        ura_client._token["expires"] = 0.0
+        t4 = ura_client.current_token()
+        self.assertEqual(self.calls, 3)
+        self.assertEqual(t4, "token-3")
 
 
 if __name__ == "__main__":

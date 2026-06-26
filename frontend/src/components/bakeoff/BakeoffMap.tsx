@@ -7,6 +7,15 @@ import type { CardItem } from "./types";
 const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
 
+// Stable module-level identity — a new options object each render makes
+// use-supercluster rebuild its index and emit a new clusters array every render,
+// which feeds a render loop (the flicker).
+const CLUSTER_OPTIONS = {
+  radius: 70, maxZoom: 17, minPoints: 4,
+  map: (props: any) => ({ minPrice: props.price }),
+  reduce: (acc: any, props: any) => { acc.minPrice = Math.min(acc.minPrice, props.minPrice); },
+};
+
 function fmt(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
   return `$${Math.round(n / 1000)}k`;
@@ -85,12 +94,7 @@ function Clusters({ items, selectedId, onSelect }: Props) {
   );
 
   const { clusters, supercluster } = useSupercluster({
-    points, bounds, zoom,
-    options: {
-      radius: 70, maxZoom: 17, minPoints: 4,
-      map: (props: any) => ({ minPrice: props.price }),
-      reduce: (acc: any, props: any) => { acc.minPrice = Math.min(acc.minPrice, props.minPrice); },
-    },
+    points, bounds, zoom, options: CLUSTER_OPTIONS,
   });
 
   return (

@@ -38,6 +38,8 @@ import InfoPanel from "./components/InfoPanel";
 import ProductChooser from "./components/ProductChooser";
 import BtoDashboard from "./components/BtoDashboard";
 import PrivateDashboard from "./components/PrivateDashboard";
+import BakeoffApp from "./components/bakeoff/BakeoffApp";
+import { getUiVariant } from "./lib/uiVariant";
 import StatCard from "./components/StatCard";
 import AuthModal from "./components/AuthModal";
 import SavedPlacesPanel from "./components/SavedPlacesPanel";
@@ -111,6 +113,8 @@ export default function App() {
     setProductState(p);
     try { window.localStorage.setItem("hdb-product", p); } catch { /* ignore */ }
   }, []);
+  // UI bake-off variant (?ui=a|b|c). Null = the existing app.
+  const [uiVariant] = useState(getUiVariant);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = window.localStorage.getItem("hdb-match-theme");
     if (saved === "light" || saved === "dark") return saved;
@@ -515,6 +519,11 @@ export default function App() {
       <span>{theme === "light" ? "Dark" : "Light"}</span>
     </button>
   );
+
+  // ── UI bake-off: ?ui=a|b|c mounts a redesign shell (temporary eval) ───
+  if (uiVariant) {
+    return <BakeoffApp variant={uiVariant} />;
+  }
 
   // ── Product gate: chooser / BTO before the resale (explore) product ───
   if (product === "unsure") {

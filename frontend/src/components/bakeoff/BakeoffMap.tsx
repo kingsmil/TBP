@@ -109,6 +109,25 @@ function FocusView({ item }: { item: CardItem | null }) {
   return null;
 }
 
+/** Sets the min zoom so Singapore always *covers* the viewport — no whitespace
+ *  outside OneMap's tile coverage, recomputed on resize. */
+function BoundsLock() {
+  const map = useMap();
+  useEffect(() => {
+    const apply = () => {
+      // getBoundsZoom(..., true) = smallest zoom at which the bounds cover the
+      // view; ceil it so there's never a sliver of empty space at the edges.
+      const z = Math.ceil(map.getBoundsZoom(SG_BOUNDS, true));
+      map.setMinZoom(z);
+      if (map.getZoom() < z) map.setZoom(z);
+    };
+    apply();
+    map.on("resize", apply);
+    return () => { map.off("resize", apply); };
+  }, [map]);
+  return null;
+}
+
 function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) {
   const map = useMap();
   const lastKey = useRef<string | undefined>(undefined);
@@ -384,6 +403,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorB
         minZoom={11} maxBounds={SG_BOUNDS} maxBoundsViscosity={1}
         className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
         <TileLayer url={GREY_TILES} bounds={SG_BOUNDS} noWrap />
+        <BoundsLock />
         <FitOnce pts={pts} fitKey={fitKey} />
         <FocusView item={selected} />
         <Clusters items={items} selectedId={selectedId} onSelect={onSelect} colorByScore={colorByScore} />

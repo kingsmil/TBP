@@ -19,9 +19,10 @@ const MRT_COLORS: Record<string, string> = {
 
 const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
-// Hug Singapore: north edge at the Johor strait, trimmed sea south/east, no
-// Pedra Branca inset. Keeps the framing tight + no large empty areas.
-const SG_BOUNDS: [[number, number], [number, number]] = [[1.21, 103.60], [1.48, 104.06]];
+// Pannable area — inside OneMap's tiled extent (excludes the Pedra Branca inset)
+// so zooming/panning out shows tiled sea/Johor, never whitespace. Min-zoom is the
+// level at which this still covers the viewport.
+const PAN_BOUNDS: [[number, number], [number, number]] = [[1.17, 103.55], [1.49, 104.14]];
 
 const AMENITY_EMOJI: Record<string, string> = {
   schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",
@@ -129,9 +130,9 @@ function BoundsLock() {
   const map = useMap();
   useEffect(() => {
     const apply = () => {
-      // "cover" the viewport with Singapore so there's never empty space, even
-      // though OneMap tiles now load in the surrounding sea/Johor too.
-      const z = Math.ceil(map.getBoundsZoom(SG_BOUNDS, true));
+      // Max zoom-out = where the (wider) pannable area still covers the viewport,
+      // so users can zoom out into the tiled sea/Johor context with no whitespace.
+      const z = Math.ceil(map.getBoundsZoom(PAN_BOUNDS, true));
       map.setMinZoom(z);
       if (map.getZoom() < z) map.setZoom(z);
     };
@@ -414,7 +415,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorB
   return (
     <div className="relative h-full w-full">
       <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
-        minZoom={11} maxBounds={SG_BOUNDS} maxBoundsViscosity={1}
+        minZoom={11} maxBounds={PAN_BOUNDS} maxBoundsViscosity={1}
         className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
         <TileLayer url={GREY_TILES} noWrap />
         <ResizeHandler />

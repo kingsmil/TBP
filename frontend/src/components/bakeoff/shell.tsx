@@ -31,6 +31,26 @@ export interface ShellProps {
   isDesktop: boolean;
   authEmail: string | null;
   onAccount: () => void;
+  sort: string;
+  setSort: (s: string) => void;
+}
+
+const SORT_OPTIONS = [
+  { value: "match", label: "Recommended" },
+  { value: "price-asc", label: "Price: low to high" },
+  { value: "price-desc", label: "Price: high to low" },
+  { value: "psf-asc", label: "PSF: low to high" },
+  { value: "psf-desc", label: "PSF: high to low" },
+];
+
+export function SortSelect({ value, onChange }: { value: string; onChange: (s: string) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      aria-label="Sort results"
+      className="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium outline-none">
+      {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
 }
 
 export function SearchBar({ value, onChange, placeholder }: {

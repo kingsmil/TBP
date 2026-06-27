@@ -4,7 +4,7 @@ import ModeSwitch from "./ModeSwitch";
 import FilterSheet from "./FilterSheet";
 import BakeoffMap from "./BakeoffMap";
 import DetailPanel from "./DetailPanel";
-import { type ShellProps, SearchBar, ResultsCount, CardList } from "./shell";
+import { type ShellProps, SearchBar, ResultsCount, CardList, SortSelect } from "./shell";
 
 /** Floating Glass — full-screen map canvas; frosted panels float on top. */
 export default function LayoutFloatingGlass(p: ShellProps) {
@@ -50,6 +50,12 @@ export default function LayoutFloatingGlass(p: ShellProps) {
             </button>
           </div>
           {railOpen && (
+            <div className="flex items-center gap-2 px-3 pb-2">
+              <span className="text-[11px] text-muted-foreground">Sort</span>
+              <SortSelect value={p.sort} onChange={p.setSort} />
+            </div>
+          )}
+          {railOpen && (
             <div className="bo-stagger min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3"
               onMouseLeave={() => p.setHoveredId(null)}>
               <CardList p={p} />
@@ -79,8 +85,11 @@ function MobileSheet({ p }: { p: ShellProps }) {
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-center gap-2 py-4 text-sm font-semibold">
         <span className="h-1 w-10 rounded-full bg-muted-foreground/40" />
       </button>
-      <div className="-mt-2 px-4 pb-2 text-center text-sm font-semibold"><ResultsCount n={p.items.length} /></div>
-      {open && <div className="bo-stagger h-[calc(100%-5rem)] space-y-2 overflow-y-auto px-3 pb-6"><CardList p={p} /></div>}
+      <div className="-mt-2 flex items-center justify-center gap-2 px-4 pb-2 text-sm font-semibold">
+        <ResultsCount n={p.items.length} />
+        {open && <SortSelect value={p.sort} onChange={p.setSort} />}
+      </div>
+      {open && <div className="bo-stagger h-[calc(100%-6rem)] space-y-2 overflow-y-auto px-3 pb-6"><CardList p={p} /></div>}
     </div>
   );
 }

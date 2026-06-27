@@ -7,8 +7,17 @@ import { setRedesign } from "../../lib/uiVariant";
 import { getStoredUser, clearAuth, type AuthUser } from "../../lib/auth";
 import { getMyPreferences, putMyPreferences } from "../../lib/api";
 import AuthModal from "../AuthModal";
-import type { Mode } from "./types";
+import type { CardItem, Mode } from "./types";
 import { useListings } from "./useListings";
+
+// List sort comparators (nulls sink to the bottom).
+const SORT_CMP: Record<string, (a: CardItem, b: CardItem) => number> = {
+  match: (a, b) => (b.score ?? -1) - (a.score ?? -1),
+  "price-asc": (a, b) => (a.price ?? Infinity) - (b.price ?? Infinity),
+  "price-desc": (a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity),
+  "psf-asc": (a, b) => (a.psf ?? Infinity) - (b.psf ?? Infinity),
+  "psf-desc": (a, b) => (b.psf ?? -Infinity) - (a.psf ?? -Infinity),
+};
 import { useIsDesktop } from "./useMediaQuery";
 import { type ShellProps, CompareBar } from "./shell";
 import LayoutFloatingGlass from "./LayoutFloatingGlass";
@@ -92,14 +101,17 @@ export default function BakeoffApp() {
     if (!on) setModes((prev) => (prev.length > 1 ? [prev[0]] : prev)); // collapse to one
   };
 
+  const [sort, setSort] = useState("match");
   const { items: allItems, blocks, isLoading, isError } = useListings(modes, filters);
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return allItems;
-    return allItems.filter((it) =>
-      it.title.toLowerCase().includes(q) || it.subtitle.toLowerCase().includes(q));
-  }, [allItems, query]);
+    const filtered = q
+      ? allItems.filter((it) => it.title.toLowerCase().includes(q) || it.subtitle.toLowerCase().includes(q))
+      : allItems;
+    const cmp = SORT_CMP[sort] ?? SORT_CMP.match;
+    return [...filtered].sort(cmp);
+  }, [allItems, query, sort]);
 
   const toggle = (set: React.Dispatch<React.SetStateAction<Set<string>>>) => (id: string) =>
     set((prev) => {
@@ -117,6 +129,7 @@ export default function BakeoffApp() {
     hoveredId, setHoveredId,
     filterOpen, setFilterOpen, isDesktop,
     authEmail: authUser?.email ?? null, onAccount,
+    sort, setSort,
   };
 
   return (

@@ -5,21 +5,23 @@ import {
 } from "../../lib/api";
 import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
 import type { SearchFilters, BlockSummary, PrivateTransaction, BtoResaleSupplyRow } from "../../types";
-import type { CardItem, Mode } from "./types";
+import type { CardItem, Mode, Weights } from "./types";
+import { blendScore } from "./types";
 
 const sgd = (n?: number | null) => (n != null ? `$${Math.round(n).toLocaleString()}` : "—");
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
+const CUR_YEAR = new Date().getFullYear();
 
-/** Real 0–100 match blend from precomputed signals:
- *  commute (MRT proximity) + lifestyle (schools) + appreciation (precomputed). */
-function matchScore(b: BlockSummary, appreciation?: number): number {
+/** Per-factor 0–100 sub-scores for a resale block, from precomputed signals. */
+function resaleSubs(b: BlockSummary, appreciation?: number): Record<string, number | null> {
   const mrt = b.nearest_mrt_distance_m;
-  const commute = mrt == null ? 50 : clamp(100 - (mrt / 1000) * 100); // 0m=100, ≥1km=0
-  const lifestyle = clamp((b.schools_within_1km ?? 0) * 33); // 3+ schools ≈ 100
-  const parts: [number, number][] = [[commute, 0.4], [lifestyle, 0.3]];
-  if (appreciation != null) parts.push([appreciation, 0.3]);
-  const wsum = parts.reduce((s, [, w]) => s + w, 0);
-  return Math.round(parts.reduce((s, [v, w]) => s + v * w, 0) / wsum);
+  return {
+    commute: mrt == null ? 50 : clamp(100 - (mrt / 1000) * 100),           // 0m=100, ≥1km=0
+    schools: clamp((b.schools_within_1km ?? 0) * 33),                       // 3+ ≈ 100
+    appreciation: appreciation ?? null,
+    value: b.median_psf == null ? null : clamp(100 - ((b.median_psf - 300) / 600) * 100), // $300=100, $900=0
+    lease: clamp(((99 - (CUR_YEAR - b.lease_commencement_year)) / 99) * 100),
+  };
 }
 
 function walk(m?: number | null): string {
@@ -27,10 +29,13 @@ function walk(m?: number | null): string {
   return `${Math.max(1, Math.round(m / 80))} min to MRT`; // ~80 m/min
 }
 
-function fromResale(b: BlockSummary, scores: Record<string, number>): CardItem {
+function fromResale(b: BlockSummary, scores: Record<string, number>, weights: Weights): CardItem {
+  const appr = scores[String(b.block_id)];
+  const subs = resaleSubs(b, appr);
   return {
     id: `r-${b.block_id}`,
     mode: "resale",
+    subs,
     title: `Blk ${b.block_number} ${b.street_name}`,
     subtitle: b.town,
     badge: undefined,
@@ -42,8 +47,8 @@ function fromResale(b: BlockSummary, scores: Record<string, number>): CardItem {
       { label: "Schools", value: `${b.schools_within_1km ?? 0} within 1km` },
       { label: "Lease from", value: String(b.lease_commencement_year) },
     ],
-    score: matchScore(b, scores[String(b.block_id)]),
-    appreciation: scores[String(b.block_id)],
+    score: blendScore(subs, weights),
+    appreciation: appr,
     sortDate: new Date(b.lease_commencement_year, 0, 1).getTime(),
     lat: b.lat,
     lon: b.lon,
@@ -97,9 +102,10 @@ function fromBto(r: BtoResaleSupplyRow): CardItem {
 
 /** Fetches every selected mode and merges them into one tagged list, so one or
  *  more property types can be shown together on the map + list. */
-export function useListings(modes: Mode[], filters: SearchFilters) {
+export function useListings(modes: Mode[], filters: SearchFilters, weights: Weights) {
   const want = (m: Mode) => modes.includes(m);
   const key = modes.join(",");
+  const wkey = JSON.stringify(weights);
 
   const resale = useQuery({
     queryKey: ["bo-resale", filters],
@@ -132,12 +138,12 @@ export function useListings(modes: Mode[], filters: SearchFilters) {
   const items = useMemo<CardItem[]>(() => {
     const scores = scoresQ.data?.scores ?? {};
     const out: CardItem[] = [];
-    if (want("resale")) out.push(...blocks.map((b) => fromResale(b, scores)));
+    if (want("resale")) out.push(...blocks.map((b) => fromResale(b, scores, weights)));
     if (want("private")) out.push(...(priv.data?.results ?? []).map(fromPrivate));
     if (want("bto")) out.push(...(bto.data?.results ?? []).map(fromBto));
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, blocks, priv.data, bto.data, scoresQ.data]);
+  }, [key, wkey, blocks, priv.data, bto.data, scoresQ.data]);
 
   const active = [
     want("resale") ? resale : null,

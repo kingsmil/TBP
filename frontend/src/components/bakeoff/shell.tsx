@@ -1,6 +1,6 @@
 import { Search, Heart, GitCompareArrows } from "lucide-react";
 import type { SearchFilters } from "../../types";
-import type { CardItem, Mode } from "./types";
+import type { CardItem, Mode, Weights } from "./types";
 import type { BlockSummary } from "../../types";
 import PropertyCard from "./PropertyCard";
 
@@ -33,6 +33,10 @@ export interface ShellProps {
   onAccount: () => void;
   sort: string;
   setSort: (s: string) => void;
+  weights: Weights;
+  setWeights: (w: Weights) => void;
+  colorByScore: boolean;
+  setColorByScore: (on: boolean) => void;
 }
 
 const SORT_OPTIONS = [

@@ -7,8 +7,15 @@ import { setRedesign } from "../../lib/uiVariant";
 import { getStoredUser, clearAuth, type AuthUser } from "../../lib/auth";
 import { getMyPreferences, putMyPreferences } from "../../lib/api";
 import AuthModal from "../AuthModal";
-import type { CardItem, Mode } from "./types";
+import type { CardItem, Mode, Weights } from "./types";
+import { DEFAULT_WEIGHTS } from "./types";
 import { useListings } from "./useListings";
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [d, setD] = useState(value);
+  useEffect(() => { const t = setTimeout(() => setD(value), ms); return () => clearTimeout(t); }, [value, ms]);
+  return d;
+}
 
 // List sort comparators (nulls sink to the bottom).
 const SORT_CMP: Record<string, (a: CardItem, b: CardItem) => number> = {
@@ -46,6 +53,12 @@ export default function BakeoffApp() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(() => loadSet("hdb_saved"));
   const [compareIds, setCompareIds] = useState<Set<string>>(() => loadSet("hdb_compare"));
+  const [weights, setWeights] = useState<Weights>(() => {
+    try { const raw = localStorage.getItem("hdb_weights"); return raw ? { ...DEFAULT_WEIGHTS, ...JSON.parse(raw) } : DEFAULT_WEIGHTS; } catch { return DEFAULT_WEIGHTS; }
+  });
+  const [colorByScore, setColorByScore] = useState<boolean>(() => localStorage.getItem("hdb_colorByScore") === "1");
+  useEffect(() => { try { localStorage.setItem("hdb_weights", JSON.stringify(weights)); } catch { /* ignore */ } }, [weights]);
+  useEffect(() => { try { localStorage.setItem("hdb_colorByScore", colorByScore ? "1" : "0"); } catch { /* ignore */ } }, [colorByScore]);
 
   // Persist saved + compare locally so they survive reloads (anon cache).
   useEffect(() => saveSet("hdb_saved", savedIds), [savedIds]);
@@ -64,9 +77,10 @@ export default function BakeoffApp() {
     getMyPreferences()
       .then((prefs) => {
         if (cancelled) return;
-        const meta = (prefs?.metadata_json ?? {}) as { saved?: string[]; compare?: string[] };
+        const meta = (prefs?.metadata_json ?? {}) as { saved?: string[]; compare?: string[]; weights?: Weights };
         if (meta.saved?.length) setSavedIds((prev) => new Set([...prev, ...meta.saved!]));
         if (meta.compare?.length) setCompareIds((prev) => new Set([...prev, ...meta.compare!]));
+        if (meta.weights) setWeights((w) => ({ ...w, ...meta.weights }));
       })
       .catch(() => { /* not reachable / not authed — stay local */ })
       .finally(() => { if (!cancelled) synced.current = true; });
@@ -77,10 +91,10 @@ export default function BakeoffApp() {
   useEffect(() => {
     if (!authUser || !synced.current) return;
     const t = setTimeout(() => {
-      putMyPreferences({ metadata_json: { saved: [...savedIds], compare: [...compareIds] } }).catch(() => {});
+      putMyPreferences({ metadata_json: { saved: [...savedIds], compare: [...compareIds], weights } }).catch(() => {});
     }, 500);
     return () => clearTimeout(t);
-  }, [savedIds, compareIds, authUser]);
+  }, [savedIds, compareIds, weights, authUser]);
 
   const onAccount = () => {
     if (authUser) { clearAuth(); setAuthUser(null); }
@@ -107,7 +121,8 @@ export default function BakeoffApp() {
   };
 
   const [sort, setSort] = useState("match");
-  const { items: allItems, blocks, isLoading, isError } = useListings(modes, filters);
+  const dWeights = useDebounced(weights, 200);
+  const { items: allItems, blocks, isLoading, isError } = useListings(modes, filters, dWeights);
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -151,6 +166,7 @@ export default function BakeoffApp() {
     filterOpen, setFilterOpen, isDesktop,
     authEmail: authUser?.email ?? null, onAccount,
     sort, setSort,
+    weights, setWeights, colorByScore, setColorByScore,
   };
 
   return (

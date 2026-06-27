@@ -4,6 +4,7 @@ import ModeSwitch from "./ModeSwitch";
 import FilterSheet from "./FilterSheet";
 import BakeoffMap from "./BakeoffMap";
 import DetailPanel from "./DetailPanel";
+import PrioritiesControl from "./PrioritiesPanel";
 import { type ShellProps, SearchBar, ResultsCount, CardList, SortSelect } from "./shell";
 
 /** Floating Glass — full-screen map canvas; frosted panels float on top. */
@@ -14,7 +15,7 @@ export default function LayoutFloatingGlass(p: ShellProps) {
   return (
     <div className="fixed inset-0">
       {/* Map canvas */}
-      <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.modes.join(",")} />
+      <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.modes.join(",")} colorByScore={p.colorByScore} />
 
       {/* Top floating controls */}
       <div className="bo-fade-up pointer-events-none absolute inset-x-0 top-0 z-[1000] p-3 sm:p-4">
@@ -27,6 +28,8 @@ export default function LayoutFloatingGlass(p: ShellProps) {
               className="bo-glass flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
               <SlidersHorizontal className="h-4 w-4" /> <span className="hidden sm:inline">Filters</span>
             </button>
+            <PrioritiesControl weights={p.weights} setWeights={p.setWeights}
+              colorByScore={p.colorByScore} setColorByScore={p.setColorByScore} />
             <button type="button" onClick={p.onAccount}
               title={p.authEmail ? `${p.authEmail} — sign out` : "Sign in"}
               className="bo-glass flex h-11 items-center gap-2 rounded-full px-3.5 text-sm font-semibold">

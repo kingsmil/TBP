@@ -42,7 +42,23 @@ function priceLabel(it: CardItem): string {
   return it.price == null ? (it.badge ?? "View") : fmt(it.price);
 }
 
-function pinIcon(it: CardItem, selected: boolean) {
+function scoreColor(s: number): string {
+  if (s >= 75) return "#16a34a";
+  if (s >= 60) return "#65a30d";
+  if (s >= 45) return "#f59e0b";
+  if (s >= 30) return "#ea580c";
+  return "#dc2626";
+}
+
+function pinIcon(it: CardItem, selected: boolean, colorByScore: boolean) {
+  if (colorByScore && it.score != null) {
+    const c = scoreColor(it.score);
+    return divIcon({
+      className: "bo-pin-wrap",
+      html: `<div class="bo-pin ${selected ? "bo-pin--selected" : ""}" style="background:${c};color:#fff;border-color:${c}">${priceLabel(it)}</div>`,
+      iconSize: [10, 10], iconAnchor: [0, 0],
+    });
+  }
   const dot = `<span class="bo-pin-dot" style="background:${MODE_META[it.mode].color}"></span>`;
   return divIcon({
     className: "bo-pin-wrap",
@@ -230,9 +246,10 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   fitKey?: string;
+  colorByScore?: boolean;
 }
 
-function Clusters({ items, selectedId, onSelect }: Omit<Props, "fitKey">) {
+function Clusters({ items, selectedId, onSelect, colorByScore }: Omit<Props, "fitKey">) {
   const map = useMap();
   const [bounds, setBounds] = useState<[number, number, number, number]>([103.6, 1.13, 104.01, 1.48]);
   const [zoom, setZoom] = useState(12);
@@ -263,7 +280,7 @@ function Clusters({ items, selectedId, onSelect }: Omit<Props, "fitKey">) {
   const selected = selectedId ? items.find((i) => i.id === selectedId && i.lat != null) : null;
   if (selected) {
     return (
-      <Marker key={selected.id} position={[selected.lat!, selected.lon!]} icon={pinIcon(selected, true)}
+      <Marker key={selected.id} position={[selected.lat!, selected.lon!]} icon={pinIcon(selected, true, !!colorByScore)}
         eventHandlers={{ click: () => onSelect(null) }} />
     );
   }
@@ -285,7 +302,7 @@ function Clusters({ items, selectedId, onSelect }: Omit<Props, "fitKey">) {
         }
         const it: CardItem = item;
         return (
-          <Marker key={it.id} position={[lat, lon]} icon={pinIcon(it, false)}
+          <Marker key={it.id} position={[lat, lon]} icon={pinIcon(it, false, !!colorByScore)}
             eventHandlers={{ click: () => onSelect(it.id) }} />
         );
       })}
@@ -328,7 +345,7 @@ function AmenityToggle({ active, onToggle }: { active: string[]; onToggle: (k: s
   );
 }
 
-export default function BakeoffMap({ items, selectedId, onSelect, fitKey }: Props) {
+export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorByScore }: Props) {
   const [activeAmenities, setActiveAmenities] = useState<string[]>([]);
   const types = useQuery({ queryKey: ["amenity-types"], queryFn: getAmenityTypes, staleTime: 6e5 });
   const colorOf = (key: string) => types.data?.amenities.find((a) => a.key === key)?.color ?? "#475569";
@@ -356,7 +373,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey }: Prop
         <TileLayer url={GREY_TILES} />
         <FitOnce pts={pts} fitKey={fitKey} />
         <FocusView item={selected} />
-        <Clusters items={items} selectedId={selectedId} onSelect={onSelect} />
+        <Clusters items={items} selectedId={selectedId} onSelect={onSelect} colorByScore={colorByScore} />
         {selected && selected.lat != null && selected.lon != null && <TransitLayer item={selected} />}
         {activeAmenities.length > 0 && (
           <AmenityMarkers active={activeAmenities} colorOf={colorOf}

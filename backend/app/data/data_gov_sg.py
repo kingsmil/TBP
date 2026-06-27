@@ -106,10 +106,40 @@ def geocode_block(client: httpx.Client, record: dict, retries: int = 3) -> dict 
         if response.status_code >= 400:
             return None
         results = response.json().get("results") or []
-        for result in results:
-            if result.get("LONGITUDE") and result.get("LATITUDE"):
-                return result
+        best = _best_geocode(results, record["block"], record["street_name"])
+        if best is not None:
+            return best
     return None
+
+
+# HDB street abbreviations -> OneMap's full ROAD_NAME, so we can verify the match
+# instead of blindly trusting OneMap's fuzzy top result (which once matched
+# "JALAN JAMBU BATU" for "JLN BATU").
+_ROAD_ABBREV = {
+    "JLN": "JALAN", "RD": "ROAD", "AVE": "AVENUE", "ST": "STREET", "DR": "DRIVE",
+    "CRES": "CRESCENT", "CL": "CLOSE", "BT": "BUKIT", "UPP": "UPPER", "LOR": "LORONG",
+    "TG": "TANJONG", "GDNS": "GARDENS", "PK": "PARK", "TER": "TERRACE", "NTH": "NORTH",
+    "STH": "SOUTH", "CTRL": "CENTRAL", "MKT": "MARKET", "KG": "KAMPONG", "HTS": "HEIGHTS",
+    "PL": "PLACE", "SQ": "SQUARE", "CTR": "CENTRE", "C'WEALTH": "COMMONWEALTH",
+}
+
+
+def _norm_road(name: str) -> str:
+    return " ".join(_ROAD_ABBREV.get(t, t) for t in (name or "").upper().split())
+
+
+def _best_geocode(results: list[dict], block: str, street: str) -> dict | None:
+    """Prefer a result that actually matches the block + road; fall back to the
+    first geocoded result only if nothing matches."""
+    want = _norm_road(street)
+    has_xy = [r for r in results if r.get("LATITUDE") and r.get("LONGITUDE")]
+    for r in has_xy:  # exact: same block number AND road
+        if str(r.get("BLK_NO")) == str(block) and r.get("ROAD_NAME", "").upper() == want:
+            return r
+    for r in has_xy:  # road matches (any block)
+        if r.get("ROAD_NAME", "").upper() == want:
+            return r
+    return has_xy[0] if has_xy else None
 
 
 def unique_block_records(records: Iterable[dict]) -> list[dict]:

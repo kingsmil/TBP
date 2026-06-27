@@ -18,6 +18,9 @@ const MRT_COLORS: Record<string, string> = {
 };
 
 const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
+// World basemap rendered *under* OneMap, so the area outside Singapore (sea,
+// Malaysia, Indonesia) shows a muted grey map instead of empty space.
+const WORLD_TILES = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
 // The island — framing target. Min-zoom fits this (width-bound), so the whole of
 // Singapore is visible and you can't zoom out far enough to create side margins.
@@ -25,7 +28,7 @@ const SG_VIEW: [[number, number], [number, number]] = [[1.22, 103.62], [1.47, 10
 // Pan limit — slightly wider but strictly inside OneMap's tiled extent (incl the
 // Johor strait to the north, excl the far-west open sea + Pedra Branca inset), so
 // panning never reveals whitespace.
-const SG_MAX: [[number, number], [number, number]] = [[1.19, 103.60], [1.52, 104.08]];
+const SG_MAX: [[number, number], [number, number]] = [[1.13, 103.50], [1.55, 104.15]];
 
 const AMENITY_EMOJI: Record<string, string> = {
   schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",
@@ -133,10 +136,10 @@ function BoundsLock() {
   const map = useMap();
   useEffect(() => {
     const apply = () => {
-      // Min zoom = the whole island fits the width. You can't zoom out past this,
-      // so the view can never become wider than Singapore (which would expose the
-      // untiled open sea to the west/east as whitespace).
-      const z = Math.round(map.getBoundsZoom(SG_VIEW));
+      // Min zoom: a little below "whole island fits" so you can zoom out into the
+      // (now world-tiled) regional context. Clamped to 11 so OneMap's detailed SG
+      // tiles always render. Whitespace is impossible — WORLD_TILES backs everything.
+      const z = Math.max(11, Math.round(map.getBoundsZoom(SG_VIEW)) - 1);
       map.setMinZoom(z);
       if (map.getZoom() < z) map.setZoom(z);
     };
@@ -426,6 +429,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorB
       <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
         minZoom={11} maxBounds={SG_MAX} maxBoundsViscosity={1}
         className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
+        <TileLayer url={WORLD_TILES} subdomains="abcd" noWrap />
         <TileLayer url={GREY_TILES} noWrap />
         <ResizeHandler />
         <BoundsLock />

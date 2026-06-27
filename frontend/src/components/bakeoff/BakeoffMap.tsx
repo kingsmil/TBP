@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { MapContainer, TileLayer, Marker, CircleMarker, Circle, Polyline, Tooltip, Pane, useMap, useMapEvents } from "react-leaflet";
-import { divIcon, type LatLngBoundsExpression } from "leaflet";
+import { divIcon } from "leaflet";
 import useSupercluster from "use-supercluster";
 import { Layers, X } from "lucide-react";
 import type { CardItem } from "./types";
@@ -22,13 +22,10 @@ const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 // Malaysia, Indonesia) shows a muted grey map instead of empty space.
 const WORLD_TILES = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
-// The island — framing target. Min-zoom fits this (width-bound), so the whole of
-// Singapore is visible and you can't zoom out far enough to create side margins.
-const SG_VIEW: [[number, number], [number, number]] = [[1.22, 103.62], [1.47, 104.04]];
-// Pan limit — slightly wider but strictly inside OneMap's tiled extent (incl the
-// Johor strait to the north, excl the far-west open sea + Pedra Branca inset), so
-// panning never reveals whitespace.
-const SG_MAX: [[number, number], [number, number]] = [[1.13, 103.50], [1.55, 104.15]];
+// The locked view: the whole island (+ a little context, excludes the Pedra
+// Branca inset). This is the start framing, the zoom-out floor, AND the pan limit
+// — users can only look around inside this box.
+const LOCK_BOX: [[number, number], [number, number]] = [[1.15, 103.58], [1.50, 104.10]];
 
 const AMENITY_EMOJI: Record<string, string> = {
   schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",
@@ -132,41 +129,28 @@ function ResizeHandler() {
   return null;
 }
 
-function BoundsLock() {
+/** Locks the view to LOCK_BOX: frames it at start, sets it as the zoom-out floor,
+ *  and constrains panning to it. Recomputed on resize (e.g. the rail collapses). */
+function LockView() {
   const map = useMap();
   useEffect(() => {
-    const apply = () => {
-      // Min zoom: a little below "whole island fits" so you can zoom out into the
-      // (now world-tiled) regional context. Clamped to 11 so OneMap's detailed SG
-      // tiles always render. Whitespace is impossible — WORLD_TILES backs everything.
-      const z = Math.max(11, Math.round(map.getBoundsZoom(SG_VIEW)) - 1);
+    const lock = () => {
+      const z = map.getBoundsZoom(LOCK_BOX); // zoom at which the box fills the view
       map.setMinZoom(z);
-      if (map.getZoom() < z) map.setZoom(z);
+      map.setMaxBounds(LOCK_BOX);
+      return z;
     };
-    apply();
-    map.on("resize", apply);
-    return () => { map.off("resize", apply); };
+    map.fitBounds(LOCK_BOX, { animate: false });
+    lock();
+    const onResize = () => {
+      const z = lock();
+      // Re-frame only when the user is at the zoomed-out (locked) level — don't
+      // yank them out of a property they've zoomed into.
+      if (map.getZoom() <= z + 0.05) map.fitBounds(LOCK_BOX, { animate: false });
+    };
+    map.on("resize", onResize);
+    return () => { map.off("resize", onResize); };
   }, [map]);
-  return null;
-}
-
-function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) {
-  const map = useMap();
-  const lastKey = useRef<string | undefined>(undefined);
-  const fitted = useRef(false);
-  useEffect(() => {
-    if (fitKey !== lastKey.current) { lastKey.current = fitKey; fitted.current = false; }
-    if (!fitted.current && pts.length > 0) {
-      fitted.current = true;
-      if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { padding: [26, 26], maxZoom: 15 });
-      else map.setView(pts[0], 15, { animate: false });
-      // Pan (not zoom) the framing down so northern pins clear the floating bar —
-      // this reveals tiled Johor at the top instead of zooming out into whitespace.
-      const c = map.getCenter();
-      const p = map.latLngToContainerPoint(c);
-      map.setView(map.containerPointToLatLng([p.x, p.y - 60]), map.getZoom(), { animate: false });
-    }
-  }, [fitKey, pts, map]);
   return null;
 }
 
@@ -403,7 +387,7 @@ function AmenityToggle({ active, onToggle }: { active: string[]; onToggle: (k: s
   );
 }
 
-export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorByScore }: Props) {
+export default function BakeoffMap({ items, selectedId, onSelect, colorByScore }: Props) {
   const [activeAmenities, setActiveAmenities] = useState<string[]>([]);
   const types = useQuery({ queryKey: ["amenity-types"], queryFn: getAmenityTypes, staleTime: 6e5 });
   const colorOf = (key: string) => types.data?.amenities.find((a) => a.key === key)?.color ?? "#475569";
@@ -418,22 +402,17 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorB
   const toggleAmenity = (key: string) =>
     setActiveAmenities((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 
-  const pts = useMemo(
-    () => items.filter((i) => i.lat != null && i.lon != null).map((i) => [i.lat!, i.lon!] as [number, number]),
-    [items],
-  );
   const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
 
   return (
     <div className="relative h-full w-full">
       <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
-        minZoom={11} maxBounds={SG_MAX} maxBoundsViscosity={1}
+        minZoom={11} maxBounds={LOCK_BOX} maxBoundsViscosity={1}
         className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
         <TileLayer url={WORLD_TILES} subdomains="abcd" noWrap className="bo-world-tiles" />
         <TileLayer url={GREY_TILES} noWrap />
         <ResizeHandler />
-        <BoundsLock />
-        <FitOnce pts={pts} fitKey={fitKey} />
+        <LockView />
         <FocusView item={selected} />
         <Clusters items={items} selectedId={selectedId} onSelect={onSelect} colorByScore={colorByScore} />
         {selected && selected.lat != null && selected.lon != null && <TransitLayer item={selected} />}

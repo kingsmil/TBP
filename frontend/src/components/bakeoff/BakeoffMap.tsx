@@ -19,10 +19,13 @@ const MRT_COLORS: Record<string, string> = {
 
 const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
-// Pannable area — inside OneMap's tiled extent (excludes the Pedra Branca inset)
-// so zooming/panning out shows tiled sea/Johor, never whitespace. Min-zoom is the
-// level at which this still covers the viewport.
-const PAN_BOUNDS: [[number, number], [number, number]] = [[1.17, 103.55], [1.49, 104.14]];
+// The island — framing target. Min-zoom fits this (width-bound), so the whole of
+// Singapore is visible and you can't zoom out far enough to create side margins.
+const SG_VIEW: [[number, number], [number, number]] = [[1.22, 103.62], [1.47, 104.04]];
+// Pan limit — slightly wider but strictly inside OneMap's tiled extent (incl the
+// Johor strait to the north, excl the far-west open sea + Pedra Branca inset), so
+// panning never reveals whitespace.
+const SG_MAX: [[number, number], [number, number]] = [[1.19, 103.60], [1.50, 104.08]];
 
 const AMENITY_EMOJI: Record<string, string> = {
   schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",
@@ -130,9 +133,10 @@ function BoundsLock() {
   const map = useMap();
   useEffect(() => {
     const apply = () => {
-      // Max zoom-out = where the (wider) pannable area still covers the viewport,
-      // so users can zoom out into the tiled sea/Johor context with no whitespace.
-      const z = Math.ceil(map.getBoundsZoom(PAN_BOUNDS, true));
+      // Min zoom = the whole island fits the width. You can't zoom out past this,
+      // so the view can never become wider than Singapore (which would expose the
+      // untiled open sea to the west/east as whitespace).
+      const z = Math.round(map.getBoundsZoom(SG_VIEW));
       map.setMinZoom(z);
       if (map.getZoom() < z) map.setZoom(z);
     };
@@ -151,10 +155,13 @@ function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) 
     if (fitKey !== lastKey.current) { lastKey.current = fitKey; fitted.current = false; }
     if (!fitted.current && pts.length > 0) {
       fitted.current = true;
-      // Reserve top room for the floating search/mode bar so northern pins aren't
-      // hidden behind it. (Any sliver above OneMap's edge sits under the bar.)
-      if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { paddingTopLeft: [24, 124], paddingBottomRight: [24, 28], maxZoom: 15 });
-      else map.setView(pts[0], 15, { animate: true });
+      if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { padding: [26, 26], maxZoom: 15 });
+      else map.setView(pts[0], 15, { animate: false });
+      // Pan (not zoom) the framing down so northern pins clear the floating bar —
+      // this reveals tiled Johor at the top instead of zooming out into whitespace.
+      const c = map.getCenter();
+      const p = map.latLngToContainerPoint(c);
+      map.setView(map.containerPointToLatLng([p.x, p.y - 60]), map.getZoom(), { animate: false });
     }
   }, [fitKey, pts, map]);
   return null;
@@ -417,7 +424,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorB
   return (
     <div className="relative h-full w-full">
       <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
-        minZoom={11} maxBounds={PAN_BOUNDS} maxBoundsViscosity={1}
+        minZoom={11} maxBounds={SG_MAX} maxBoundsViscosity={1}
         className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
         <TileLayer url={GREY_TILES} noWrap />
         <ResizeHandler />

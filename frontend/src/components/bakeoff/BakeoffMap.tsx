@@ -19,9 +19,9 @@ const MRT_COLORS: Record<string, string> = {
 
 const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
-// Lock panning to mainland SG (+ nearby islands). Excludes the Pedra Branca
-// "inset" OneMap draws far east (~104.3°E) and keeps white/empty areas off-screen.
-const SG_BOUNDS: [[number, number], [number, number]] = [[1.16, 103.59], [1.47, 104.09]];
+// Hug Singapore: north edge at the Johor strait, trimmed sea south/east, no
+// Pedra Branca inset. Keeps the framing tight + no large empty areas.
+const SG_BOUNDS: [[number, number], [number, number]] = [[1.21, 103.60], [1.48, 104.06]];
 
 const AMENITY_EMOJI: Record<string, string> = {
   schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",
@@ -148,7 +148,8 @@ function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) 
     if (fitKey !== lastKey.current) { lastKey.current = fitKey; fitted.current = false; }
     if (!fitted.current && pts.length > 0) {
       fitted.current = true;
-      if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { padding: [50, 50], maxZoom: 15 });
+      // Extra top padding so the floating search bar doesn't cover the island.
+      if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { paddingTopLeft: [20, 110], paddingBottomRight: [20, 30], maxZoom: 15 });
       else map.setView(pts[0], 15, { animate: true });
     }
   }, [fitKey, pts, map]);

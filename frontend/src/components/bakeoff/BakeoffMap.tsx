@@ -429,7 +429,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorB
       <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
         minZoom={11} maxBounds={SG_MAX} maxBoundsViscosity={1}
         className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
-        <TileLayer url={WORLD_TILES} subdomains="abcd" noWrap />
+        <TileLayer url={WORLD_TILES} subdomains="abcd" noWrap className="bo-world-tiles" />
         <TileLayer url={GREY_TILES} noWrap />
         <ResizeHandler />
         <BoundsLock />

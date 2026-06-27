@@ -24,6 +24,7 @@ const SORT_CMP: Record<string, (a: CardItem, b: CardItem) => number> = {
 import { useIsDesktop } from "./useMediaQuery";
 import { type ShellProps, CompareBar } from "./shell";
 import LayoutFloatingGlass from "./LayoutFloatingGlass";
+import CompareView from "./CompareView";
 
 function loadSet(key: string): Set<string> {
   try {
@@ -88,6 +89,7 @@ export default function BakeoffApp() {
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
   const isDesktop = useIsDesktop();
 
   // Single-tap = focused view; in Combine mode, tap toggles a mode in/out.
@@ -123,6 +125,15 @@ export default function BakeoffApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modes]);
 
+  // Cache every card we've loaded (by id) so compared items survive mode switches
+  // / filtering — the compare view can still show them.
+  const itemCache = useRef(new Map<string, CardItem>());
+  useEffect(() => { for (const it of allItems) itemCache.current.set(it.id, it); }, [allItems]);
+  const compareItems = useMemo(
+    () => [...compareIds].map((id) => itemCache.current.get(id)).filter(Boolean) as CardItem[],
+    [compareIds, allItems],
+  );
+
   const toggle = (set: React.Dispatch<React.SetStateAction<Set<string>>>) => (id: string) =>
     set((prev) => {
       const next = new Set(prev);
@@ -145,7 +156,13 @@ export default function BakeoffApp() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <LayoutFloatingGlass {...props} />
-      <CompareBar saved={savedIds.size} comparing={compareIds.size} />
+      <CompareBar saved={savedIds.size} comparing={compareIds.size} onCompare={() => setShowCompare(true)} />
+      {showCompare && (
+        <CompareView items={compareItems}
+          onRemove={(id) => toggle(setCompareIds)(id)}
+          onClear={() => { setCompareIds(new Set()); setShowCompare(false); }}
+          onClose={() => setShowCompare(false)} />
+      )}
       {showAuth && (
         <AuthModal
           onSuccess={(u) => { setAuthUser(u); setShowAuth(false); }}

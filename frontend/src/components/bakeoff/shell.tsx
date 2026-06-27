@@ -127,15 +127,20 @@ export function CardList({ p, grid = false }: { p: ShellProps; grid?: boolean })
   );
 }
 
-/** Sticky bottom bar summarising saved + compare selections. */
-export function CompareBar({ saved, comparing }: { saved: number; comparing: number }) {
+/** Sticky bottom bar summarising saved + compare; opens the compare view. */
+export function CompareBar({ saved, comparing, onCompare }: {
+  saved: number; comparing: number; onCompare: () => void;
+}) {
   if (saved === 0 && comparing === 0) return null;
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[1500] flex justify-center p-3 sm:bottom-6">
-      <div className="pointer-events-auto flex items-center gap-4 rounded-full border border-border bg-card/95 px-5 py-2.5 text-sm shadow-lg backdrop-blur">
+      <div className="bo-glass pointer-events-auto flex items-center gap-3 rounded-full px-4 py-2 text-sm shadow-lg">
         <span className="flex items-center gap-1.5"><Heart className="h-4 w-4 text-primary" /> {saved} saved</span>
         <span className="h-4 w-px bg-border" />
-        <span className="flex items-center gap-1.5"><GitCompareArrows className="h-4 w-4 text-primary" /> {comparing} to compare</span>
+        <button type="button" onClick={onCompare} disabled={comparing === 0}
+          className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 font-semibold text-primary-foreground disabled:opacity-50">
+          <GitCompareArrows className="h-4 w-4" /> Compare{comparing > 0 ? ` (${comparing})` : ""}
+        </button>
       </div>
     </div>
   );

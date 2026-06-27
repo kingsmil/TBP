@@ -16,64 +16,66 @@ export default function LayoutFloatingGlass(p: ShellProps) {
   const selected = p.items.find((i) => i.id === p.selectedId) ?? null;
 
   return (
-    <div className="fixed inset-0">
-      {/* Map canvas */}
-      <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.modes.join(",")} colorByScore={p.colorByScore} />
-
-      {/* Top floating controls */}
-      <div className="bo-fade-up pointer-events-none absolute inset-x-0 top-0 z-[1000] p-3 sm:p-4">
-        <div className="mx-auto flex max-w-3xl flex-col gap-2">
-          <div className="pointer-events-auto flex items-center gap-2">
-            <div className="bo-glass flex flex-1 items-center gap-2 rounded-full px-2 py-1.5">
-              <SearchBar value={p.query} onChange={p.setQuery} placeholder="Search location or project…" />
-            </div>
-            <button type="button" onClick={() => p.setFilterOpen(true)}
-              className="bo-glass flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
-              <SlidersHorizontal className="h-4 w-4" /> <span className="hidden sm:inline">Filters</span>
-            </button>
-            <PrioritiesControl weights={p.weights} setWeights={p.setWeights}
-              colorByScore={p.colorByScore} setColorByScore={p.setColorByScore} />
-            <AppMenu {...p} />
-          </div>
-          <div className="pointer-events-auto flex justify-center gap-2">
-            <ModeSwitch active={p.modes} onToggle={p.toggleMode} combine={p.combine} onCombine={p.setCombine} size="sm" />
-            <button type="button" onClick={() => setShowAgent(true)}
-              title="AI Agent (coming soon)"
-              className="bo-glass flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-primary">
-              <Sparkles className="h-3.5 w-3.5" /> Agent
-            </button>
-          </div>
+    <div className="fixed inset-0 flex">
+      {/* Desktop results rail — in-flow, so the map resizes around it */}
+      <aside className={`hidden shrink-0 flex-col overflow-hidden border-r border-border bg-card transition-[width] duration-300 sm:flex ${railOpen ? "w-80" : "w-12"}`}>
+        <div className="flex items-center justify-between px-3 py-2">
+          {railOpen && <ResultsCount n={p.items.length} />}
+          <button type="button" onClick={() => setRailOpen((o) => !o)}
+            title={railOpen ? "Collapse list" : "Expand list"}
+            className="rounded-md p-1 hover:bg-muted">
+            {railOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+          </button>
         </div>
-      </div>
-
-      {/* Desktop results rail (left) */}
-      <div className={`pointer-events-none absolute left-0 top-0 z-[900] hidden h-full p-3 pt-28 sm:block`}>
-        <div className={`bo-glass pointer-events-auto flex h-full flex-col overflow-hidden rounded-2xl transition-[width] duration-300 ${railOpen ? "w-80" : "w-12"}`}>
-          <div className="flex items-center justify-between px-3 py-2">
-            {railOpen && <ResultsCount n={p.items.length} />}
-            <button type="button" onClick={() => setRailOpen((o) => !o)} className="rounded-md p-1 hover:bg-muted">
-              {railOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-            </button>
-          </div>
-          {railOpen && (
+        {railOpen && (
+          <>
             <div className="flex items-center gap-2 px-3 pb-2">
               <span className="text-[11px] text-muted-foreground">Sort</span>
               <SortSelect value={p.sort} onChange={p.setSort} />
             </div>
-          )}
-          {railOpen && (
             <div className="bo-stagger min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3"
               onMouseLeave={() => p.setHoveredId(null)}>
               <CardList p={p} />
             </div>
-          )}
+          </>
+        )}
+      </aside>
+
+      {/* Map area (fills the rest) */}
+      <div className="relative min-w-0 flex-1">
+        <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.modes.join(",")} colorByScore={p.colorByScore} />
+
+        {/* Top floating controls */}
+        <div className="bo-fade-up pointer-events-none absolute inset-x-0 top-0 z-[1000] p-3 sm:p-4">
+          <div className="mx-auto flex max-w-3xl flex-col gap-2">
+            <div className="pointer-events-auto flex items-center gap-2">
+              <div className="bo-glass flex flex-1 items-center gap-2 rounded-full px-2 py-1.5">
+                <SearchBar value={p.query} onChange={p.setQuery} placeholder="Search location or project…" />
+              </div>
+              <button type="button" onClick={() => p.setFilterOpen(true)}
+                className="bo-glass flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
+                <SlidersHorizontal className="h-4 w-4" /> <span className="hidden sm:inline">Filters</span>
+              </button>
+              <PrioritiesControl weights={p.weights} setWeights={p.setWeights}
+                colorByScore={p.colorByScore} setColorByScore={p.setColorByScore} />
+              <AppMenu {...p} />
+            </div>
+            <div className="pointer-events-auto flex justify-center gap-2">
+              <ModeSwitch active={p.modes} onToggle={p.toggleMode} combine={p.combine} onCombine={p.setCombine} size="sm" />
+              <button type="button" onClick={() => setShowAgent(true)}
+                title="AI Agent (coming soon)"
+                className="bo-glass flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-primary">
+                <Sparkles className="h-3.5 w-3.5" /> Agent
+              </button>
+            </div>
+          </div>
         </div>
+
+        {/* Mobile results sheet (peek) */}
+        <MobileSheet p={p} />
       </div>
 
-      {/* Mobile results sheet (peek) */}
-      <MobileSheet p={p} />
-
-      {/* Detail panel (self-positioning: right rail on desktop, sheet on mobile) */}
+      {/* Detail panel (fixed to viewport: right rail on desktop, sheet on mobile) */}
       {selected && (
         <DetailPanel item={selected} saved={p.savedIds.has(selected.id)} comparing={p.compareIds.has(selected.id)}
           onClose={() => p.setSelectedId(null)} onSave={() => p.toggleSave(selected.id)} onCompare={() => p.toggleCompare(selected.id)} />

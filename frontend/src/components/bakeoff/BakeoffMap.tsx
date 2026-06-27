@@ -113,6 +113,18 @@ function FocusView({ item }: { item: CardItem | null }) {
  *  letting users zoom out into empty space — recomputed on resize. Uses "fit"
  *  (see the whole island) rather than "cover" (which over-zooms on wide screens);
  *  the slim off-island margins read as sea. */
+/** Re-render the map whenever its container resizes (e.g. the rail collapses),
+ *  not just on window resize. */
+function ResizeHandler() {
+  const map = useMap();
+  useEffect(() => {
+    const ro = new ResizeObserver(() => map.invalidateSize({ animate: false }));
+    ro.observe(map.getContainer());
+    return () => ro.disconnect();
+  }, [map]);
+  return null;
+}
+
 function BoundsLock() {
   const map = useMap();
   useEffect(() => {
@@ -347,7 +359,7 @@ function AmenityToggle({ active, onToggle }: { active: string[]; onToggle: (k: s
   const types = useQuery({ queryKey: ["amenity-types"], queryFn: getAmenityTypes, staleTime: 6e5 });
   const list = types.data?.amenities ?? [];
   return (
-    <div className="absolute bottom-24 left-3 z-[1000] sm:bottom-3 sm:left-[21rem]">
+    <div className="absolute bottom-24 left-3 z-[1000] sm:bottom-3">
       {open && list.length > 0 && (
         <div className="bo-glass mb-2 w-52 rounded-2xl p-2">
           <div className="mb-1 flex items-center justify-between px-1">
@@ -403,6 +415,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorB
         minZoom={11} maxBounds={SG_BOUNDS} maxBoundsViscosity={1}
         className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
         <TileLayer url={GREY_TILES} bounds={SG_BOUNDS} noWrap />
+        <ResizeHandler />
         <BoundsLock />
         <FitOnce pts={pts} fitKey={fitKey} />
         <FocusView item={selected} />

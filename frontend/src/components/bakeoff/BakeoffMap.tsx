@@ -151,7 +151,9 @@ function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) 
     if (fitKey !== lastKey.current) { lastKey.current = fitKey; fitted.current = false; }
     if (!fitted.current && pts.length > 0) {
       fitted.current = true;
-      if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { padding: [24, 24], maxZoom: 15 });
+      // Reserve top room for the floating search/mode bar so northern pins aren't
+      // hidden behind it. (Any sliver above OneMap's edge sits under the bar.)
+      if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { paddingTopLeft: [24, 124], paddingBottomRight: [24, 28], maxZoom: 15 });
       else map.setView(pts[0], 15, { animate: true });
     }
   }, [fitKey, pts, map]);

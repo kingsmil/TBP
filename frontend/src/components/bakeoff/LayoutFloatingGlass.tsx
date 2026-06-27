@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, User, LogOut } from "lucide-react";
+import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, User, LogOut, Sparkles } from "lucide-react";
+import AgentPanel from "./AgentPanel";
 import ModeSwitch from "./ModeSwitch";
 import FilterSheet from "./FilterSheet";
 import BakeoffMap from "./BakeoffMap";
@@ -10,6 +11,7 @@ import { type ShellProps, SearchBar, ResultsCount, CardList, SortSelect } from "
 /** Floating Glass — full-screen map canvas; frosted panels float on top. */
 export default function LayoutFloatingGlass(p: ShellProps) {
   const [railOpen, setRailOpen] = useState(true);
+  const [showAgent, setShowAgent] = useState(false);
   const selected = p.items.find((i) => i.id === p.selectedId) ?? null;
 
   return (
@@ -37,8 +39,13 @@ export default function LayoutFloatingGlass(p: ShellProps) {
               <span className="hidden max-w-[120px] truncate sm:inline">{p.authEmail ?? "Sign in"}</span>
             </button>
           </div>
-          <div className="pointer-events-auto flex justify-center">
+          <div className="pointer-events-auto flex justify-center gap-2">
             <ModeSwitch active={p.modes} onToggle={p.toggleMode} combine={p.combine} onCombine={p.setCombine} size="sm" />
+            <button type="button" onClick={() => setShowAgent(true)}
+              title="AI Agent (coming soon)"
+              className="bo-glass flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-primary">
+              <Sparkles className="h-3.5 w-3.5" /> Agent
+            </button>
           </div>
         </div>
       </div>
@@ -77,6 +84,7 @@ export default function LayoutFloatingGlass(p: ShellProps) {
       )}
 
       <FilterSheet filters={p.filters} onChange={p.setFilters} asSheet open={p.filterOpen} onClose={() => p.setFilterOpen(false)} />
+      {showAgent && <AgentPanel onClose={() => setShowAgent(false)} />}
     </div>
   );
 }

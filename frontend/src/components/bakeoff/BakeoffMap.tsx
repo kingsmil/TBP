@@ -19,6 +19,9 @@ const MRT_COLORS: Record<string, string> = {
 
 const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
+// Lock panning to mainland SG (+ nearby islands). Excludes the Pedra Branca
+// "inset" OneMap draws far east (~104.3°E) and keeps white/empty areas off-screen.
+const SG_BOUNDS: [[number, number], [number, number]] = [[1.16, 103.59], [1.47, 104.09]];
 
 const AMENITY_EMOJI: Record<string, string> = {
   schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",
@@ -378,8 +381,9 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorB
   return (
     <div className="relative h-full w-full">
       <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
+        minZoom={11} maxBounds={SG_BOUNDS} maxBoundsViscosity={1}
         className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
-        <TileLayer url={GREY_TILES} />
+        <TileLayer url={GREY_TILES} bounds={SG_BOUNDS} noWrap />
         <FitOnce pts={pts} fitKey={fitKey} />
         <FocusView item={selected} />
         <Clusters items={items} selectedId={selectedId} onSelect={onSelect} colorByScore={colorByScore} />

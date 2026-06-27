@@ -338,6 +338,36 @@ def _geocode_one(search_val: str, token: str) -> tuple[float, float] | None:
     return None
 
 
+def _geocode_block(blk: str, street: str, token: str) -> tuple[float, float] | None:
+    """Geocode a block+street, validating the match (BLK_NO + ROAD_NAME) so a
+    fuzzy OneMap hit (e.g. JLN BATU -> JALAN JAMBU BATU) isn't accepted."""
+    from app.data.data_gov_sg import _best_geocode
+    query = f"{blk} {street}"
+    for attempt in range(5):
+        try:
+            resp = requests.get(
+                ONEMAP_SEARCH_URL,
+                params={"searchVal": query, "returnGeom": "Y", "getAddrDetails": "Y"},
+                headers={"Authorization": token}, timeout=10,
+            )
+            if resp.status_code == 429 or resp.status_code >= 500:
+                time.sleep(2 ** attempt)
+                continue
+            resp.raise_for_status()
+            body = resp.json()
+            if body.get("error"):
+                log.warning("OneMap rejected %r: %s", query, body["error"])
+                return None
+            best = _best_geocode(body.get("results", []), blk, street)
+            return (float(best["LATITUDE"]), float(best["LONGITUDE"])) if best else None
+        except requests.RequestException as exc:
+            if attempt == 4:
+                log.warning("Geocode failed for %r: %s", query, exc)
+            else:
+                time.sleep(2 ** attempt)
+    return None
+
+
 def geocode_blocks(
     unique_addresses: list[tuple[str, str]],  # [(block_no, street_name), ...]
     token: str,
@@ -365,7 +395,7 @@ def geocode_blocks(
 
     def lookup(address: tuple[str, str]):
         blk, street = address
-        return address, _geocode_one(f"{blk} {street}", token)
+        return address, _geocode_block(blk, street, token)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [executor.submit(lookup, address) for address in pending]

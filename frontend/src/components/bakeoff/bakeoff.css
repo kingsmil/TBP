@@ -47,8 +47,9 @@
 .bo-amenity-bubble > span { transform: rotate(45deg); }
 .bo-amenity-bubble:hover { z-index: 1000; }
 @keyframes bo-drop-rot {
-  0%   { transform: translate(-50%, -180%) rotate(-45deg) scale(0.5); opacity: 0; }
-  60%  { opacity: 1; }
+  0%   { transform: translate(-50%, -320%) rotate(-45deg) scale(0.4); opacity: 0; }
+  55%  { opacity: 1; }
+  78%  { transform: translate(-50%, -38%) rotate(-45deg) scale(1.06); }  /* overshoot */
   100% { transform: translate(-50%, -50%) rotate(-45deg) scale(1); opacity: 1; }
 }
 @keyframes bo-drop {

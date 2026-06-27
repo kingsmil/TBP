@@ -141,8 +141,17 @@ function AmenityMarkers({ active, colorOf, origin }: {
       queryKey: ["bo-amenity", key], queryFn: () => getAmenities(key), staleTime: 6e5,
     })),
   });
+  // Hold the pins until the fly-to-estate finishes, so they drop in *after* the
+  // map has zoomed/centred (re-triggered whenever the selected estate changes).
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setReady(false);
+    const t = setTimeout(() => setReady(true), 620);
+    return () => clearTimeout(t);
+  }, [origin?.lat, origin?.lon]);
+
   // Only show amenities when a property is selected — and only the ones near it.
-  if (!origin) return null;
+  if (!origin || !ready) return null;
   return (
     <>
       {queries.map((q, i) => {
@@ -150,7 +159,7 @@ function AmenityMarkers({ active, colorOf, origin }: {
           (poi) => distanceMetres(origin, { lat: poi.lat, lon: poi.lon }) <= TRANSIT_RADIUS_M);
         return results.map((poi, j) => (
           <Marker key={`${active[i]}-${poi.lat}-${poi.lon}`} position={[poi.lat, poi.lon]}
-            icon={amenityIcon(AMENITY_EMOJI[active[i]] ?? "📍", colorOf(active[i]), (j % 12) * 28)}>
+            icon={amenityIcon(AMENITY_EMOJI[active[i]] ?? "📍", colorOf(active[i]), (j % 16) * 40)}>
             <Tooltip direction="top" offset={[0, -10]}>{AMENITY_EMOJI[active[i]] ?? ""} {poi.name}</Tooltip>
           </Marker>
         ));

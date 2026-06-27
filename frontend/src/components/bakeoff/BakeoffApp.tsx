@@ -7,8 +7,9 @@ import { getStoredUser, clearAuth, type AuthUser } from "../../lib/auth";
 import { getMyPreferences, putMyPreferences } from "../../lib/api";
 import AuthModal from "../AuthModal";
 import SavedPlacesPanel from "../SavedPlacesPanel";
-import InfoPanel from "../InfoPanel";
 import BtoDashboard from "../BtoDashboard";
+import RecommendWizard from "../RecommendWizard";
+import InsightsModal from "./InsightsModal";
 import type { CardItem, Mode, Weights } from "./types";
 import { DEFAULT_WEIGHTS } from "./types";
 import { useListings } from "./useListings";
@@ -109,6 +110,7 @@ export default function BakeoffApp() {
   const [showSaved, setShowSaved] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showBto, setShowBto] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   // Theme (light/dark) — applies the same way the classic app does.
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -188,6 +190,7 @@ export default function BakeoffApp() {
     onSaved: () => setShowSaved(true),
     onInsights: () => setShowInsights(true),
     onBtoData: () => setShowBto(true),
+    onHelp: () => setShowHelp(true),
     theme, onToggleTheme: toggleTheme,
   };
 
@@ -213,21 +216,28 @@ export default function BakeoffApp() {
           onSignIn={() => { setShowSaved(false); setShowAuth(true); }} />
       )}
       {showInsights && (
-        <div className="fixed inset-0 z-[2400] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowInsights(false)}>
-          <div className="bo-glass flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-border px-5 py-3">
-              <h2 className="text-base font-bold">Insights</h2>
-              <button type="button" onClick={() => setShowInsights(false)} className="rounded-md p-1 hover:bg-muted"><X className="h-4 w-4" /></button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <InfoPanel onSelectBlock={(id) => { setSelectedId(`r-${id}`); setShowInsights(false); }} />
-            </div>
-          </div>
-        </div>
+        <InsightsModal onClose={() => setShowInsights(false)}
+          onSelectBlock={(id) => setSelectedId(`r-${id}`)} />
       )}
       {showBto && (
         <div className="fixed inset-0 z-[2400]">
           <BtoDashboard onBack={() => setShowBto(false)} theme={theme} onToggleTheme={toggleTheme} />
+        </div>
+      )}
+      {showHelp && (
+        <div className="fixed inset-0 z-[2400] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowHelp(false)}>
+          <div className="bo-glass flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold">Help me decide</h2>
+                <p className="text-xs text-muted-foreground">A few questions to suggest BTO or resale.</p>
+              </div>
+              <button type="button" onClick={() => setShowHelp(false)} className="rounded-md p-1 hover:bg-muted"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <RecommendWizard onSelect={(product) => { setModes([product]); setShowHelp(false); }} />
+            </div>
+          </div>
         </div>
       )}
     </div>

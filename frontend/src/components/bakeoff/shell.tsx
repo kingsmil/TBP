@@ -40,6 +40,7 @@ export interface ShellProps {
   onSaved: () => void;
   onInsights: () => void;
   onBtoData: () => void;
+  onHelp: () => void;
   theme: "light" | "dark";
   onToggleTheme: () => void;
 }

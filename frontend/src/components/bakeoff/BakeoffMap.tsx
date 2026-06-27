@@ -129,7 +129,9 @@ function BoundsLock() {
   const map = useMap();
   useEffect(() => {
     const apply = () => {
-      const z = Math.round(map.getBoundsZoom(SG_BOUNDS)); // fit the island to the view
+      // "cover" the viewport with Singapore so there's never empty space, even
+      // though OneMap tiles now load in the surrounding sea/Johor too.
+      const z = Math.ceil(map.getBoundsZoom(SG_BOUNDS, true));
       map.setMinZoom(z);
       if (map.getZoom() < z) map.setZoom(z);
     };
@@ -148,8 +150,7 @@ function FitOnce({ pts, fitKey }: { pts: [number, number][]; fitKey?: string }) 
     if (fitKey !== lastKey.current) { lastKey.current = fitKey; fitted.current = false; }
     if (!fitted.current && pts.length > 0) {
       fitted.current = true;
-      // Extra top padding so the floating search bar doesn't cover the island.
-      if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { paddingTopLeft: [20, 110], paddingBottomRight: [20, 30], maxZoom: 15 });
+      if (pts.length > 1) map.fitBounds(pts as LatLngBoundsExpression, { padding: [24, 24], maxZoom: 15 });
       else map.setView(pts[0], 15, { animate: true });
     }
   }, [fitKey, pts, map]);
@@ -415,7 +416,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, fitKey, colorB
       <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
         minZoom={11} maxBounds={SG_BOUNDS} maxBoundsViscosity={1}
         className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
-        <TileLayer url={GREY_TILES} bounds={SG_BOUNDS} noWrap />
+        <TileLayer url={GREY_TILES} noWrap />
         <ResizeHandler />
         <BoundsLock />
         <FitOnce pts={pts} fitKey={fitKey} />

@@ -18,7 +18,7 @@ export default function LayoutFloatingGlass(p: ShellProps) {
   return (
     <div className="fixed inset-0 flex">
       {/* Desktop results rail — in-flow, so the map resizes around it */}
-      <aside className={`hidden shrink-0 flex-col overflow-hidden border-r border-border bg-card transition-[width] duration-300 sm:flex ${railOpen ? "w-80" : "w-12"}`}>
+      <aside className={`hidden shrink-0 flex-col overflow-hidden border-r border-border bg-card transition-[width] duration-300 sm:flex ${railOpen ? "w-[420px]" : "w-12"}`}>
         <div className="flex items-center justify-between px-3 py-2">
           {railOpen && <ResultsCount n={p.items.length} />}
           <button type="button" onClick={() => setRailOpen((o) => !o)}

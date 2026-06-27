@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, User, LogOut, Sparkles } from "lucide-react";
+import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
 import AgentPanel from "./AgentPanel";
+import AppMenu from "./AppMenu";
 import ModeSwitch from "./ModeSwitch";
 import FilterSheet from "./FilterSheet";
 import BakeoffMap from "./BakeoffMap";
@@ -32,12 +33,7 @@ export default function LayoutFloatingGlass(p: ShellProps) {
             </button>
             <PrioritiesControl weights={p.weights} setWeights={p.setWeights}
               colorByScore={p.colorByScore} setColorByScore={p.setColorByScore} />
-            <button type="button" onClick={p.onAccount}
-              title={p.authEmail ? `${p.authEmail} — sign out` : "Sign in"}
-              className="bo-glass flex h-11 items-center gap-2 rounded-full px-3.5 text-sm font-semibold">
-              {p.authEmail ? <LogOut className="h-4 w-4" /> : <User className="h-4 w-4" />}
-              <span className="hidden max-w-[120px] truncate sm:inline">{p.authEmail ?? "Sign in"}</span>
-            </button>
+            <AppMenu {...p} />
           </div>
           <div className="pointer-events-auto flex justify-center gap-2">
             <ModeSwitch active={p.modes} onToggle={p.toggleMode} combine={p.combine} onCombine={p.setCombine} size="sm" />

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./bakeoff.css";
-import { Undo2 } from "lucide-react";
+import { X } from "lucide-react";
 import type { SearchFilters } from "../../types";
 import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
-import { setRedesign } from "../../lib/uiVariant";
 import { getStoredUser, clearAuth, type AuthUser } from "../../lib/auth";
 import { getMyPreferences, putMyPreferences } from "../../lib/api";
 import AuthModal from "../AuthModal";
+import SavedPlacesPanel from "../SavedPlacesPanel";
+import InfoPanel from "../InfoPanel";
+import BtoDashboard from "../BtoDashboard";
 import type { CardItem, Mode, Weights } from "./types";
 import { DEFAULT_WEIGHTS } from "./types";
 import { useListings } from "./useListings";
@@ -104,6 +106,22 @@ export default function BakeoffApp() {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
+  const [showBto, setShowBto] = useState(false);
+
+  // Theme (light/dark) — applies the same way the classic app does.
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const s = localStorage.getItem("hdb-match-theme");
+    if (s === "light" || s === "dark") return s;
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.style.colorScheme = theme;
+    try { localStorage.setItem("hdb-match-theme", theme); } catch { /* ignore */ }
+  }, [theme]);
+  const toggleTheme = () => setTheme((t) => (t === "light" ? "dark" : "light"));
   const isDesktop = useIsDesktop();
 
   // Single-tap = focused view; in Combine mode, tap toggles a mode in/out.
@@ -167,6 +185,10 @@ export default function BakeoffApp() {
     authEmail: authUser?.email ?? null, onAccount,
     sort, setSort,
     weights, setWeights, colorByScore, setColorByScore,
+    onSaved: () => setShowSaved(true),
+    onInsights: () => setShowInsights(true),
+    onBtoData: () => setShowBto(true),
+    theme, onToggleTheme: toggleTheme,
   };
 
   return (
@@ -185,11 +207,29 @@ export default function BakeoffApp() {
           onClose={() => setShowAuth(false)}
         />
       )}
-      <button type="button" onClick={() => setRedesign(false)}
-        title="Back to the classic app"
-        className="bo-glass fixed bottom-4 right-4 z-[3000] flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold sm:bottom-6 sm:right-6">
-        <Undo2 className="h-4 w-4" /> Classic
-      </button>
+      {showSaved && (
+        <SavedPlacesPanel authUser={authUser}
+          onClose={() => setShowSaved(false)}
+          onSignIn={() => { setShowSaved(false); setShowAuth(true); }} />
+      )}
+      {showInsights && (
+        <div className="fixed inset-0 z-[2400] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowInsights(false)}>
+          <div className="bo-glass flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <h2 className="text-base font-bold">Insights</h2>
+              <button type="button" onClick={() => setShowInsights(false)} className="rounded-md p-1 hover:bg-muted"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <InfoPanel onSelectBlock={(id) => { setSelectedId(`r-${id}`); setShowInsights(false); }} />
+            </div>
+          </div>
+        </div>
+      )}
+      {showBto && (
+        <div className="fixed inset-0 z-[2400]">
+          <BtoDashboard onBack={() => setShowBto(false)} theme={theme} onToggleTheme={toggleTheme} />
+        </div>
+      )}
     </div>
   );
 }

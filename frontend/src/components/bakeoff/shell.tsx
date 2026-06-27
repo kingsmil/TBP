@@ -37,6 +37,11 @@ export interface ShellProps {
   setWeights: (w: Weights) => void;
   colorByScore: boolean;
   setColorByScore: (on: boolean) => void;
+  onSaved: () => void;
+  onInsights: () => void;
+  onBtoData: () => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 }
 
 const SORT_OPTIONS = [

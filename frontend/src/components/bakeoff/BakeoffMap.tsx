@@ -109,15 +109,15 @@ function FocusView({ item }: { item: CardItem | null }) {
   return null;
 }
 
-/** Sets the min zoom so Singapore always *covers* the viewport — no whitespace
- *  outside OneMap's tile coverage, recomputed on resize. */
+/** Sets the min zoom so the whole of Singapore is comfortably visible without
+ *  letting users zoom out into empty space — recomputed on resize. Uses "fit"
+ *  (see the whole island) rather than "cover" (which over-zooms on wide screens);
+ *  the slim off-island margins read as sea. */
 function BoundsLock() {
   const map = useMap();
   useEffect(() => {
     const apply = () => {
-      // getBoundsZoom(..., true) = smallest zoom at which the bounds cover the
-      // view; ceil it so there's never a sliver of empty space at the edges.
-      const z = Math.ceil(map.getBoundsZoom(SG_BOUNDS, true));
+      const z = Math.round(map.getBoundsZoom(SG_BOUNDS)); // fit the island to the view
       map.setMinZoom(z);
       if (map.getZoom() < z) map.setZoom(z);
     };

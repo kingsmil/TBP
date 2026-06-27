@@ -25,7 +25,7 @@ const SG_VIEW: [[number, number], [number, number]] = [[1.22, 103.62], [1.47, 10
 // Pan limit — slightly wider but strictly inside OneMap's tiled extent (incl the
 // Johor strait to the north, excl the far-west open sea + Pedra Branca inset), so
 // panning never reveals whitespace.
-const SG_MAX: [[number, number], [number, number]] = [[1.19, 103.60], [1.50, 104.08]];
+const SG_MAX: [[number, number], [number, number]] = [[1.19, 103.60], [1.52, 104.08]];
 
 const AMENITY_EMOJI: Record<string, string> = {
   schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",

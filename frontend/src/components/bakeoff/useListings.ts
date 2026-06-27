@@ -43,6 +43,8 @@ function fromResale(b: BlockSummary, scores: Record<string, number>): CardItem {
       { label: "Lease from", value: String(b.lease_commencement_year) },
     ],
     score: matchScore(b, scores[String(b.block_id)]),
+    appreciation: scores[String(b.block_id)],
+    sortDate: new Date(b.lease_commencement_year, 0, 1).getTime(),
     lat: b.lat,
     lon: b.lon,
     block: b,
@@ -64,6 +66,8 @@ function fromPrivate(t: PrivateTransaction): CardItem {
       { label: "Tenure", value: t.tenure ? (t.tenure.includes("Freehold") ? "Freehold" : "Leasehold") : "—" },
       { label: "Sold", value: t.sale_date.slice(0, 7) },
     ],
+    area: t.area_sqft ?? undefined,
+    sortDate: Date.parse(t.sale_date) || undefined,
     lat: t.lat ?? undefined,
     lon: t.lon ?? undefined,
   };
@@ -85,6 +89,7 @@ function fromBto(r: BtoResaleSupplyRow): CardItem {
     ],
     pinLabel: r.estimated_resale_eligible_date
       ? `Resale '${r.estimated_resale_eligible_date.slice(2, 4)}` : undefined,
+    sortDate: r.estimated_resale_eligible_date ? Date.parse(r.estimated_resale_eligible_date) || undefined : undefined,
     lat: r.lat ?? undefined,
     lon: r.lon ?? undefined,
   };

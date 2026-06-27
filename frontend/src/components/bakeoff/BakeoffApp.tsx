@@ -17,6 +17,9 @@ const SORT_CMP: Record<string, (a: CardItem, b: CardItem) => number> = {
   "price-desc": (a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity),
   "psf-asc": (a, b) => (a.psf ?? Infinity) - (b.psf ?? Infinity),
   "psf-desc": (a, b) => (b.psf ?? -Infinity) - (a.psf ?? -Infinity),
+  newest: (a, b) => (b.sortDate ?? -Infinity) - (a.sortDate ?? -Infinity),
+  "area-desc": (a, b) => (b.area ?? -Infinity) - (a.area ?? -Infinity),
+  appreciation: (a, b) => (b.appreciation ?? -Infinity) - (a.appreciation ?? -Infinity),
 };
 import { useIsDesktop } from "./useMediaQuery";
 import { type ShellProps, CompareBar } from "./shell";
@@ -112,6 +115,13 @@ export default function BakeoffApp() {
     const cmp = SORT_CMP[sort] ?? SORT_CMP.match;
     return [...filtered].sort(cmp);
   }, [allItems, query, sort]);
+
+  // Match/appreciation only make sense for resale — if it's not in the mix,
+  // fall back to a meaningful default (price high → low).
+  useEffect(() => {
+    if (!modes.includes("resale") && (sort === "match" || sort === "appreciation")) setSort("price-desc");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modes]);
 
   const toggle = (set: React.Dispatch<React.SetStateAction<Set<string>>>) => (id: string) =>
     set((prev) => {

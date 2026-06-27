@@ -20,6 +20,9 @@ export interface CardItem {
   metrics: CardMetric[];   // up to 3 friendly chips
   pinLabel?: string;       // overrides the map-pin text (else price / badge)
   score?: number | null;   // 0–100 "match" for the score bar (resale only)
+  appreciation?: number;   // appreciation sub-score (resale)
+  area?: number;           // floor area sqft (private)
+  sortDate?: number;       // recency epoch ms: sale date / eligible / lease year
   lat?: number;
   lon?: number;
   block?: BlockSummary;     // resale only — feeds the map + detail

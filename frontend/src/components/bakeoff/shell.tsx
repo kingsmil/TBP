@@ -41,6 +41,9 @@ const SORT_OPTIONS = [
   { value: "price-desc", label: "Price: high to low" },
   { value: "psf-asc", label: "PSF: low to high" },
   { value: "psf-desc", label: "PSF: high to low" },
+  { value: "newest", label: "Newest" },
+  { value: "area-desc", label: "Largest area" },
+  { value: "appreciation", label: "Best appreciation" },
 ];
 
 export function SortSelect({ value, onChange }: { value: string; onChange: (s: string) => void }) {

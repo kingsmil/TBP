@@ -4,6 +4,7 @@ import { MapPin, X, Trash2, Plus, LogIn, Home, Briefcase, GraduationCap, Heart, 
 import type { AuthUser } from "../lib/auth";
 import type { SavedLocationType } from "../types";
 import { authState, canPersist, loadLocations, addLocation, removeLocation, loadPreferences } from "../lib/userState";
+import { geocodeAddress } from "../lib/api";
 
 const TYPE_META: Record<SavedLocationType, { label: string; icon: typeof Home }> = {
   home: { label: "Home", icon: Home },
@@ -48,10 +49,19 @@ export default function SavedPlacesPanel({ authUser, onClose, onSignIn }: Props)
     if (!label.trim()) return;
     setBusy(true);
     try {
+      // Geocode so the place can drive proximity scoring (best-effort).
+      let lat: number | null = null, lng: number | null = null;
+      const q = postal.trim() || address.trim();
+      if (q) {
+        try {
+          const g = (await geocodeAddress(q)).results?.[0];
+          if (g) { lat = g.lat; lng = g.lon; }
+        } catch { /* keep null — place still saves, just won't affect scoring */ }
+      }
       await addLocation({
         label: label.trim(), location_type: type,
         address: address.trim() || null, postal_code: postal.trim() || null,
-        lat: null, lng: null,
+        lat, lng,
       });
       setLabel(""); setAddress(""); setPostal(""); setType("home");
       refresh();
@@ -110,6 +120,7 @@ export default function SavedPlacesPanel({ authUser, onClose, onSignIn }: Props)
           {/* Add location */}
           <form onSubmit={handleAdd} className="space-y-2 rounded-xl border border-border bg-background/50 p-3">
             <div className="text-xs font-semibold text-muted-foreground">Add a place</div>
+            <p className="text-[11px] text-muted-foreground">Add an address or postal code so homes can be scored by how close they are to here.</p>
             <div className="flex flex-wrap gap-2">
               <select value={type} onChange={(e) => setType(e.target.value as SavedLocationType)}
                 className="h-8 rounded-md border border-input bg-background px-2 text-xs">

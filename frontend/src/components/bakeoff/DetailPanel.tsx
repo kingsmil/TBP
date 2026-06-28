@@ -8,7 +8,6 @@ import ActiveListingsSection from "../ActiveListingsSection";
 import ScoreBar from "./ScoreBar";
 
 const sgd = (n?: number | null) => (n != null ? `$${Math.round(n).toLocaleString()}` : "—");
-const clamp = (n: number) => Math.max(0, Math.min(100, n));
 
 interface Props {
   item: CardItem;
@@ -66,8 +65,9 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
     enabled: !!b?.planning_area_id, staleTime: 6e5,
   });
 
-  const commute = b ? (b.nearest_mrt_distance_m == null ? 50 : clamp(100 - (b.nearest_mrt_distance_m / 1000) * 100)) : null;
-  const lifestyle = b ? clamp((b.schools_within_1km ?? 0) * 33) : null;
+  // Show the SAME sub-scores that drive the match (incl. place-aware commute),
+  // not a local re-derivation — otherwise the bars contradict the match number.
+  const subs = item.subs;
 
   return (
     <div className="bo-glass bo-spring-up pointer-events-auto fixed inset-x-0 bottom-0 z-[1200] flex max-h-[86vh] flex-col overflow-hidden rounded-t-2xl sm:inset-x-auto sm:right-3 sm:top-3 sm:bottom-3 sm:w-[380px] sm:max-h-none sm:rounded-2xl">
@@ -122,13 +122,11 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
           <div className="space-y-2 rounded-xl border border-border bg-card/60 p-3">
             <div className="flex items-center justify-between text-xs font-semibold"><span>Match</span><span className="text-muted-foreground">{item.score}/100</span></div>
             <ScoreBar score={item.score} gradient />
-            {commute != null && lifestyle != null && (
+            {subs && (
               <div className="space-y-1.5 pt-1">
-                <SubScore icon={Train} label="Commute" score={commute} />
-                <SubScore icon={GraduationCap} label="Lifestyle" score={lifestyle} />
-                {appr.data?.appreciation_score != null && (
-                  <SubScore icon={TrendingUp} label="Appreciation" score={appr.data.appreciation_score} />
-                )}
+                {subs.commute != null && <SubScore icon={Train} label="Commute" score={subs.commute} />}
+                {subs.schools != null && <SubScore icon={GraduationCap} label="Schools" score={subs.schools} />}
+                {subs.appreciation != null && <SubScore icon={TrendingUp} label="Appreciation" score={subs.appreciation} />}
               </div>
             )}
           </div>

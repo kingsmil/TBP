@@ -12,11 +12,30 @@ const sgd = (n?: number | null) => (n != null ? `$${Math.round(n).toLocaleString
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
 const CUR_YEAR = new Date().getFullYear();
 
-/** Per-factor 0–100 sub-scores for a resale block, from precomputed signals. */
-function resaleSubs(b: BlockSummary, appreciation?: number): Record<string, number | null> {
+export interface Place { lat: number; lon: number }
+
+function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat), dLon = toRad(bLon - aLon);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+/** Commute score: if the user saved places (home/work/school), score by average
+ *  proximity to them (0km=100, 12km=0); otherwise fall back to nearest-MRT. */
+function commuteScore(b: BlockSummary, places: Place[]): number {
+  if (places.length && b.lat != null && b.lon != null) {
+    const avg = places.reduce((s, p) => s + haversineKm(b.lat!, b.lon!, p.lat, p.lon), 0) / places.length;
+    return clamp(100 - (avg / 12) * 100);
+  }
   const mrt = b.nearest_mrt_distance_m;
+  return mrt == null ? 50 : clamp(100 - (mrt / 1000) * 100);           // 0m=100, ≥1km=0
+}
+
+/** Per-factor 0–100 sub-scores for a resale block, from precomputed signals. */
+function resaleSubs(b: BlockSummary, appreciation: number | undefined, places: Place[]): Record<string, number | null> {
   return {
-    commute: mrt == null ? 50 : clamp(100 - (mrt / 1000) * 100),           // 0m=100, ≥1km=0
+    commute: commuteScore(b, places),
     schools: clamp((b.schools_within_1km ?? 0) * 33),                       // 3+ ≈ 100
     appreciation: appreciation ?? null,
     value: b.median_psf == null ? null : clamp(100 - ((b.median_psf - 300) / 600) * 100), // $300=100, $900=0
@@ -29,9 +48,9 @@ function walk(m?: number | null): string {
   return `${Math.max(1, Math.round(m / 80))} min to MRT`; // ~80 m/min
 }
 
-function fromResale(b: BlockSummary, scores: Record<string, number>, weights: Weights): CardItem {
+function fromResale(b: BlockSummary, scores: Record<string, number>, weights: Weights, places: Place[]): CardItem {
   const appr = scores[String(b.block_id)];
-  const subs = resaleSubs(b, appr);
+  const subs = resaleSubs(b, appr, places);
   return {
     id: `r-${b.block_id}`,
     mode: "resale",
@@ -102,10 +121,11 @@ function fromBto(r: BtoResaleSupplyRow): CardItem {
 
 /** Fetches every selected mode and merges them into one tagged list, so one or
  *  more property types can be shown together on the map + list. */
-export function useListings(modes: Mode[], filters: SearchFilters, weights: Weights) {
+export function useListings(modes: Mode[], filters: SearchFilters, weights: Weights, places: Place[] = []) {
   const want = (m: Mode) => modes.includes(m);
   const key = modes.join(",");
   const wkey = JSON.stringify(weights);
+  const pkey = JSON.stringify(places);
 
   const resale = useQuery({
     queryKey: ["bo-resale", filters],
@@ -138,12 +158,12 @@ export function useListings(modes: Mode[], filters: SearchFilters, weights: Weig
   const items = useMemo<CardItem[]>(() => {
     const scores = scoresQ.data?.scores ?? {};
     const out: CardItem[] = [];
-    if (want("resale")) out.push(...blocks.map((b) => fromResale(b, scores, weights)));
+    if (want("resale")) out.push(...blocks.map((b) => fromResale(b, scores, weights, places)));
     if (want("private")) out.push(...(priv.data?.results ?? []).map(fromPrivate));
     if (want("bto")) out.push(...(bto.data?.results ?? []).map(fromBto));
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, wkey, blocks, priv.data, bto.data, scoresQ.data]);
+  }, [key, wkey, pkey, blocks, priv.data, bto.data, scoresQ.data]);
 
   const active = [
     want("resale") ? resale : null,

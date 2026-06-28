@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import "./bakeoff.css";
 import { X } from "lucide-react";
 import type { SearchFilters } from "../../types";
 import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
 import { getStoredUser, clearAuth, type AuthUser } from "../../lib/auth";
 import { getMyPreferences, putMyPreferences } from "../../lib/api";
+import { loadLocations, authState } from "../../lib/userState";
 import AuthModal from "../AuthModal";
 import SavedPlacesPanel from "../SavedPlacesPanel";
 import BtoDashboard from "../BtoDashboard";
@@ -13,7 +15,7 @@ import InsightsModal from "./InsightsModal";
 import SavedHomesPanel, { type SavedSnapshot } from "./SavedHomesPanel";
 import type { CardItem, Mode, Weights } from "./types";
 import { DEFAULT_WEIGHTS } from "./types";
-import { useListings } from "./useListings";
+import { useListings, type Place } from "./useListings";
 
 function useDebounced<T>(value: T, ms: number): T {
   const [d, setD] = useState(value);
@@ -150,7 +152,16 @@ export default function BakeoffApp() {
 
   const [sort, setSort] = useState("match");
   const dWeights = useDebounced(weights, 200);
-  const { items: allItems, blocks, isLoading, isError } = useListings(modes, filters, dWeights);
+  // Saved places (home/work/school) → fed into the commute score so blocks are
+  // ranked by proximity to where YOU need to be.
+  const savedLocs = useQuery({ queryKey: ["saved-locations", authState()], queryFn: loadLocations });
+  const places = useMemo<Place[]>(
+    () => (savedLocs.data ?? [])
+      .filter((l) => l.lat != null && l.lng != null)
+      .map((l) => ({ lat: l.lat as number, lon: l.lng as number })),
+    [savedLocs.data],
+  );
+  const { items: allItems, blocks, isLoading, isError } = useListings(modes, filters, dWeights, places);
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();

@@ -31,7 +31,7 @@ export default function LayoutFloatingGlass(p: ShellProps) {
           <>
             <div className="flex items-center gap-2 px-3 pb-2">
               <span className="text-[11px] text-muted-foreground">Sort</span>
-              <SortSelect value={p.sort} onChange={p.setSort} />
+              <SortSelect value={p.sort} onChange={p.setSort} modes={p.modes} />
             </div>
             <div className="bo-stagger bo-noscroll min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3"
               onMouseLeave={() => p.setHoveredId(null)}>
@@ -101,7 +101,7 @@ function MobileSheet({ p }: { p: ShellProps }) {
       </button>
       <div className="-mt-2 flex items-center justify-center gap-2 px-4 pb-2 text-sm font-semibold">
         <ResultsCount n={p.items.length} />
-        {open && <SortSelect value={p.sort} onChange={p.setSort} />}
+        {open && <SortSelect value={p.sort} onChange={p.setSort} modes={p.modes} />}
       </div>
       {open && <div className="bo-stagger bo-noscroll h-[calc(100%-6rem)] space-y-2 overflow-y-auto px-3 pb-6"><CardList p={p} /></div>}
     </div>

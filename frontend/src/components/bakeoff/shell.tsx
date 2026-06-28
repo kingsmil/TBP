@@ -46,23 +46,28 @@ export interface ShellProps {
   onToggleTheme: () => void;
 }
 
-const SORT_OPTIONS = [
-  { value: "match", label: "Recommended" },
-  { value: "price-asc", label: "Price: low to high" },
-  { value: "price-desc", label: "Price: high to low" },
-  { value: "psf-asc", label: "PSF: low to high" },
-  { value: "psf-desc", label: "PSF: high to low" },
-  { value: "newest", label: "Newest" },
-  { value: "area-desc", label: "Largest area" },
-  { value: "appreciation", label: "Best appreciation" },
+const SORT_OPTIONS: { value: string; label: string; modes: Mode[] }[] = [
+  { value: "match", label: "Recommended", modes: ["resale"] },
+  { value: "price-asc", label: "Price: low to high", modes: ["resale", "private"] },
+  { value: "price-desc", label: "Price: high to low", modes: ["resale", "private"] },
+  { value: "psf-asc", label: "PSF: low to high", modes: ["resale", "private"] },
+  { value: "psf-desc", label: "PSF: high to low", modes: ["resale", "private"] },
+  { value: "newest", label: "Newest", modes: ["resale", "private", "bto"] },
+  { value: "area-desc", label: "Largest area", modes: ["private"] },
+  { value: "appreciation", label: "Best appreciation", modes: ["resale"] },
 ];
 
-export function SortSelect({ value, onChange }: { value: string; onChange: (s: string) => void }) {
+/** Sort options valid for the active mode(s) — hides resale-only sorts in BTO/Private. */
+export function sortOptionsFor(modes: Mode[]) {
+  return SORT_OPTIONS.filter((o) => o.modes.some((m) => modes.includes(m)));
+}
+
+export function SortSelect({ value, onChange, modes }: { value: string; onChange: (s: string) => void; modes: Mode[] }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}
       aria-label="Sort results"
       className="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium outline-none">
-      {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      {sortOptionsFor(modes).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   );
 }

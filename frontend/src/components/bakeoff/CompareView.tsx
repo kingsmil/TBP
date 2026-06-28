@@ -72,8 +72,12 @@ export default function CompareView({ items, onRemove, onClear, onClose }: Props
               </thead>
               <tbody>
                 <Row label="Price" items={items} render={(it) => <span className="font-semibold tabular-nums">{sgd(it.price)}</span>} />
-                <Row label="$/sqft" items={items} render={(it) => <span className="tabular-nums">{it.psf != null ? `$${it.psf}` : "—"}</span>} />
-                <Row label="Match" items={items} render={(it) => (it.score != null ? `${it.score}/100` : "—")} />
+                {items.some((it) => it.psf != null) && (
+                  <Row label="$/sqft" items={items} render={(it) => <span className="tabular-nums">{it.psf != null ? `$${it.psf}` : "—"}</span>} />
+                )}
+                {items.some((it) => it.score != null) && (
+                  <Row label="Match" items={items} render={(it) => (it.score != null ? `${it.score}/100` : "—")} />
+                )}
                 {labels.map((label) => (
                   <Row key={label} label={label} items={items} render={(it) => metricVal(it, label)} />
                 ))}

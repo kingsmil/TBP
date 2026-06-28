@@ -36,7 +36,7 @@ const SORT_CMP: Record<string, (a: CardItem, b: CardItem) => number> = {
   appreciation: (a, b) => (b.appreciation ?? -Infinity) - (a.appreciation ?? -Infinity),
 };
 import { useIsDesktop } from "./useMediaQuery";
-import { type ShellProps, CompareBar } from "./shell";
+import { type ShellProps, CompareBar, sortOptionsFor } from "./shell";
 import LayoutFloatingGlass from "./LayoutFloatingGlass";
 import CompareView from "./CompareView";
 
@@ -180,10 +180,11 @@ export default function BakeoffApp() {
     return [...filtered].sort(cmp);
   }, [allItems, query, sort]);
 
-  // Match/appreciation only make sense for resale — if it's not in the mix,
-  // fall back to a meaningful default (price high → low).
+  // Keep the sort valid for the active mode(s) — reset to the first allowed one
+  // when the current sort isn't offered (e.g. "match" while viewing BTO).
   useEffect(() => {
-    if (!modes.includes("resale") && (sort === "match" || sort === "appreciation")) setSort("price-desc");
+    const allowed = sortOptionsFor(modes).map((o) => o.value);
+    if (!allowed.includes(sort)) setSort(allowed[0] ?? "newest");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modes]);
 

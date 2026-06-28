@@ -28,6 +28,7 @@ export interface BlockSummary {
   median_psf: number | null;
   median_price: number | null;
   txn_count: number;
+  amenity_counts?: Record<string, number> | null; // precomputed amenities within ~1km (Lifestyle)
   transit_matches?: DirectTransitMatch[];
 }
 

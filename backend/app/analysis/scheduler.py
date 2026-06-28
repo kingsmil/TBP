@@ -146,6 +146,12 @@ def _refresh_amenities() -> None:
     total = amenities_data.rebuild(engine)
     if total:
         log.info("Auto-refreshed amenity POIs: %d.", total)
+    # Recompute per-block amenity counts (Lifestyle score) from the fresh POIs.
+    try:
+        from app.data import amenity_counts as counts_data
+        counts_data.rebuild(engine)
+    except Exception:  # noqa: BLE001 — never let the count rebuild break the refresh
+        log.exception("block_amenity_counts rebuild failed")
 
 
 async def _loop() -> None:

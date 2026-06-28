@@ -326,9 +326,11 @@ class PostgisRepository(Repository):
                 b.planning_area_id, ST_X(b.geom) AS lon, ST_Y(b.geom) AS lat,
                 b.lease_commencement_year, p.nearest_mrt_distance_m,
                 p.schools_within_1km, s.median_psf, s.median_price,
-                COALESCE(s.txn_count, 0) AS txn_count
+                COALESCE(s.txn_count, 0) AS txn_count,
+                ac.counts AS amenity_counts
             FROM hdb_blocks b
             LEFT JOIN block_proximity p ON p.block_id = b.block_id
+            LEFT JOIN block_amenity_counts ac ON ac.block_id = b.block_id
             {join} stats s ON s.block_id = b.block_id
             {final_where}
             ORDER BY s.median_psf ASC NULLS LAST, b.block_id ASC

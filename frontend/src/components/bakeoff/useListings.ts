@@ -1,11 +1,11 @@
 import { useMemo } from "react";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
-  searchProperties, getPrivateTransactions, getBtoResaleSupply, getBlockScores, getAmenities,
+  searchProperties, getPrivateTransactions, getBtoResaleSupply, getBlockScores,
 } from "../../lib/api";
 import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
-import { LIFESTYLE_TYPES, buildLifestyleIndex, scoreLifestyle, type LifestyleIndex } from "../../lib/lifestyle";
-import type { SearchFilters, BlockSummary, PrivateTransaction, BtoResaleSupplyRow, AmenityPoi } from "../../types";
+import { scoreFromCounts } from "../../lib/lifestyle";
+import type { SearchFilters, BlockSummary, PrivateTransaction, BtoResaleSupplyRow } from "../../types";
 import type { CardItem, Mode, Weights } from "./types";
 import { blendScore } from "./types";
 
@@ -34,10 +34,10 @@ function commuteScore(b: BlockSummary, places: Place[]): number {
 }
 
 /** Per-factor 0–100 sub-scores for a resale block, from precomputed signals.
- *  Lifestyle comes from nearby-amenity counts (see lib/lifestyle); if amenities
- *  haven't loaded yet, fall back to the schools-count proxy. */
-function resaleSubs(b: BlockSummary, appreciation: number | undefined, places: Place[], life: LifestyleIndex | null): Record<string, number | null> {
-  const lifestyle = life ? scoreLifestyle(life, b.lat, b.lon) : clamp((b.schools_within_1km ?? 0) * 33);
+ *  Lifestyle uses server-precomputed amenity counts (weighted at read time); if
+ *  those are absent it falls back to the schools-count proxy. */
+function resaleSubs(b: BlockSummary, appreciation: number | undefined, places: Place[]): Record<string, number | null> {
+  const lifestyle = scoreFromCounts(b.amenity_counts) ?? clamp((b.schools_within_1km ?? 0) * 33);
   return {
     commute: commuteScore(b, places),
     lifestyle,
@@ -54,9 +54,9 @@ function walk(m?: number | null): string {
 
 // Base resale card (subs computed; `score` is blended later, per weights, so a
 // weight tweak doesn't re-run the heavy sub-score maths).
-function fromResale(b: BlockSummary, scores: Record<string, number>, places: Place[], life: LifestyleIndex | null): CardItem {
+function fromResale(b: BlockSummary, scores: Record<string, number>, places: Place[]): CardItem {
   const appr = scores[String(b.block_id)];
-  const subs = resaleSubs(b, appr, places, life);
+  const subs = resaleSubs(b, appr, places);
   return {
     id: `r-${b.block_id}`,
     mode: "resale",
@@ -154,22 +154,6 @@ export function useListings(modes: Mode[], filters: SearchFilters, weights: Weig
     enabled: want("resale"),
     staleTime: 36e5,
   });
-  // Amenity datasets for the lifestyle score (shares cache with the map's layers).
-  const amenityQs = useQueries({
-    queries: LIFESTYLE_TYPES.map((t) => ({
-      queryKey: ["bo-amenity", t], queryFn: () => getAmenities(t),
-      enabled: want("resale"), staleTime: 6e5,
-    })),
-  });
-  const amenityKey = amenityQs.map((q) => q.data?.results.length ?? -1).join(",");
-  const lifeIndex = useMemo<LifestyleIndex | null>(() => {
-    const byType: Record<string, AmenityPoi[]> = {};
-    let any = false;
-    amenityQs.forEach((q, i) => { if (q.data) { byType[LIFESTYLE_TYPES[i]] = q.data.results; any = true; } });
-    return any ? buildLifestyleIndex(byType) : null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amenityKey]);
-
   const blocks = useMemo<BlockSummary[]>(
     () => (want("resale") ? resale.data?.results ?? [] : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,9 +165,9 @@ export function useListings(modes: Mode[], filters: SearchFilters, weights: Weig
   const resaleBase = useMemo<CardItem[]>(() => {
     if (!want("resale")) return [];
     const scores = scoresQ.data?.scores ?? {};
-    return blocks.map((b) => fromResale(b, scores, places, lifeIndex));
+    return blocks.map((b) => fromResale(b, scores, places));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, pkey, blocks, scoresQ.data, lifeIndex]);
+  }, [key, pkey, blocks, scoresQ.data]);
 
   // Cheap part: blend sub-scores with the current weights.
   const items = useMemo<CardItem[]>(() => {

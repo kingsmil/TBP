@@ -75,7 +75,7 @@ export default function SavedPlacesPanel({ authUser, onClose, onSignIn }: Props)
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-bold">Saved places &amp; preferences</h2>
+            <h2 className="text-base font-bold">My places <span className="font-normal text-muted-foreground">· home, work &amp; school</span></h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-md p-1 hover:bg-muted"><X className="h-4 w-4" /></button>
         </div>

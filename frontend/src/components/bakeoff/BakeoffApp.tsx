@@ -10,6 +10,7 @@ import SavedPlacesPanel from "../SavedPlacesPanel";
 import BtoDashboard from "../BtoDashboard";
 import RecommendWizard from "../RecommendWizard";
 import InsightsModal from "./InsightsModal";
+import SavedHomesPanel, { type SavedSnapshot } from "./SavedHomesPanel";
 import type { CardItem, Mode, Weights } from "./types";
 import { DEFAULT_WEIGHTS } from "./types";
 import { useListings } from "./useListings";
@@ -56,6 +57,12 @@ export default function BakeoffApp() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(() => loadSet("hdb_saved"));
   const [compareIds, setCompareIds] = useState<Set<string>>(() => loadSet("hdb_compare"));
+  // Persisted display snapshots of saved homes, so the favourites list works even
+  // before/without the live cards being loaded (other modes, fresh reload).
+  const [savedSnaps, setSavedSnaps] = useState<Record<string, SavedSnapshot>>(() => {
+    try { return JSON.parse(localStorage.getItem("hdb_saved_snap") || "{}"); } catch { return {}; }
+  });
+  useEffect(() => { try { localStorage.setItem("hdb_saved_snap", JSON.stringify(savedSnaps)); } catch { /* ignore */ } }, [savedSnaps]);
   const [weights, setWeights] = useState<Weights>(() => {
     try { const raw = localStorage.getItem("hdb_weights"); return raw ? { ...DEFAULT_WEIGHTS, ...JSON.parse(raw) } : DEFAULT_WEIGHTS; } catch { return DEFAULT_WEIGHTS; }
   });
@@ -108,6 +115,7 @@ export default function BakeoffApp() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
+  const [showSavedHomes, setShowSavedHomes] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showBto, setShowBto] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -176,11 +184,39 @@ export default function BakeoffApp() {
       return next;
     });
 
+  // Saving a home also captures a display snapshot (so the favourites list works
+  // across reloads / mode switches); un-saving drops it.
+  const toggleSave = (id: string) => {
+    toggle(setSavedIds)(id);
+    setSavedSnaps((prev) => {
+      if (prev[id]) { const next = { ...prev }; delete next[id]; return next; }
+      const it = itemCache.current.get(id);
+      if (!it) return prev;
+      return { ...prev, [id]: {
+        id: it.id, mode: it.mode, title: it.title, subtitle: it.subtitle,
+        price: it.price ?? null, priceLabel: it.priceLabel ?? "", psf: it.psf ?? null,
+        score: it.score ?? null, lat: it.lat ?? null, lon: it.lon ?? null,
+        blockId: it.block?.block_id,
+      } };
+    });
+  };
+
+  const savedHomes = useMemo(
+    () => [...savedIds].map((id) => savedSnaps[id]).filter(Boolean) as SavedSnapshot[],
+    [savedIds, savedSnaps],
+  );
+  const openSavedHome = (id: string) => {
+    const snap = savedSnaps[id];
+    if (snap && !modes.includes(snap.mode)) setModes([snap.mode]);
+    setSelectedId(id);
+    setShowSavedHomes(false);
+  };
+
   const props: ShellProps = {
     modes, toggleMode, combine, setCombine, filters, setFilters, query, setQuery,
     items, blocks, isLoading, isError,
     selectedId, setSelectedId,
-    savedIds, toggleSave: toggle(setSavedIds),
+    savedIds, toggleSave,
     compareIds, toggleCompare: toggle(setCompareIds),
     hoveredId, setHoveredId,
     filterOpen, setFilterOpen, isDesktop,
@@ -188,6 +224,7 @@ export default function BakeoffApp() {
     sort, setSort,
     weights, setWeights, colorByScore, setColorByScore,
     onSaved: () => setShowSaved(true),
+    onSavedHomes: () => setShowSavedHomes(true),
     onInsights: () => setShowInsights(true),
     onBtoData: () => setShowBto(true),
     onHelp: () => setShowHelp(true),
@@ -197,7 +234,8 @@ export default function BakeoffApp() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <LayoutFloatingGlass {...props} />
-      <CompareBar saved={savedIds.size} comparing={compareIds.size} onCompare={() => setShowCompare(true)} />
+      <CompareBar saved={savedIds.size} comparing={compareIds.size}
+        onSaved={() => setShowSavedHomes(true)} onCompare={() => setShowCompare(true)} />
       {showCompare && (
         <CompareView items={compareItems}
           onRemove={(id) => toggle(setCompareIds)(id)}
@@ -214,6 +252,12 @@ export default function BakeoffApp() {
         <SavedPlacesPanel authUser={authUser}
           onClose={() => setShowSaved(false)}
           onSignIn={() => { setShowSaved(false); setShowAuth(true); }} />
+      )}
+      {showSavedHomes && (
+        <SavedHomesPanel snaps={savedHomes}
+          onSelect={openSavedHome}
+          onRemove={toggleSave}
+          onClose={() => setShowSavedHomes(false)} />
       )}
       {showInsights && (
         <InsightsModal onClose={() => setShowInsights(false)}

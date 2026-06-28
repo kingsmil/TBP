@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, Heart, GitCompareArrows, MapPin, TrendingUp, Train, GraduationCap, Tag } from "lucide-react";
+import { X, Heart, GitCompareArrows, MapPin, TrendingUp, Train, GraduationCap } from "lucide-react";
 import type { CardItem } from "./types";
-import { propertyImageUrl, getAppreciation, getEstateAnalytics, getBlockListings } from "../../lib/api";
+import { propertyImageUrl, getAppreciation, getEstateAnalytics } from "../../lib/api";
 import PsfTrendChart from "../PsfTrendChart";
+import ActiveListingsSection from "../ActiveListingsSection";
 import ScoreBar from "./ScoreBar";
 
 const sgd = (n?: number | null) => (n != null ? `$${Math.round(n).toLocaleString()}` : "—");
@@ -64,15 +65,9 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
     queryFn: () => getEstateAnalytics(b!.planning_area_id as number),
     enabled: !!b?.planning_area_id, staleTime: 6e5,
   });
-  const listings = useQuery({
-    queryKey: ["bo-listings", b?.block_id],
-    queryFn: () => getBlockListings(b!.block_id),
-    enabled: !!b, staleTime: 6e5,
-  });
 
   const commute = b ? (b.nearest_mrt_distance_m == null ? 50 : clamp(100 - (b.nearest_mrt_distance_m / 1000) * 100)) : null;
   const lifestyle = b ? clamp((b.schools_within_1km ?? 0) * 33) : null;
-  const cheapest = listings.data?.listings?.[0];
 
   return (
     <div className="bo-glass bo-spring-up pointer-events-auto fixed inset-x-0 bottom-0 z-[1200] flex max-h-[86vh] flex-col overflow-hidden rounded-t-2xl sm:inset-x-auto sm:right-3 sm:top-3 sm:bottom-3 sm:w-[380px] sm:max-h-none sm:rounded-2xl">
@@ -150,15 +145,10 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
           </div>
         </div>
 
-        {/* Active listings (resale) */}
-        {cheapest && (
-          <div className="rounded-xl border border-border bg-card/60 p-3">
-            <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold"><Tag className="h-3.5 w-3.5" /> On the market now</div>
-            <p className="text-sm">
-              <span className="font-semibold">{listings.data!.count}</span> listing{listings.data!.count > 1 ? "s" : ""} ·
-              from <span className="font-semibold tabular-nums">{sgd(cheapest.price)}</span>
-            </p>
-            <p className="text-[11px] text-muted-foreground">{cheapest.flat_type} · {cheapest.floor_area_sqft} sqft · {cheapest.storey_range}</p>
+        {/* Active listings (resale) — full list w/ photos, agent + outreach */}
+        {b && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card/60 [&>div]:border-b-0 [&>div]:p-3">
+            <ActiveListingsSection blockId={b.block_id} />
           </div>
         )}
 

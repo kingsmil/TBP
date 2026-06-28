@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Menu, User, LogOut, MapPin, BarChart3, Building2, Wand2, Moon, Sun, Undo2 } from "lucide-react";
+import { Menu, User, LogOut, MapPin, Heart, BarChart3, Building2, Wand2, Moon, Sun, Undo2 } from "lucide-react";
 import { setRedesign } from "../../lib/uiVariant";
 import type { ShellProps } from "./shell";
 
@@ -32,7 +32,8 @@ export default function AppMenu(p: ShellProps) {
         <div className="bo-glass absolute right-0 top-12 z-[1300] w-56 rounded-2xl p-2">
           {item(p.authEmail ? <LogOut className="h-4 w-4" /> : <User className="h-4 w-4" />,
             p.authEmail ? "Sign out" : "Sign in", p.onAccount)}
-          {item(<MapPin className="h-4 w-4" />, "Saved places", p.onSaved)}
+          {item(<Heart className="h-4 w-4" />, "Saved homes", p.onSavedHomes)}
+          {item(<MapPin className="h-4 w-4" />, "My places", p.onSaved)}
           {item(<BarChart3 className="h-4 w-4" />, "Insights", p.onInsights)}
           {item(<Building2 className="h-4 w-4" />, "BTO data", p.onBtoData)}
           {item(<Wand2 className="h-4 w-4" />, "Help me decide", p.onHelp)}

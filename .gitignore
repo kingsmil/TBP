@@ -20,3 +20,6 @@ tests/e2e/logs/
 
 # Local deploy runtime state (PIDs)
 deploy/.run/
+
+
+.claude/

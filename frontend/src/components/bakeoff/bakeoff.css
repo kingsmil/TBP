@@ -93,9 +93,10 @@
 .bo-cluster__n { font-size: 13px; font-weight: 800; }
 .bo-cluster__from { font-size: 9px; font-weight: 600; opacity: 0.85; white-space: nowrap; }
 
-/* world background tiles tinted to sit closer to OneMap's grey so the seam at
-   Singapore's coastline is far less noticeable */
+/* world background tiles tinted to sit closer to OneMap so the seam at Singapore's
+   coastline is far less noticeable (per theme) */
 .bo-world-tiles { filter: brightness(0.94) saturate(0.82) contrast(1.02); }
+.dark .bo-world-tiles { filter: brightness(0.95) saturate(0.85); }
 
 /* hide scrollbars while keeping scroll (lists/sheets) */
 .bo-noscroll { scrollbar-width: none; -ms-overflow-style: none; }

@@ -43,7 +43,7 @@ export default function LayoutFloatingGlass(p: ShellProps) {
 
       {/* Map area (fills the rest) */}
       <div className="relative min-w-0 flex-1">
-        <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.modes.join(",")} colorByScore={p.colorByScore} />
+        <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.modes.join(",")} colorByScore={p.colorByScore} theme={p.theme} />
 
         {/* Top floating controls */}
         <div className="bo-fade-up pointer-events-none absolute inset-x-0 top-0 z-[1000] p-3 sm:p-4">

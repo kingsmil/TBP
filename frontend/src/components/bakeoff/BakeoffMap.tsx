@@ -18,14 +18,18 @@ const MRT_COLORS: Record<string, string> = {
 };
 
 const GREY_TILES = "https://www.onemap.gov.sg/maps/tiles/Grey/{z}/{x}/{y}.png";
+const NIGHT_TILES = "https://www.onemap.gov.sg/maps/tiles/Night/{z}/{x}/{y}.png";
 // World basemap rendered *under* OneMap, so the area outside Singapore (sea,
-// Malaysia, Indonesia) shows a muted grey map instead of empty space.
+// Malaysia, Indonesia) shows a muted map instead of empty space. Themed to match.
 const WORLD_TILES = "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
+const WORLD_TILES_DARK = "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png";
 const SG_CENTER: [number, number] = [1.352, 103.82];
-// The locked view: the whole island (+ a little context, excludes the Pedra
-// Branca inset). This is the start framing, the zoom-out floor, AND the pan limit
-// — users can only look around inside this box.
-const LOCK_BOX: [[number, number], [number, number]] = [[1.15, 103.58], [1.50, 104.10]];
+// The framing target: the island. The locked view *covers* this (OneMap fills the
+// screen — no world-layer seam, no Pedra Branca inset).
+const LOCK_BOX: [[number, number], [number, number]] = [[1.215, 103.63], [1.47, 104.03]];
+// Pan limit — a little wider (all OneMap-tiled) so you can nudge around the island
+// without revealing the world layer.
+const MAX_BOUNDS: [[number, number], [number, number]] = [[1.17, 103.60], [1.50, 104.09]];
 
 const AMENITY_EMOJI: Record<string, string> = {
   schools: "🎓", parks: "🌳", hawker: "🍜", hospitals: "🏥",
@@ -129,24 +133,34 @@ function ResizeHandler() {
   return null;
 }
 
-/** Locks the view to LOCK_BOX: frames it at start, sets it as the zoom-out floor,
- *  and constrains panning to it. Recomputed on resize (e.g. the rail collapses). */
+const LOCK_CENTER: [number, number] = [
+  (LOCK_BOX[0][0] + LOCK_BOX[1][0]) / 2,
+  (LOCK_BOX[0][1] + LOCK_BOX[1][1]) / 2,
+];
+
+/** Locks the view: covers LOCK_BOX so OneMap fills the screen (no world-layer
+ *  seam / inset), sets that as the zoom-out floor, constrains panning to
+ *  MAX_BOUNDS, and nudges the island down so the floating bar doesn't cover the
+ *  northern pins. Recomputed on resize (e.g. the rail collapses). */
 function LockView() {
   const map = useMap();
   useEffect(() => {
-    const lock = () => {
-      const z = map.getBoundsZoom(LOCK_BOX); // zoom at which the box fills the view
-      map.setMinZoom(z);
-      map.setMaxBounds(LOCK_BOX);
+    const frame = () => {
+      const z = map.getBoundsZoom(LOCK_BOX, true); // "cover" — fill the viewport
+      map.setMinZoom(z - 1); // allow a little zoom-out into the (themed) surroundings
+      map.setMaxBounds(MAX_BOUNDS);
+      map.setView(LOCK_CENTER, z, { animate: false }); // default = the clean framing
+      // pan down a touch so northern pins clear the search bar (tiled, no seam)
+      const p = map.latLngToContainerPoint(map.getCenter());
+      map.setView(map.containerPointToLatLng([p.x, p.y - 48]), z, { animate: false });
       return z;
     };
-    map.fitBounds(LOCK_BOX, { animate: false });
-    lock();
+    frame();
     const onResize = () => {
-      const z = lock();
-      // Re-frame only when the user is at the zoomed-out (locked) level — don't
-      // yank them out of a property they've zoomed into.
-      if (map.getZoom() <= z + 0.05) map.fitBounds(LOCK_BOX, { animate: false });
+      const z = map.getBoundsZoom(LOCK_BOX, true);
+      map.setMinZoom(z - 1);
+      // re-frame only when at the locked-out level (don't yank out of a property)
+      if (map.getZoom() <= z + 0.05) frame();
     };
     map.on("resize", onResize);
     return () => { map.off("resize", onResize); };
@@ -289,9 +303,10 @@ interface Props {
   onSelect: (id: string | null) => void;
   fitKey?: string;
   colorByScore?: boolean;
+  theme?: "light" | "dark";
 }
 
-function Clusters({ items, selectedId, onSelect, colorByScore }: Omit<Props, "fitKey">) {
+function Clusters({ items, selectedId, onSelect, colorByScore }: Omit<Props, "fitKey" | "theme">) {
   const map = useMap();
   const [bounds, setBounds] = useState<[number, number, number, number]>([103.6, 1.13, 104.01, 1.48]);
   const [zoom, setZoom] = useState(12);
@@ -387,7 +402,10 @@ function AmenityToggle({ active, onToggle }: { active: string[]; onToggle: (k: s
   );
 }
 
-export default function BakeoffMap({ items, selectedId, onSelect, colorByScore }: Props) {
+export default function BakeoffMap({ items, selectedId, onSelect, colorByScore, theme = "light" }: Props) {
+  const dark = theme === "dark";
+  const mapTiles = dark ? NIGHT_TILES : GREY_TILES;
+  const worldTiles = dark ? WORLD_TILES_DARK : WORLD_TILES;
   const [activeAmenities, setActiveAmenities] = useState<string[]>([]);
   const types = useQuery({ queryKey: ["amenity-types"], queryFn: getAmenityTypes, staleTime: 6e5 });
   const colorOf = (key: string) => types.data?.amenities.find((a) => a.key === key)?.color ?? "#475569";
@@ -407,10 +425,11 @@ export default function BakeoffMap({ items, selectedId, onSelect, colorByScore }
   return (
     <div className="relative h-full w-full">
       <MapContainer center={SG_CENTER} zoom={12} zoomControl={false}
-        minZoom={11} maxBounds={LOCK_BOX} maxBoundsViscosity={1}
-        className="h-full w-full" style={{ background: "#e8edf0" }} preferCanvas>
-        <TileLayer url={WORLD_TILES} subdomains="abcd" noWrap className="bo-world-tiles" />
-        <TileLayer url={GREY_TILES} noWrap />
+        zoomSnap={0.5} zoomDelta={0.5}
+        minZoom={11} maxBounds={MAX_BOUNDS} maxBoundsViscosity={1}
+        className="h-full w-full" style={{ background: dark ? "#1a1d24" : "#e8edf0" }} preferCanvas>
+        <TileLayer key={`world-${theme}`} url={worldTiles} subdomains="abcd" noWrap className="bo-world-tiles" />
+        <TileLayer key={`map-${theme}`} url={mapTiles} noWrap />
         <ResizeHandler />
         <LockView />
         <FocusView item={selected} />

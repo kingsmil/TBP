@@ -13,6 +13,7 @@ import BtoDashboard from "../BtoDashboard";
 import RecommendWizard from "../RecommendWizard";
 import InsightsModal from "./InsightsModal";
 import SavedHomesPanel, { type SavedSnapshot } from "./SavedHomesPanel";
+import Onboarding from "./Onboarding";
 import type { CardItem, Mode, Weights } from "./types";
 import { DEFAULT_WEIGHTS, migrateWeights } from "./types";
 import { useListings, type Place } from "./useListings";
@@ -72,6 +73,11 @@ export default function BakeoffApp() {
   useEffect(() => { try { localStorage.setItem("hdb_weights", JSON.stringify(weights)); } catch { /* ignore */ } }, [weights]);
   useEffect(() => { try { localStorage.setItem("hdb_colorByScore", colorByScore ? "1" : "0"); } catch { /* ignore */ } }, [colorByScore]);
 
+  // First-run intake: shown once per brand-new user (anon → localStorage flag;
+  // logged-in → synced via account metadata), then never again.
+  const [onboarded, setOnboarded] = useState<boolean>(() => localStorage.getItem("hdb_onboarded") === "1");
+  const finishOnboarding = () => { setOnboarded(true); try { localStorage.setItem("hdb_onboarded", "1"); } catch { /* ignore */ } };
+
   // Persist saved + compare locally so they survive reloads (anon cache).
   useEffect(() => saveSet("hdb_saved", savedIds), [savedIds]);
   useEffect(() => saveSet("hdb_compare", compareIds), [compareIds]);
@@ -89,10 +95,12 @@ export default function BakeoffApp() {
     getMyPreferences()
       .then((prefs) => {
         if (cancelled) return;
-        const meta = (prefs?.metadata_json ?? {}) as { saved?: string[]; compare?: string[]; weights?: Weights };
+        const meta = (prefs?.metadata_json ?? {}) as { saved?: string[]; compare?: string[]; weights?: Weights; onboarded?: boolean };
         if (meta.saved?.length) setSavedIds((prev) => new Set([...prev, ...meta.saved!]));
         if (meta.compare?.length) setCompareIds((prev) => new Set([...prev, ...meta.compare!]));
         if (meta.weights) setWeights((w) => ({ ...w, ...migrateWeights(meta.weights!) }));
+        // Returning account that's already onboarded → skip intake.
+        if (meta.onboarded) finishOnboarding();
       })
       .catch(() => { /* not reachable / not authed — stay local */ })
       .finally(() => { if (!cancelled) synced.current = true; });
@@ -103,10 +111,10 @@ export default function BakeoffApp() {
   useEffect(() => {
     if (!authUser || !synced.current) return;
     const t = setTimeout(() => {
-      putMyPreferences({ metadata_json: { saved: [...savedIds], compare: [...compareIds], weights } }).catch(() => {});
+      putMyPreferences({ metadata_json: { saved: [...savedIds], compare: [...compareIds], weights, onboarded } }).catch(() => {});
     }, 500);
     return () => clearTimeout(t);
-  }, [savedIds, compareIds, weights, authUser]);
+  }, [savedIds, compareIds, weights, onboarded, authUser]);
 
   const onAccount = () => {
     if (authUser) { clearAuth(); setAuthUser(null); }
@@ -245,6 +253,15 @@ export default function BakeoffApp() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <LayoutFloatingGlass {...props} />
+      {!onboarded && (
+        <Onboarding
+          weights={weights} setWeights={setWeights}
+          modes={modes} setModes={setModes}
+          filters={filters} setFilters={setFilters}
+          authEmail={authUser?.email ?? null}
+          onSignIn={() => setShowAuth(true)}
+          onFinish={finishOnboarding} />
+      )}
       <CompareBar saved={savedIds.size} comparing={compareIds.size}
         onSaved={() => setShowSavedHomes(true)} onCompare={() => setShowCompare(true)} />
       {showCompare && (

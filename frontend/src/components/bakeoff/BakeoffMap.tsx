@@ -440,7 +440,8 @@ export default function BakeoffMap({ items, selectedId, onSelect, colorByScore, 
             origin={selected && selected.lat != null && selected.lon != null ? { lat: selected.lat, lon: selected.lon } : null} />
         )}
       </MapContainer>
-      <AmenityToggle active={activeAmenities} onToggle={toggleAmenity} />
+      {/* Amenities only render around a selected home, so only offer the toggle then. */}
+      {selected && <AmenityToggle active={activeAmenities} onToggle={toggleAmenity} />}
     </div>
   );
 }

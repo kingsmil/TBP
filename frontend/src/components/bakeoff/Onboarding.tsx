@@ -50,35 +50,43 @@ export default function Onboarding(p: Props) {
           </div>
         </div>
 
-        {/* Budget */}
-        <div className="mb-5">
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Max budget (optional)</label>
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3">
-            <span className="text-sm text-muted-foreground">$</span>
-            <input type="number" inputMode="numeric" placeholder="e.g. 650000"
-              value={p.filters.max_price ?? ""}
-              onChange={(e) => p.setFilters({ ...p.filters, max_price: e.target.value ? Number(e.target.value) : undefined })}
-              className="h-11 flex-1 bg-transparent text-sm outline-none" />
+        {/* Budget — resale/private have a price; BTO doesn't */}
+        {active !== "bto" && (
+          <div className="mb-5">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Max budget (optional)</label>
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3">
+              <span className="text-sm text-muted-foreground">$</span>
+              <input type="number" inputMode="numeric" placeholder="e.g. 650000"
+                value={p.filters.max_price ?? ""}
+                onChange={(e) => p.setFilters({ ...p.filters, max_price: e.target.value ? Number(e.target.value) : undefined })}
+                className="h-11 flex-1 bg-transparent text-sm outline-none" />
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Priorities */}
-        <div className="mb-6">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">What matters most?</div>
-          <p className="mb-3 text-[11px] text-muted-foreground">Drag to set how much each one counts toward a home's match score.</p>
-          <div className="space-y-3">
-            {SCORE_FACTORS.map((f) => (
-              <div key={f.key}>
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="font-medium">{f.label}</span>
-                  <span className="tabular-nums text-muted-foreground">{p.weights[f.key] ?? 0}</span>
+        {/* Priorities — the match score is resale-only */}
+        {active === "resale" ? (
+          <div className="mb-6">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">What matters most?</div>
+            <p className="mb-3 text-[11px] text-muted-foreground">Drag to set how much each one counts toward a home's match score.</p>
+            <div className="space-y-3">
+              {SCORE_FACTORS.map((f) => (
+                <div key={f.key}>
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className="font-medium">{f.label}</span>
+                    <span className="tabular-nums text-muted-foreground">{p.weights[f.key] ?? 0}</span>
+                  </div>
+                  <input type="range" min={0} max={50} value={p.weights[f.key] ?? 0}
+                    onChange={(e) => set(f.key, Number(e.target.value))} className="w-full accent-primary" />
                 </div>
-                <input type="range" min={0} max={50} value={p.weights[f.key] ?? 0}
-                  onChange={(e) => set(f.key, Number(e.target.value))} className="w-full accent-primary" />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className="mb-6 rounded-xl border border-border bg-muted/40 p-3 text-[11px] text-muted-foreground">
+            Match scoring &amp; filters apply to <span className="font-medium text-foreground">Resale</span> homes. You can switch modes anytime on the map.
+          </p>
+        )}
 
         {/* Actions */}
         <div className="flex items-center gap-3">

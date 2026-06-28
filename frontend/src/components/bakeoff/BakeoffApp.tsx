@@ -289,7 +289,12 @@ export default function BakeoffApp() {
       )}
       {showInsights && (
         <InsightsModal onClose={() => setShowInsights(false)}
-          onSelectBlock={(id) => setSelectedId(`r-${id}`)} />
+          onSelectBlock={(id) => {
+            // Top areas are resale blocks — make sure resale is on so it loads.
+            if (!modes.includes("resale")) setModes(["resale"]);
+            setSelectedId(`r-${id}`);
+            setShowInsights(false);
+          }} />
       )}
       {showBto && (
         <div className="fixed inset-0 z-[2400]">

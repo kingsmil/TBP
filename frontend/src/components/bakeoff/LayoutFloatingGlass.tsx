@@ -52,12 +52,17 @@ export default function LayoutFloatingGlass(p: ShellProps) {
               <div className="bo-glass flex flex-1 items-center gap-2 rounded-full px-2 py-1.5">
                 <SearchBar value={p.query} onChange={p.setQuery} placeholder="Search location or project…" />
               </div>
-              <button type="button" onClick={() => p.setFilterOpen(true)}
-                className="bo-glass flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
-                <SlidersHorizontal className="h-4 w-4" /> <span className="hidden sm:inline">Filters</span>
-              </button>
-              <PrioritiesControl weights={p.weights} setWeights={p.setWeights}
-                colorByScore={p.colorByScore} setColorByScore={p.setColorByScore} />
+              {/* Filters + Priorities only affect Resale, so only show them there. */}
+              {p.modes.includes("resale") && (
+                <>
+                  <button type="button" onClick={() => p.setFilterOpen(true)}
+                    className="bo-glass flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
+                    <SlidersHorizontal className="h-4 w-4" /> <span className="hidden sm:inline">Filters</span>
+                  </button>
+                  <PrioritiesControl weights={p.weights} setWeights={p.setWeights}
+                    colorByScore={p.colorByScore} setColorByScore={p.setColorByScore} />
+                </>
+              )}
               <AppMenu {...p} />
             </div>
             <div className="pointer-events-auto flex justify-center gap-2">

@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MapPin, X, Trash2, Plus, LogIn, Home, Briefcase, GraduationCap, Heart, Users, Star } from "lucide-react";
 import type { AuthUser } from "../lib/auth";
 import type { SavedLocationType } from "../types";
-import { authState, canPersist, loadLocations, addLocation, removeLocation, loadPreferences } from "../lib/userState";
+import { authState, canPersist, loadLocations, addLocation, editLocation, removeLocation, loadPreferences } from "../lib/userState";
 import { geocodeAddress } from "../lib/api";
 
 const TYPE_META: Record<SavedLocationType, { label: string; icon: typeof Home }> = {
@@ -43,6 +43,28 @@ export default function SavedPlacesPanel({ authUser, onClose, onSignIn }: Props)
   }, [onClose]);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["saved-locations"] });
+
+  // Backfill coordinates for older places saved without them, so they start
+  // counting toward scoring. Runs once when the panel opens.
+  const backfilled = useRef(false);
+  useEffect(() => {
+    if (backfilled.current || !locs.data) return;
+    const missing = locs.data.filter((l) => l.lat == null && (l.address || l.postal_code));
+    if (missing.length === 0) return;
+    backfilled.current = true;
+    (async () => {
+      let changed = false;
+      for (const l of missing) {
+        const q = (l.postal_code || l.address || "").trim();
+        if (!q) continue;
+        try {
+          const g = (await geocodeAddress(q)).results?.[0];
+          if (g) { await editLocation(l.id, { lat: g.lat, lng: g.lon }); changed = true; }
+        } catch { /* skip — leave as-is */ }
+      }
+      if (changed) refresh();
+    })();
+  }, [locs.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();

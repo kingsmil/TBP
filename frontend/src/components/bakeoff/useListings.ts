@@ -125,6 +125,24 @@ function fromBto(r: BtoResaleSupplyRow): CardItem {
   };
 }
 
+/** Client-side filters for private/BTO (resale is filtered server-side). */
+function passesPrivate(it: CardItem, f: SearchFilters): boolean {
+  if (f.property_type && it.badge !== f.property_type) return false;
+  if (f.max_price != null && (it.price ?? Infinity) > f.max_price) return false;
+  if (f.min_price != null && (it.price ?? -Infinity) < f.min_price) return false;
+  if (f.max_psf != null && (it.psf ?? Infinity) > f.max_psf) return false;
+  if (f.min_psf != null && (it.psf ?? -Infinity) < f.min_psf) return false;
+  return true;
+}
+function passesBto(it: CardItem, f: SearchFilters): boolean {
+  if (f.town && !it.subtitle.toLowerCase().includes(f.town.toLowerCase())) return false;
+  if (f.flat_type) {
+    const types = it.metrics.find((m) => m.label === "Flat types")?.value ?? "";
+    if (!types.toLowerCase().includes(f.flat_type.toLowerCase())) return false;
+  }
+  return true;
+}
+
 /** Fetches every selected mode and merges them into one tagged list, so one or
  *  more property types can be shown together on the map + list. */
 export function useListings(modes: Mode[], filters: SearchFilters, weights: Weights, places: Place[] = []) {
@@ -132,6 +150,7 @@ export function useListings(modes: Mode[], filters: SearchFilters, weights: Weig
   const key = modes.join(",");
   const wkey = JSON.stringify(weights);
   const pkey = JSON.stringify(places);
+  const fkey = JSON.stringify(filters);
 
   const resale = useQuery({
     queryKey: ["bo-resale", filters],
@@ -169,15 +188,16 @@ export function useListings(modes: Mode[], filters: SearchFilters, weights: Weig
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, pkey, blocks, scoresQ.data]);
 
-  // Cheap part: blend sub-scores with the current weights.
+  // Cheap part: blend sub-scores with the current weights, and apply the filters
+  // to private/BTO client-side (resale is already filtered server-side).
   const items = useMemo<CardItem[]>(() => {
     const out: CardItem[] = [];
     if (want("resale")) out.push(...resaleBase.map((c) => ({ ...c, score: blendScore(c.subs, weights) })));
-    if (want("private")) out.push(...(priv.data?.results ?? []).map(fromPrivate));
-    if (want("bto")) out.push(...(bto.data?.results ?? []).map(fromBto));
+    if (want("private")) out.push(...(priv.data?.results ?? []).map(fromPrivate).filter((it) => passesPrivate(it, filters)));
+    if (want("bto")) out.push(...(bto.data?.results ?? []).map(fromBto).filter((it) => passesBto(it, filters)));
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, wkey, resaleBase, priv.data, bto.data]);
+  }, [key, wkey, fkey, resaleBase, priv.data, bto.data]);
 
   const active = [
     want("resale") ? resale : null,

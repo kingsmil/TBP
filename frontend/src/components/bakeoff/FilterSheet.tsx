@@ -1,22 +1,69 @@
 import { useEffect } from "react";
 import { X, SlidersHorizontal } from "lucide-react";
 import type { SearchFilters } from "../../types";
+import type { Mode } from "./types";
 
 const FLAT_TYPES = ["2 ROOM", "3 ROOM", "4 ROOM", "5 ROOM", "EXECUTIVE"];
 const MRT_PRESETS = [
   { label: "5 min", m: 400 }, { label: "10 min", m: 800 }, { label: "15 min", m: 1200 },
 ];
+const PRIVATE_TYPES: [string, string][] = [
+  ["CONDO", "Condo"], ["APARTMENT", "Apartment"], ["EC", "EC"],
+  ["LANDED", "Landed"], ["STRATA_LANDED", "Strata landed"],
+];
 
 interface Props {
   filters: SearchFilters;
   onChange: (f: SearchFilters) => void;
+  modes: Mode[];
   /** When set, render as a slide-up sheet (mobile); otherwise inline (desktop rail). */
   asSheet?: boolean;
   open?: boolean;
   onClose?: () => void;
 }
 
-export default function FilterSheet({ filters, onChange, asSheet, open, onClose }: Props) {
+function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+        on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted"
+      }`}>
+      {children}
+    </button>
+  );
+}
+
+function PriceField({ filters, set }: { filters: SearchFilters; set: (p: Partial<SearchFilters>) => void }) {
+  return (
+    <div>
+      <div className="mb-2 text-sm font-semibold">Max price</div>
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3">
+        <span className="text-sm text-muted-foreground">$</span>
+        <input type="number" inputMode="numeric" placeholder="Any"
+          value={filters.max_price ?? ""}
+          onChange={(e) => set({ max_price: e.target.value ? Number(e.target.value) : undefined })}
+          className="h-10 flex-1 bg-transparent text-sm outline-none" />
+      </div>
+    </div>
+  );
+}
+
+function PsfField({ filters, set }: { filters: SearchFilters; set: (p: Partial<SearchFilters>) => void }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-sm font-semibold">Max PSF</span>
+        <span className="text-xs font-medium text-muted-foreground">{filters.max_psf ? `$${filters.max_psf}` : "Any"}</span>
+      </div>
+      <input type="range" min={300} max={1200} step={25} value={filters.max_psf ?? 1200}
+        onChange={(e) => set({ max_psf: Number(e.target.value) >= 1200 ? undefined : Number(e.target.value) })}
+        className="w-full accent-primary" />
+      <div className="flex justify-between text-[10px] text-muted-foreground"><span>$300</span><span>$1200+</span></div>
+    </div>
+  );
+}
+
+export default function FilterSheet({ filters, onChange, modes, asSheet, open, onClose }: Props) {
   useEffect(() => {
     if (!asSheet) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose?.();
@@ -25,79 +72,77 @@ export default function FilterSheet({ filters, onChange, asSheet, open, onClose 
   }, [asSheet, onClose]);
 
   const set = (patch: Partial<SearchFilters>) => onChange({ ...filters, ...patch });
-  const active =
-    (filters.flat_type ? 1 : 0) + (filters.max_psf ? 1 : 0) +
-    (filters.max_mrt_distance_m ? 1 : 0) + (filters.min_schools_within_1km ? 1 : 0);
+  const multi = modes.length > 1;
+  const activeCount = (Object.keys(filters) as (keyof SearchFilters)[])
+    .filter((k) => k !== "limit" && k !== "bbox" && filters[k] != null).length;
+
+  const header = (label: string) => multi
+    ? <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</div>
+    : null;
 
   const body = (
     <div className="space-y-5">
-      {/* Flat type */}
-      <div>
-        <div className="mb-2 text-sm font-semibold">Flat type</div>
-        <div className="flex flex-wrap gap-2">
-          {FLAT_TYPES.map((t) => {
-            const on = filters.flat_type === t;
-            return (
-              <button key={t} type="button"
-                onClick={() => set({ flat_type: on ? undefined : t })}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted"
-                }`}>
-                {t}
-              </button>
-            );
-          })}
+      {modes.includes("resale") && (
+        <div className="space-y-5">
+          {header("Resale")}
+          <div>
+            <div className="mb-2 text-sm font-semibold">Flat type</div>
+            <div className="flex flex-wrap gap-2">
+              {FLAT_TYPES.map((t) => <Chip key={t} on={filters.flat_type === t} onClick={() => set({ flat_type: filters.flat_type === t ? undefined : t })}>{t}</Chip>)}
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 text-sm font-semibold">Walk to MRT</div>
+            <div className="flex flex-wrap gap-2">
+              {MRT_PRESETS.map((p) => <Chip key={p.m} on={filters.max_mrt_distance_m === p.m} onClick={() => set({ max_mrt_distance_m: filters.max_mrt_distance_m === p.m ? undefined : p.m })}>{p.label}</Chip>)}
+            </div>
+          </div>
+          <PriceField filters={filters} set={set} />
+          <PsfField filters={filters} set={set} />
+          <label className="flex items-center justify-between">
+            <span className="text-sm font-semibold">Schools within 1 km</span>
+            <input type="checkbox" checked={!!filters.min_schools_within_1km}
+              onChange={(e) => set({ min_schools_within_1km: e.target.checked ? 1 : undefined })}
+              className="h-5 w-5 accent-primary" />
+          </label>
         </div>
-      </div>
+      )}
 
-      {/* Walk to MRT */}
-      <div>
-        <div className="mb-2 text-sm font-semibold">Walk to MRT</div>
-        <div className="flex flex-wrap gap-2">
-          {MRT_PRESETS.map((p) => {
-            const on = filters.max_mrt_distance_m === p.m;
-            return (
-              <button key={p.m} type="button"
-                onClick={() => set({ max_mrt_distance_m: on ? undefined : p.m })}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted"
-                }`}>
-                {p.label}
-              </button>
-            );
-          })}
+      {modes.includes("private") && (
+        <div className="space-y-5">
+          {header("Private")}
+          <div>
+            <div className="mb-2 text-sm font-semibold">Property type</div>
+            <div className="flex flex-wrap gap-2">
+              {PRIVATE_TYPES.map(([v, label]) => <Chip key={v} on={filters.property_type === v} onClick={() => set({ property_type: filters.property_type === v ? undefined : v })}>{label}</Chip>)}
+            </div>
+          </div>
+          <PriceField filters={filters} set={set} />
+          <PsfField filters={filters} set={set} />
         </div>
-      </div>
+      )}
 
-      {/* Max price (PSF) slider */}
-      <div>
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-sm font-semibold">Max PSF</span>
-          <span className="text-xs font-medium text-muted-foreground">
-            {filters.max_psf ? `$${filters.max_psf}` : "Any"}
-          </span>
+      {modes.includes("bto") && (
+        <div className="space-y-5">
+          {header("BTO")}
+          <div>
+            <div className="mb-2 text-sm font-semibold">Flat type</div>
+            <div className="flex flex-wrap gap-2">
+              {FLAT_TYPES.map((t) => <Chip key={t} on={filters.flat_type === t} onClick={() => set({ flat_type: filters.flat_type === t ? undefined : t })}>{t}</Chip>)}
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 text-sm font-semibold">Town</div>
+            <input type="text" placeholder="e.g. Tampines"
+              value={filters.town ?? ""}
+              onChange={(e) => set({ town: e.target.value || undefined })}
+              className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm outline-none" />
+          </div>
         </div>
-        <input
-          type="range" min={300} max={1200} step={25}
-          value={filters.max_psf ?? 1200}
-          onChange={(e) => set({ max_psf: Number(e.target.value) >= 1200 ? undefined : Number(e.target.value) })}
-          className="w-full accent-primary"
-        />
-        <div className="flex justify-between text-[10px] text-muted-foreground"><span>$300</span><span>$1200+</span></div>
-      </div>
+      )}
 
-      {/* Schools nearby */}
-      <label className="flex items-center justify-between">
-        <span className="text-sm font-semibold">Schools within 1 km</span>
-        <input type="checkbox"
-          checked={!!filters.min_schools_within_1km}
-          onChange={(e) => set({ min_schools_within_1km: e.target.checked ? 1 : undefined })}
-          className="h-5 w-5 accent-primary" />
-      </label>
-
-      {active > 0 && (
-        <button type="button"
-          onClick={() => onChange({ limit: filters.limit })}
+      {activeCount > 0 && (
+        <button type="button" onClick={() => onChange({ limit: filters.limit })}
           className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline">
           Clear all filters
         </button>

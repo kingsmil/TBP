@@ -4,6 +4,7 @@ export interface SearchFilters {
   town?: string;
   planning_area_id?: number;
   flat_type?: string;
+  property_type?: string; // private only (CONDO/APARTMENT/EC/LANDED/STRATA_LANDED)
   min_price?: number;
   max_price?: number;
   min_psf?: number;

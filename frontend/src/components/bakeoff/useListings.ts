@@ -1,10 +1,11 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import {
-  searchProperties, getPrivateTransactions, getBtoResaleSupply, getBlockScores,
+  searchProperties, getPrivateTransactions, getBtoResaleSupply, getBlockScores, getAmenities,
 } from "../../lib/api";
 import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
-import type { SearchFilters, BlockSummary, PrivateTransaction, BtoResaleSupplyRow } from "../../types";
+import { LIFESTYLE_TYPES, buildLifestyleIndex, scoreLifestyle, type LifestyleIndex } from "../../lib/lifestyle";
+import type { SearchFilters, BlockSummary, PrivateTransaction, BtoResaleSupplyRow, AmenityPoi } from "../../types";
 import type { CardItem, Mode, Weights } from "./types";
 import { blendScore } from "./types";
 
@@ -32,11 +33,14 @@ function commuteScore(b: BlockSummary, places: Place[]): number {
   return mrt == null ? 50 : clamp(100 - (mrt / 1000) * 100);           // 0m=100, ≥1km=0
 }
 
-/** Per-factor 0–100 sub-scores for a resale block, from precomputed signals. */
-function resaleSubs(b: BlockSummary, appreciation: number | undefined, places: Place[]): Record<string, number | null> {
+/** Per-factor 0–100 sub-scores for a resale block, from precomputed signals.
+ *  Lifestyle comes from nearby-amenity counts (see lib/lifestyle); if amenities
+ *  haven't loaded yet, fall back to the schools-count proxy. */
+function resaleSubs(b: BlockSummary, appreciation: number | undefined, places: Place[], life: LifestyleIndex | null): Record<string, number | null> {
+  const lifestyle = life ? scoreLifestyle(life, b.lat, b.lon) : clamp((b.schools_within_1km ?? 0) * 33);
   return {
     commute: commuteScore(b, places),
-    schools: clamp((b.schools_within_1km ?? 0) * 33),                       // 3+ ≈ 100
+    lifestyle,
     appreciation: appreciation ?? null,
     value: b.median_psf == null ? null : clamp(100 - ((b.median_psf - 300) / 600) * 100), // $300=100, $900=0
     lease: clamp(((99 - (CUR_YEAR - b.lease_commencement_year)) / 99) * 100),
@@ -48,9 +52,11 @@ function walk(m?: number | null): string {
   return `${Math.max(1, Math.round(m / 80))} min to MRT`; // ~80 m/min
 }
 
-function fromResale(b: BlockSummary, scores: Record<string, number>, weights: Weights, places: Place[]): CardItem {
+// Base resale card (subs computed; `score` is blended later, per weights, so a
+// weight tweak doesn't re-run the heavy sub-score maths).
+function fromResale(b: BlockSummary, scores: Record<string, number>, places: Place[], life: LifestyleIndex | null): CardItem {
   const appr = scores[String(b.block_id)];
-  const subs = resaleSubs(b, appr, places);
+  const subs = resaleSubs(b, appr, places, life);
   return {
     id: `r-${b.block_id}`,
     mode: "resale",
@@ -66,7 +72,7 @@ function fromResale(b: BlockSummary, scores: Record<string, number>, weights: We
       { label: "Schools", value: `${b.schools_within_1km ?? 0} within 1km` },
       { label: "Lease from", value: String(b.lease_commencement_year) },
     ],
-    score: blendScore(subs, weights),
+    score: null,
     appreciation: appr,
     sortDate: new Date(b.lease_commencement_year, 0, 1).getTime(),
     lat: b.lat,
@@ -148,6 +154,21 @@ export function useListings(modes: Mode[], filters: SearchFilters, weights: Weig
     enabled: want("resale"),
     staleTime: 36e5,
   });
+  // Amenity datasets for the lifestyle score (shares cache with the map's layers).
+  const amenityQs = useQueries({
+    queries: LIFESTYLE_TYPES.map((t) => ({
+      queryKey: ["bo-amenity", t], queryFn: () => getAmenities(t),
+      enabled: want("resale"), staleTime: 6e5,
+    })),
+  });
+  const amenityKey = amenityQs.map((q) => q.data?.results.length ?? -1).join(",");
+  const lifeIndex = useMemo<LifestyleIndex | null>(() => {
+    const byType: Record<string, AmenityPoi[]> = {};
+    let any = false;
+    amenityQs.forEach((q, i) => { if (q.data) { byType[LIFESTYLE_TYPES[i]] = q.data.results; any = true; } });
+    return any ? buildLifestyleIndex(byType) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amenityKey]);
 
   const blocks = useMemo<BlockSummary[]>(
     () => (want("resale") ? resale.data?.results ?? [] : []),
@@ -155,15 +176,24 @@ export function useListings(modes: Mode[], filters: SearchFilters, weights: Weig
     [key, resale.data],
   );
 
-  const items = useMemo<CardItem[]>(() => {
+  // Heavy part: per-block sub-scores. Recomputed only when the data/places/
+  // amenities change — NOT when weights change.
+  const resaleBase = useMemo<CardItem[]>(() => {
+    if (!want("resale")) return [];
     const scores = scoresQ.data?.scores ?? {};
+    return blocks.map((b) => fromResale(b, scores, places, lifeIndex));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, pkey, blocks, scoresQ.data, lifeIndex]);
+
+  // Cheap part: blend sub-scores with the current weights.
+  const items = useMemo<CardItem[]>(() => {
     const out: CardItem[] = [];
-    if (want("resale")) out.push(...blocks.map((b) => fromResale(b, scores, weights, places)));
+    if (want("resale")) out.push(...resaleBase.map((c) => ({ ...c, score: blendScore(c.subs, weights) })));
     if (want("private")) out.push(...(priv.data?.results ?? []).map(fromPrivate));
     if (want("bto")) out.push(...(bto.data?.results ?? []).map(fromBto));
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, wkey, pkey, blocks, priv.data, bto.data, scoresQ.data]);
+  }, [key, wkey, resaleBase, priv.data, bto.data]);
 
   const active = [
     want("resale") ? resale : null,

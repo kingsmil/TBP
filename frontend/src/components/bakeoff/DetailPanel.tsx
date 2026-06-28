@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, Heart, GitCompareArrows, MapPin, TrendingUp, Train, GraduationCap } from "lucide-react";
+import { X, Heart, GitCompareArrows, MapPin, TrendingUp, Train, Trees } from "lucide-react";
 import type { CardItem } from "./types";
 import { propertyImageUrl, getAppreciation, getEstateAnalytics } from "../../lib/api";
 import PsfTrendChart from "../PsfTrendChart";
@@ -125,7 +125,7 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
             {subs && (
               <div className="space-y-1.5 pt-1">
                 {subs.commute != null && <SubScore icon={Train} label="Commute" score={subs.commute} />}
-                {subs.schools != null && <SubScore icon={GraduationCap} label="Schools" score={subs.schools} />}
+                {subs.lifestyle != null && <SubScore icon={Trees} label="Lifestyle" score={subs.lifestyle} />}
                 {subs.appreciation != null && <SubScore icon={TrendingUp} label="Appreciation" score={subs.appreciation} />}
               </div>
             )}

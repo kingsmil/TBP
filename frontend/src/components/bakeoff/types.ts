@@ -31,14 +31,23 @@ export interface CardItem {
 
 /** Client-side scoring factors (resale). Weights drive the "match" blend. */
 export const SCORE_FACTORS = [
-  { key: "commute", label: "Commute (MRT)" },
-  { key: "schools", label: "Schools" },
+  { key: "commute", label: "Commute" },
+  { key: "lifestyle", label: "Lifestyle" },
   { key: "appreciation", label: "Appreciation" },
   { key: "value", label: "Value (PSF)" },
   { key: "lease", label: "Lease" },
 ] as const;
 export type Weights = Record<string, number>;
-export const DEFAULT_WEIGHTS: Weights = { commute: 30, schools: 20, appreciation: 20, value: 20, lease: 10 };
+export const DEFAULT_WEIGHTS: Weights = { commute: 30, lifestyle: 20, appreciation: 20, value: 20, lease: 10 };
+
+/** Migrate older saved weights (the "schools" factor became "lifestyle"). */
+export function migrateWeights(w: Weights): Weights {
+  if (w && w.schools != null && w.lifestyle == null) {
+    const { schools, ...rest } = w;
+    return { ...rest, lifestyle: schools };
+  }
+  return w;
+}
 
 /** Weighted-normalised blend of a block's per-factor sub-scores (nulls excluded). */
 export function blendScore(subs: Record<string, number | null> | undefined, weights: Weights): number | null {

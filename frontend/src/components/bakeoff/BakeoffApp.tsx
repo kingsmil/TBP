@@ -14,7 +14,7 @@ import RecommendWizard from "../RecommendWizard";
 import InsightsModal from "./InsightsModal";
 import SavedHomesPanel, { type SavedSnapshot } from "./SavedHomesPanel";
 import type { CardItem, Mode, Weights } from "./types";
-import { DEFAULT_WEIGHTS } from "./types";
+import { DEFAULT_WEIGHTS, migrateWeights } from "./types";
 import { useListings, type Place } from "./useListings";
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -66,7 +66,7 @@ export default function BakeoffApp() {
   });
   useEffect(() => { try { localStorage.setItem("hdb_saved_snap", JSON.stringify(savedSnaps)); } catch { /* ignore */ } }, [savedSnaps]);
   const [weights, setWeights] = useState<Weights>(() => {
-    try { const raw = localStorage.getItem("hdb_weights"); return raw ? { ...DEFAULT_WEIGHTS, ...JSON.parse(raw) } : DEFAULT_WEIGHTS; } catch { return DEFAULT_WEIGHTS; }
+    try { const raw = localStorage.getItem("hdb_weights"); return raw ? { ...DEFAULT_WEIGHTS, ...migrateWeights(JSON.parse(raw)) } : DEFAULT_WEIGHTS; } catch { return DEFAULT_WEIGHTS; }
   });
   const [colorByScore, setColorByScore] = useState<boolean>(() => localStorage.getItem("hdb_colorByScore") === "1");
   useEffect(() => { try { localStorage.setItem("hdb_weights", JSON.stringify(weights)); } catch { /* ignore */ } }, [weights]);
@@ -92,7 +92,7 @@ export default function BakeoffApp() {
         const meta = (prefs?.metadata_json ?? {}) as { saved?: string[]; compare?: string[]; weights?: Weights };
         if (meta.saved?.length) setSavedIds((prev) => new Set([...prev, ...meta.saved!]));
         if (meta.compare?.length) setCompareIds((prev) => new Set([...prev, ...meta.compare!]));
-        if (meta.weights) setWeights((w) => ({ ...w, ...meta.weights }));
+        if (meta.weights) setWeights((w) => ({ ...w, ...migrateWeights(meta.weights!) }));
       })
       .catch(() => { /* not reachable / not authed — stay local */ })
       .finally(() => { if (!cancelled) synced.current = true; });

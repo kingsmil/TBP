@@ -40,6 +40,7 @@ export interface ShellProps {
   setColorByScore: (on: boolean) => void;
   onSaved: () => void;
   onSavedHomes: () => void;
+  onSavedSearches: () => void;
   onInsights: () => void;
   onBtoData: () => void;
   onHelp: () => void;

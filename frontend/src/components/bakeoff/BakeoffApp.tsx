@@ -14,6 +14,7 @@ import RecommendWizard from "../RecommendWizard";
 import BtoResaleCompare from "../BtoResaleCompare";
 import InsightsModal from "./InsightsModal";
 import SavedHomesPanel, { type SavedSnapshot } from "./SavedHomesPanel";
+import SavedSearchesPanel, { type SavedSearch, describeSearch } from "./SavedSearchesPanel";
 import AffordabilityModal from "./AffordabilityModal";
 import Onboarding from "./Onboarding";
 import type { CardItem, Mode, Weights } from "./types";
@@ -91,6 +92,13 @@ export default function BakeoffApp() {
   useEffect(() => { try { localStorage.setItem("hdb_weights", JSON.stringify(weights)); } catch { /* ignore */ } }, [weights]);
   useEffect(() => { try { localStorage.setItem("hdb_colorByScore", colorByScore ? "1" : "0"); } catch { /* ignore */ } }, [colorByScore]);
 
+  // Saved searches (in-app): persisted locally + synced to the account.
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>(() => {
+    try { return JSON.parse(localStorage.getItem("hdb_saved_searches") || "[]"); } catch { return []; }
+  });
+  useEffect(() => { try { localStorage.setItem("hdb_saved_searches", JSON.stringify(savedSearches)); } catch { /* ignore */ } }, [savedSearches]);
+  const [appliedSearch, setAppliedSearch] = useState<SavedSearch | null>(null);
+
   // First-run intake: shown once per brand-new user (anon → localStorage flag;
   // logged-in → synced via account metadata), then never again.
   const [onboarded, setOnboarded] = useState<boolean>(() => localStorage.getItem("hdb_onboarded") === "1");
@@ -113,8 +121,9 @@ export default function BakeoffApp() {
     getMyPreferences()
       .then((prefs) => {
         if (cancelled) return;
-        const meta = (prefs?.metadata_json ?? {}) as { saved?: string[]; compare?: string[]; weights?: Weights; onboarded?: boolean; snaps?: Record<string, SavedSnapshot> };
+        const meta = (prefs?.metadata_json ?? {}) as { saved?: string[]; compare?: string[]; weights?: Weights; onboarded?: boolean; snaps?: Record<string, SavedSnapshot>; searches?: SavedSearch[] };
         if (meta.snaps) setSavedSnaps((prev) => ({ ...meta.snaps, ...prev }));
+        if (meta.searches?.length) setSavedSearches((prev) => (prev.length ? prev : meta.searches!));
         if (meta.saved?.length) setSavedIds((prev) => new Set([...prev, ...meta.saved!]));
         if (meta.compare?.length) setCompareIds((prev) => new Set([...prev, ...meta.compare!]));
         if (meta.weights) setWeights((w) => ({ ...w, ...migrateWeights(meta.weights!) }));
@@ -130,10 +139,10 @@ export default function BakeoffApp() {
   useEffect(() => {
     if (!authUser || !synced.current) return;
     const t = setTimeout(() => {
-      putMyPreferences({ metadata_json: { saved: [...savedIds], compare: [...compareIds], weights, onboarded, snaps: savedSnaps } }).catch(() => {});
+      putMyPreferences({ metadata_json: { saved: [...savedIds], compare: [...compareIds], weights, onboarded, snaps: savedSnaps, searches: savedSearches } }).catch(() => {});
     }, 500);
     return () => clearTimeout(t);
-  }, [savedIds, compareIds, weights, onboarded, savedSnaps, authUser]);
+  }, [savedIds, compareIds, weights, onboarded, savedSnaps, savedSearches, authUser]);
 
   const onAccount = () => {
     if (authUser) { clearAuth(); setAuthUser(null); }
@@ -145,6 +154,7 @@ export default function BakeoffApp() {
   const [showCompare, setShowCompare] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
   const [showSavedHomes, setShowSavedHomes] = useState(false);
+  const [showSavedSearches, setShowSavedSearches] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showBto, setShowBto] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -267,6 +277,27 @@ export default function BakeoffApp() {
     setShowSavedHomes(false);
   };
 
+  // ── Saved searches ─────────────────────────────────────────────────────────
+  const saveCurrentSearch = () => {
+    const id = `s-${Date.now()}`;
+    setSavedSearches((prev) => [
+      { id, name: describeSearch(modes, filters), modes: [...modes], filters: { ...filters }, count: items.length },
+      ...prev,
+    ]);
+  };
+  const applySearch = (s: SavedSearch) => {
+    setModes(s.modes);
+    setFilters(s.filters);
+    setAppliedSearch(s);
+    setShowSavedSearches(false);
+  };
+  const markSearchSeen = () => {
+    if (!appliedSearch) return;
+    setSavedSearches((prev) => prev.map((s) => (s.id === appliedSearch.id ? { ...s, count: items.length } : s)));
+    setAppliedSearch(null);
+  };
+  const newSinceSaved = appliedSearch ? items.length - appliedSearch.count : 0;
+
   const props: ShellProps = {
     modes, toggleMode, combine, setCombine, filters, setFilters, query, setQuery,
     items, blocks, isLoading, isError,
@@ -280,6 +311,7 @@ export default function BakeoffApp() {
     weights, setWeights, colorByScore, setColorByScore,
     onSaved: () => setShowSaved(true),
     onSavedHomes: () => setShowSavedHomes(true),
+    onSavedSearches: () => setShowSavedSearches(true),
     onInsights: () => setShowInsights(true),
     onBtoData: () => setShowBto(true),
     onHelp: () => setShowHelp(true),
@@ -318,6 +350,20 @@ export default function BakeoffApp() {
         <SavedPlacesPanel authUser={authUser}
           onClose={() => setShowSaved(false)}
           onSignIn={() => { setShowSaved(false); setShowAuth(true); }} />
+      )}
+      {showSavedSearches && (
+        <SavedSearchesPanel searches={savedSearches} liveCount={items.length}
+          onApply={applySearch} onRemove={(id) => setSavedSearches((prev) => prev.filter((s) => s.id !== id))}
+          onSaveCurrent={saveCurrentSearch} onClose={() => setShowSavedSearches(false)} />
+      )}
+      {appliedSearch && newSinceSaved > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 top-24 z-[1400] flex justify-center px-3">
+          <button type="button" onClick={markSearchSeen}
+            className="bo-glass pointer-events-auto flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold shadow-lg">
+            <span className="flex h-2 w-2 rounded-full bg-primary" />
+            {newSinceSaved.toLocaleString()} new since you saved this search · mark seen
+          </button>
+        </div>
       )}
       {showAfford && <AffordabilityModal onClose={() => setShowAfford(false)} />}
       {showBtoCompare && (

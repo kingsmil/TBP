@@ -40,6 +40,7 @@ export default function LocationSearch({ value, onChange, onPick }: Props) {
 
   const pick = (r: { lat: number; lon: number; label: string }) => {
     onPick(r.lat, r.lon, r.label);
+    onChange("");      // clear the text so it doesn't keep filtering the list to empty
     setOpen(false);
   };
 

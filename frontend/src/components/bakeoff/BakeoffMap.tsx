@@ -307,15 +307,12 @@ interface Props {
   searchTarget?: [number, number] | null;
 }
 
-/** Flies to a geocoded search result and drops a temporary marker there. */
+/** Flies the map to a geocoded search result. Pan/zoom only — it does NOT select
+ *  anything (properties are selected by clicking result cards / pins). */
 function SearchFly({ target }: { target: [number, number] | null | undefined }) {
   const map = useMap();
   useEffect(() => { if (target) map.flyTo(target, Math.max(map.getZoom(), 16), { duration: 0.6 }); }, [target, map]);
-  if (!target) return null;
-  return (
-    <CircleMarker center={target} radius={10} interactive={false}
-      pathOptions={{ color: "#9333ea", weight: 3, fillColor: "#9333ea", fillOpacity: 0.25 }} />
-  );
+  return null;
 }
 
 function Clusters({ items, selectedId, onSelect, colorByScore }: Omit<Props, "fitKey" | "theme">) {

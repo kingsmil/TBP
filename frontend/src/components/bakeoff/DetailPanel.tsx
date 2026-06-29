@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, Heart, GitCompareArrows, MapPin, TrendingUp, Train, Trees } from "lucide-react";
+import { X, Heart, GitCompareArrows, MapPin, TrendingUp, Train, Trees, CalendarClock, KeyRound, Hourglass, ExternalLink, Building2 } from "lucide-react";
 import type { CardItem } from "./types";
-import { propertyImageUrl, getAppreciation, getEstateAnalytics } from "../../lib/api";
+import { propertyImageUrl, getAppreciation, getEstateAnalytics, getPrivateTransactions } from "../../lib/api";
 import PsfTrendChart from "../PsfTrendChart";
 import ActiveListingsSection from "../ActiveListingsSection";
 import ScoreBar from "./ScoreBar";
 
 const sgd = (n?: number | null) => (n != null ? `$${Math.round(n).toLocaleString()}` : "—");
+const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fmtMonth = (d?: string | null) => {
+  if (!d) return "—";
+  const [y, m] = d.split("-");
+  const mo = Number(m);
+  return m && mo >= 1 && mo <= 12 ? `${MONTHS[mo]} ${y}` : y;
+};
 
 interface Props {
   item: CardItem;
@@ -23,6 +30,16 @@ function Spec({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl bg-muted/50 p-2.5">
       <div className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="truncate text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function InfoRow({ icon: Icon, label, value }: { icon: typeof Train; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <span className="w-24 shrink-0 text-muted-foreground">{label}</span>
+      <span className="flex-1 truncate font-medium">{value}</span>
     </div>
   );
 }
@@ -63,6 +80,12 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
     queryKey: ["bo-estate", b?.planning_area_id],
     queryFn: () => getEstateAnalytics(b!.planning_area_id as number),
     enabled: !!b?.planning_area_id, staleTime: 6e5,
+  });
+  // Private-only: recent sales in the same project.
+  const projectSales = useQuery({
+    queryKey: ["bo-proj-sales", item.title],
+    queryFn: () => getPrivateTransactions({ project: item.title, limit: 30 }),
+    enabled: item.mode === "private" && !!item.title, staleTime: 6e5,
   });
 
   // Show the SAME sub-scores that drive the match (incl. place-aware commute),
@@ -157,6 +180,54 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
               <TrendingUp className="h-3.5 w-3.5" /> Area PSF trend
             </div>
             <div className="h-32"><PsfTrendChart series={estate.data.psf_over_time} /></div>
+          </div>
+        )}
+
+        {/* BTO project facts + resale-eligibility (bto) */}
+        {item.mode === "bto" && item.bto && (
+          <div className="space-y-2.5 rounded-xl border border-border bg-card/60 p-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold"><Building2 className="h-3.5 w-3.5" /> BTO project</div>
+            <div className="space-y-1.5 text-xs">
+              {item.bto.launch_exercise && <InfoRow icon={CalendarClock} label="Launched" value={item.bto.launch_exercise} />}
+              {item.bto.flat_types && <InfoRow icon={Building2} label="Flat types" value={item.bto.flat_types} />}
+              {item.bto.estimated_completion_date && <InfoRow icon={CalendarClock} label="Est. completion" value={fmtMonth(item.bto.estimated_completion_date)} />}
+              {item.bto.estimated_key_collection_date && <InfoRow icon={KeyRound} label="Est. keys" value={fmtMonth(item.bto.estimated_key_collection_date)} />}
+              <InfoRow icon={Hourglass} label="MOP" value={`${item.bto.mop_years} years`} />
+            </div>
+            <div className="rounded-lg bg-primary/10 p-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold">Earliest resale</span>
+                <span className="text-sm font-bold text-primary">{fmtMonth(item.bto.estimated_resale_eligible_date)}</span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                When the {item.bto.mop_years}-year MOP ends and the flat can first be sold on the resale market{item.bto.confidence ? ` · ${item.bto.confidence.toLowerCase()} confidence` : ""}.
+              </p>
+              {item.bto.confidence_reason && <p className="mt-1 text-[11px] text-muted-foreground">{item.bto.confidence_reason}</p>}
+            </div>
+            {item.bto.source_url && (
+              <a href={item.bto.source_url} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
+                <ExternalLink className="h-3 w-3" /> HDB source
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* Recent sales in this project (private) */}
+        {item.mode === "private" && (projectSales.data?.results?.length ?? 0) > 0 && (
+          <div className="rounded-xl border border-border bg-card/60 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold"><TrendingUp className="h-3.5 w-3.5" /> Recent sales in this project</div>
+            <div className="space-y-1.5">
+              {projectSales.data!.results.slice(0, 6).map((t) => (
+                <div key={t.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-muted-foreground">{t.sale_date.slice(0, 7)}{t.area_sqft ? ` · ${t.area_sqft} sqft` : ""}</span>
+                  <span className="shrink-0 tabular-nums font-medium">{sgd(t.price)}{t.psf != null ? ` · $${t.psf}/sqft` : ""}</span>
+                </div>
+              ))}
+            </div>
+            {projectSales.data!.results.length > 6 && (
+              <p className="mt-1.5 text-[11px] text-muted-foreground">+{projectSales.data!.results.length - 6} more recent sales</p>
+            )}
           </div>
         )}
 

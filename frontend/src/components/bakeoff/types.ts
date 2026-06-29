@@ -1,4 +1,4 @@
-import type { BlockSummary } from "../../types";
+import type { BlockSummary, BtoResaleSupplyRow } from "../../types";
 
 export type Mode = "bto" | "resale" | "private";
 
@@ -27,6 +27,7 @@ export interface CardItem {
   lat?: number;
   lon?: number;
   block?: BlockSummary;     // resale only — feeds the map + detail
+  bto?: BtoResaleSupplyRow; // bto only — feeds the detail panel
 }
 
 /** Client-side scoring factors (resale). Weights drive the "match" blend. */

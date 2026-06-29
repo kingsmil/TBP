@@ -122,6 +122,7 @@ function fromBto(r: BtoResaleSupplyRow): CardItem {
     sortDate: r.estimated_resale_eligible_date ? Date.parse(r.estimated_resale_eligible_date) || undefined : undefined,
     lat: r.lat ?? undefined,
     lon: r.lon ?? undefined,
+    bto: r,
   };
 }
 

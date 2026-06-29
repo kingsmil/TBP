@@ -44,6 +44,7 @@ export interface ShellProps {
   onBtoData: () => void;
   onHelp: () => void;
   onAfford: () => void;
+  onBtoCompare: () => void;
   theme: "light" | "dark";
   onToggleTheme: () => void;
 }

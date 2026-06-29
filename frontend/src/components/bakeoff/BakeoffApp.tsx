@@ -11,6 +11,7 @@ import AuthModal from "../AuthModal";
 import SavedPlacesPanel from "../SavedPlacesPanel";
 import BtoDashboard from "../BtoDashboard";
 import RecommendWizard from "../RecommendWizard";
+import BtoResaleCompare from "../BtoResaleCompare";
 import InsightsModal from "./InsightsModal";
 import SavedHomesPanel, { type SavedSnapshot } from "./SavedHomesPanel";
 import AffordabilityModal from "./AffordabilityModal";
@@ -148,6 +149,7 @@ export default function BakeoffApp() {
   const [showBto, setShowBto] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showAfford, setShowAfford] = useState(false);
+  const [showBtoCompare, setShowBtoCompare] = useState(false);
 
   // Theme (light/dark) — applies the same way the classic app does.
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -282,6 +284,7 @@ export default function BakeoffApp() {
     onBtoData: () => setShowBto(true),
     onHelp: () => setShowHelp(true),
     onAfford: () => setShowAfford(true),
+    onBtoCompare: () => setShowBtoCompare(true),
     theme, onToggleTheme: toggleTheme,
   };
 
@@ -317,6 +320,19 @@ export default function BakeoffApp() {
           onSignIn={() => { setShowSaved(false); setShowAuth(true); }} />
       )}
       {showAfford && <AffordabilityModal onClose={() => setShowAfford(false)} />}
+      {showBtoCompare && (
+        <div className="fixed inset-0 z-[2400] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowBtoCompare(false)}>
+          <div className="bo-glass flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
+              <h2 className="text-base font-bold">BTO vs Resale</h2>
+              <button type="button" onClick={() => setShowBtoCompare(false)} className="rounded-md p-1 hover:bg-muted"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <BtoResaleCompare onSelect={(product) => { setModes([product]); setShowBtoCompare(false); }} />
+            </div>
+          </div>
+        </div>
+      )}
       {showSavedHomes && (
         <SavedHomesPanel snaps={savedHomes}
           onSelect={openSavedHome}

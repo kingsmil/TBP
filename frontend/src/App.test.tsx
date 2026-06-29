@@ -7,6 +7,9 @@ import App from "./App";
 // flag (off by default). Enable it here so the AI surfaces render.
 vi.mock("./lib/featureFlags", () => ({ AI_MODE_ENABLED: true }));
 
+// The redesign is the default; these tests target the classic app, so force it.
+vi.mock("./lib/uiVariant", () => ({ isRedesignEnabled: () => false, setRedesign: () => {} }));
+
 vi.mock("./components/MapView", () => ({
   default: ({
     selectedBlockId,

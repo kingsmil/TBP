@@ -8,9 +8,9 @@ describe("AgentChip", () => {
     expect(screen.getByText("Market")).toBeInTheDocument();
   });
 
-  it("renders 'Lifestyle' for location source", () => {
+  it("renders 'Location' for location source", () => {
     render(<AgentChip source="location" />);
-    expect(screen.getByText("Lifestyle")).toBeInTheDocument();
+    expect(screen.getByText("Location")).toBeInTheDocument();
   });
 
   it("renders 'Risk' for risk source", () => {

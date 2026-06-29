@@ -50,6 +50,22 @@ function saveSet(key: string, set: Set<string>) {
   try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* ignore */ }
 }
 
+/** Build a saved-home snapshot from a loaded card. */
+function snapOf(it: CardItem): SavedSnapshot {
+  return {
+    id: it.id, mode: it.mode, title: it.title, subtitle: it.subtitle,
+    price: it.price ?? null, priceLabel: it.priceLabel ?? "", psf: it.psf ?? null,
+    score: it.score ?? null, lat: it.lat ?? null, lon: it.lon ?? null,
+    blockId: it.block?.block_id,
+  };
+}
+/** Minimal stand-in for a saved id whose card isn't loaded yet (e.g. synced from
+ *  the account) — so the favourites list + count never disagree. */
+function placeholderSnap(id: string): SavedSnapshot {
+  const mode: Mode = id.startsWith("p-") ? "private" : id.startsWith("b-") ? "bto" : "resale";
+  return { id, mode, title: "Saved home", subtitle: "Open to locate", price: null, priceLabel: "", psf: null, score: null, lat: null, lon: null };
+}
+
 /** The "Floating Glass" redesign shell (full-screen map + floating UI). Owns
  *  shared state + live data. Mounted opt-in (?ui=on) while it's built out. */
 export default function BakeoffApp() {
@@ -95,7 +111,8 @@ export default function BakeoffApp() {
     getMyPreferences()
       .then((prefs) => {
         if (cancelled) return;
-        const meta = (prefs?.metadata_json ?? {}) as { saved?: string[]; compare?: string[]; weights?: Weights; onboarded?: boolean };
+        const meta = (prefs?.metadata_json ?? {}) as { saved?: string[]; compare?: string[]; weights?: Weights; onboarded?: boolean; snaps?: Record<string, SavedSnapshot> };
+        if (meta.snaps) setSavedSnaps((prev) => ({ ...meta.snaps, ...prev }));
         if (meta.saved?.length) setSavedIds((prev) => new Set([...prev, ...meta.saved!]));
         if (meta.compare?.length) setCompareIds((prev) => new Set([...prev, ...meta.compare!]));
         if (meta.weights) setWeights((w) => ({ ...w, ...migrateWeights(meta.weights!) }));
@@ -111,10 +128,10 @@ export default function BakeoffApp() {
   useEffect(() => {
     if (!authUser || !synced.current) return;
     const t = setTimeout(() => {
-      putMyPreferences({ metadata_json: { saved: [...savedIds], compare: [...compareIds], weights, onboarded } }).catch(() => {});
+      putMyPreferences({ metadata_json: { saved: [...savedIds], compare: [...compareIds], weights, onboarded, snaps: savedSnaps } }).catch(() => {});
     }, 500);
     return () => clearTimeout(t);
-  }, [savedIds, compareIds, weights, onboarded, authUser]);
+  }, [savedIds, compareIds, weights, onboarded, savedSnaps, authUser]);
 
   const onAccount = () => {
     if (authUser) { clearAuth(); setAuthUser(null); }
@@ -215,18 +232,28 @@ export default function BakeoffApp() {
     setSavedSnaps((prev) => {
       if (prev[id]) { const next = { ...prev }; delete next[id]; return next; }
       const it = itemCache.current.get(id);
-      if (!it) return prev;
-      return { ...prev, [id]: {
-        id: it.id, mode: it.mode, title: it.title, subtitle: it.subtitle,
-        price: it.price ?? null, priceLabel: it.priceLabel ?? "", psf: it.psf ?? null,
-        score: it.score ?? null, lat: it.lat ?? null, lon: it.lon ?? null,
-        blockId: it.block?.block_id,
-      } };
+      return it ? { ...prev, [id]: snapOf(it) } : prev;
     });
   };
 
+  // Backfill snapshots for saved ids that don't have one yet (e.g. merged from the
+  // account, or saved before the card loaded), so the list matches the count.
+  useEffect(() => {
+    setSavedSnaps((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of savedIds) {
+        if (!next[id]) { const it = itemCache.current.get(id); if (it) { next[id] = snapOf(it); changed = true; } }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedIds, allItems]);
+
+  // Every saved id renders — with its snapshot, or a placeholder until one loads —
+  // so "N saved" and the Saved homes list can never disagree.
   const savedHomes = useMemo(
-    () => [...savedIds].map((id) => savedSnaps[id]).filter(Boolean) as SavedSnapshot[],
+    () => [...savedIds].map((id) => savedSnaps[id] ?? placeholderSnap(id)),
     [savedIds, savedSnaps],
   );
   const openSavedHome = (id: string) => {

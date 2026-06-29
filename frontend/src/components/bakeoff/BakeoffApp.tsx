@@ -13,6 +13,7 @@ import BtoDashboard from "../BtoDashboard";
 import RecommendWizard from "../RecommendWizard";
 import InsightsModal from "./InsightsModal";
 import SavedHomesPanel, { type SavedSnapshot } from "./SavedHomesPanel";
+import AffordabilityModal from "./AffordabilityModal";
 import Onboarding from "./Onboarding";
 import type { CardItem, Mode, Weights } from "./types";
 import { DEFAULT_WEIGHTS, migrateWeights } from "./types";
@@ -146,6 +147,7 @@ export default function BakeoffApp() {
   const [showInsights, setShowInsights] = useState(false);
   const [showBto, setShowBto] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showAfford, setShowAfford] = useState(false);
 
   // Theme (light/dark) — applies the same way the classic app does.
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -279,6 +281,7 @@ export default function BakeoffApp() {
     onInsights: () => setShowInsights(true),
     onBtoData: () => setShowBto(true),
     onHelp: () => setShowHelp(true),
+    onAfford: () => setShowAfford(true),
     theme, onToggleTheme: toggleTheme,
   };
 
@@ -313,6 +316,7 @@ export default function BakeoffApp() {
           onClose={() => setShowSaved(false)}
           onSignIn={() => { setShowSaved(false); setShowAuth(true); }} />
       )}
+      {showAfford && <AffordabilityModal onClose={() => setShowAfford(false)} />}
       {showSavedHomes && (
         <SavedHomesPanel snaps={savedHomes}
           onSelect={openSavedHome}

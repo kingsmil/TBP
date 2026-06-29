@@ -14,7 +14,6 @@ import { type ShellProps, ResultsCount, CardList, SortSelect } from "./shell";
 export default function LayoutFloatingGlass(p: ShellProps) {
   const [railOpen, setRailOpen] = useState(true);
   const [showAgent, setShowAgent] = useState(false);
-  const [searchTarget, setSearchTarget] = useState<[number, number] | null>(null);
   const selected = p.items.find((i) => i.id === p.selectedId) ?? null;
 
   return (
@@ -45,14 +44,14 @@ export default function LayoutFloatingGlass(p: ShellProps) {
 
       {/* Map area (fills the rest) */}
       <div className="relative min-w-0 flex-1">
-        <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.modes.join(",")} colorByScore={p.colorByScore} theme={p.theme} searchTarget={searchTarget} />
+        <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.modes.join(",")} colorByScore={p.colorByScore} theme={p.theme} searchTarget={p.searchCenter} />
 
         {/* Top floating controls */}
         <div className="bo-fade-up pointer-events-none absolute inset-x-0 top-0 z-[1000] p-3 sm:p-4">
           <div className="mx-auto flex max-w-3xl flex-col gap-2">
             <div className="pointer-events-auto flex items-center gap-2">
               <LocationSearch value={p.query} onChange={p.setQuery}
-                onPick={(lat, lon) => setSearchTarget([lat, lon])} />
+                onPick={(lat, lon) => p.onPickLocation(lat, lon)} />
               <button type="button" onClick={() => p.setFilterOpen(true)}
                 className="bo-glass flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
                 <SlidersHorizontal className="h-4 w-4" /> <span className="hidden sm:inline">Filters</span>

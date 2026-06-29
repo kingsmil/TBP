@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MapPin } from "lucide-react";
+import { MapPin, X } from "lucide-react";
 import { geocodeAddress } from "../../lib/api";
 import { SearchBar } from "./shell";
 
@@ -39,8 +39,7 @@ export default function LocationSearch({ value, onChange, onPick }: Props) {
   }, []);
 
   const pick = (r: { lat: number; lon: number; label: string }) => {
-    onPick(r.lat, r.lon, r.label);
-    onChange("");      // clear the text so it doesn't keep filtering the list to empty
+    onPick(r.lat, r.lon, r.label); // fly there + show nearest homes; keep the text
     setOpen(false);
   };
 
@@ -52,6 +51,12 @@ export default function LocationSearch({ value, onChange, onPick }: Props) {
           onChange={(v) => { onChange(v); setOpen(true); }}
           placeholder="Search postal code, address, MRT or area…"
         />
+        {value.length > 0 && (
+          <button type="button" onClick={() => onChange("")} title="Clear search"
+            className="mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
       {open && value.trim().length >= 3 && (results.length > 0 || geo.isFetching) && (
         <div className="bo-glass absolute inset-x-0 top-[3.25rem] z-[1100] max-h-72 overflow-y-auto rounded-2xl p-1.5 shadow-lg">

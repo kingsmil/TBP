@@ -62,6 +62,14 @@ function snapOf(it: CardItem): SavedSnapshot {
     blockId: it.block?.block_id,
   };
 }
+const SEARCH_RADIUS_KM = 2; // "homes near here" radius for a location search
+function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat), dLon = toRad(bLon - aLon);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(s));
+}
+
 /** Minimal stand-in for a saved id whose card isn't loaded yet (e.g. synced from
  *  the account) — so the favourites list + count never disagree. */
 function placeholderSnap(id: string): SavedSnapshot {
@@ -205,14 +213,23 @@ export default function BakeoffApp() {
   const places = useMemo<Place[]>(() => savedPlaces.map((p) => ({ lat: p.lat, lon: p.lon })), [savedPlaces]);
   const { items: allItems, blocks, isLoading, isError } = useListings(modes, filters, dWeights, places);
 
+  // A geocoded location the user searched for. When set, the list shows the
+  // homes nearest it (by radius), ranked by distance. Cleared when they type again.
+  const [searchCenter, setSearchCenter] = useState<[number, number] | null>(null);
+  useEffect(() => { setSearchCenter(null); }, [query]); // typing starts a fresh search
+
   const items = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const filtered = q
-      ? allItems.filter((it) => it.title.toLowerCase().includes(q) || it.subtitle.toLowerCase().includes(q))
-      : allItems;
+    if (searchCenter) {
+      const [clat, clon] = searchCenter;
+      return allItems
+        .map((it) => ({ it, d: it.lat != null && it.lon != null ? haversineKm(clat, clon, it.lat, it.lon) : Infinity }))
+        .filter((x) => x.d <= SEARCH_RADIUS_KM)
+        .sort((a, b) => a.d - b.d)
+        .map((x) => x.it);
+    }
     const cmp = SORT_CMP[sort] ?? SORT_CMP.match;
-    return [...filtered].sort(cmp);
-  }, [allItems, query, sort]);
+    return [...allItems].sort(cmp);
+  }, [allItems, sort, searchCenter]);
 
   // Keep the sort valid for the active mode(s) — reset to the first allowed one
   // when the current sort isn't offered (e.g. "match" while viewing BTO).
@@ -305,6 +322,7 @@ export default function BakeoffApp() {
     savedIds, toggleSave,
     compareIds, toggleCompare: toggle(setCompareIds),
     hoveredId, setHoveredId,
+    searchCenter, onPickLocation: (lat: number, lon: number) => setSearchCenter([lat, lon]),
     filterOpen, setFilterOpen, isDesktop,
     authEmail: authUser?.email ?? null, onAccount, savedPlaces,
     sort, setSort,

@@ -26,6 +26,8 @@ export interface ShellProps {
   toggleCompare: (id: string) => void;
   hoveredId: string | null;
   setHoveredId: (id: string | null) => void;
+  searchCenter: [number, number] | null;
+  onPickLocation: (lat: number, lon: number) => void;
   filterOpen: boolean;
   setFilterOpen: (open: boolean) => void;
   isDesktop: boolean;
@@ -108,11 +110,13 @@ export function SkeletonList({ count = 5, grid = false }: { count?: number; grid
   );
 }
 
-export function EmptyState({ error }: { error?: boolean }) {
+export function EmptyState({ error, near }: { error?: boolean; near?: boolean }) {
+  const title = error ? "Couldn't load results" : near ? "No homes near that location" : "No homes match your filters";
+  const sub = error ? "Is the API running?" : near ? "Try a nearby area, or clear the search (✕)." : "Try widening your filters.";
   return (
     <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-10 text-center">
-      <p className="text-sm font-medium">{error ? "Couldn't load results" : "No homes match your filters"}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{error ? "Is the API running?" : "Try widening your filters."}</p>
+      <p className="text-sm font-medium">{title}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
     </div>
   );
 }
@@ -120,7 +124,7 @@ export function EmptyState({ error }: { error?: boolean }) {
 /** Shared result list, wired to ShellProps. */
 export function CardList({ p, grid = false }: { p: ShellProps; grid?: boolean }) {
   if (p.isLoading) return <SkeletonList grid={grid} />;
-  if (p.isError || p.items.length === 0) return <EmptyState error={p.isError} />;
+  if (p.isError || p.items.length === 0) return <EmptyState error={p.isError} near={!!p.searchCenter} />;
   const LIST_CAP = 150; // map shows everything (clustered); the list stays snappy
   const shown = p.items.slice(0, LIST_CAP);
   const extra = p.items.length - shown.length;

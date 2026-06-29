@@ -277,6 +277,19 @@ export function getCommuteHeatmap(
   return postJSON<CommuteHeatmapResponse>("/commute/heatmap", { destinations });
 }
 
+export interface CommuteToPlace {
+  label: string | null;
+  distance_km: number;
+  transit_minutes: number;
+  drive_minutes: number;
+}
+export function getCommuteToPlaces(
+  origin: { lat: number; lon: number },
+  places: { label?: string | null; lat: number; lon: number }[],
+): Promise<{ results: CommuteToPlace[] }> {
+  return postJSON("/commute/to-places", { origin_lat: origin.lat, origin_lon: origin.lon, places });
+}
+
 export function getBlockLifestyle(
   blockId: number,
   destinations: DestinationPayload[] = [],

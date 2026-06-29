@@ -31,6 +31,7 @@ export interface ShellProps {
   isDesktop: boolean;
   authEmail: string | null;
   onAccount: () => void;
+  savedPlaces: { label: string; lat: number; lon: number }[];
   sort: string;
   setSort: (s: string) => void;
   weights: Weights;

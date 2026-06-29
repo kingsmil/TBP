@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, Heart, GitCompareArrows, MapPin, TrendingUp, Train, Trees, CalendarClock, KeyRound, Hourglass, ExternalLink, Building2 } from "lucide-react";
+import { X, Heart, GitCompareArrows, MapPin, TrendingUp, Train, Trees, CalendarClock, KeyRound, Hourglass, ExternalLink, Building2, Car, Navigation } from "lucide-react";
 import type { CardItem } from "./types";
-import { propertyImageUrl, getAppreciation, getEstateAnalytics, getPrivateTransactions } from "../../lib/api";
+import { propertyImageUrl, getAppreciation, getEstateAnalytics, getPrivateTransactions, getCommuteToPlaces } from "../../lib/api";
 import PsfTrendChart from "../PsfTrendChart";
 import ActiveListingsSection from "../ActiveListingsSection";
 import ScoreBar from "./ScoreBar";
@@ -20,6 +20,7 @@ interface Props {
   item: CardItem;
   saved: boolean;
   comparing: boolean;
+  savedPlaces: { label: string; lat: number; lon: number }[];
   onClose: () => void;
   onSave: () => void;
   onCompare: () => void;
@@ -54,7 +55,7 @@ function SubScore({ icon: Icon, label, score }: { icon: typeof Train; label: str
   );
 }
 
-export default function DetailPanel({ item, saved, comparing, onClose, onSave, onCompare }: Props) {
+export default function DetailPanel({ item, saved, comparing, savedPlaces, onClose, onSave, onCompare }: Props) {
   const [imgOk, setImgOk] = useState(true);
   const [imgLoaded, setImgLoaded] = useState(false);
   // Reset image state when the property changes so it never sticks on the old one.
@@ -80,6 +81,12 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
     queryKey: ["bo-estate", b?.planning_area_id],
     queryFn: () => getEstateAnalytics(b!.planning_area_id as number),
     enabled: !!b?.planning_area_id, staleTime: 6e5,
+  });
+  // Travel time from this property to each of the user's saved places.
+  const commute = useQuery({
+    queryKey: ["bo-commute", item.lat, item.lon, savedPlaces.length],
+    queryFn: () => getCommuteToPlaces({ lat: item.lat!, lon: item.lon! }, savedPlaces),
+    enabled: hasCoords && savedPlaces.length > 0, staleTime: 6e5,
   });
   // Private-only: recent sales in the same project.
   const projectSales = useQuery({
@@ -165,6 +172,27 @@ export default function DetailPanel({ item, saved, comparing, onClose, onSave, o
             {appr.data?.risk_level && <Spec label="Risk" value={appr.data.risk_level} />}
           </div>
         </div>
+
+        {/* Getting to your saved places */}
+        {commute.data?.results && commute.data.results.length > 0 && (
+          <div className="rounded-xl border border-border bg-card/60 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold">
+              <Navigation className="h-3.5 w-3.5" /> Getting to your places
+            </div>
+            <div className="space-y-1.5">
+              {commute.data.results.map((c, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-medium">{c.label || "Place"}</span>
+                  <span className="flex shrink-0 items-center gap-2.5 text-muted-foreground">
+                    <span className="flex items-center gap-1"><Train className="h-3 w-3" />{c.transit_minutes} min</span>
+                    <span className="flex items-center gap-1"><Car className="h-3 w-3" />{c.drive_minutes} min</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[10px] text-muted-foreground">Rough estimate from distance — transit / drive.</p>
+          </div>
+        )}
 
         {/* Active listings (resale) — full list w/ photos, agent + outreach */}
         {b && (

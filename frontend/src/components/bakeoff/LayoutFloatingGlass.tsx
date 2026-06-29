@@ -81,6 +81,7 @@ export default function LayoutFloatingGlass(p: ShellProps) {
       {/* Detail panel (fixed to viewport: right rail on desktop, sheet on mobile) */}
       {selected && (
         <DetailPanel item={selected} saved={p.savedIds.has(selected.id)} comparing={p.compareIds.has(selected.id)}
+          savedPlaces={p.savedPlaces}
           onClose={() => p.setSelectedId(null)} onSave={() => p.toggleSave(selected.id)} onCompare={() => p.toggleCompare(selected.id)} />
       )}
 

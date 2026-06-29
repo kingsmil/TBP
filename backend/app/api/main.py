@@ -30,6 +30,7 @@ from app.api.schemas import (
     NewsItem,
     OutreachRequest,
     CommuteRequest,
+    CommuteToPlacesRequest,
     CoupleRequest,
     DreamHomeRequest,
     HomeOSCaseFileRequest,
@@ -433,6 +434,30 @@ def commute_heatmap_endpoint(req: CommuteRequest,
                              repo: Repository = Depends(get_repository)):
     provider = get_commute_provider()
     return {"points": commute_heatmap(repo, provider, req.domain_destinations())}
+
+
+@app.post("/commute/to-places")
+def commute_to_places(req: CommuteToPlacesRequest):
+    """Estimated travel time from one property to each saved place. Uses a fast
+    distance-based estimate (no external routing) so selection stays instant."""
+    from math import radians, sin, cos, asin, sqrt
+
+    def hav_km(lat1, lon1, lat2, lon2) -> float:
+        dlat, dlon = radians(lat2 - lat1), radians(lon2 - lon1)
+        a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+        return 2 * 6371 * asin(sqrt(a))
+
+    out = []
+    for pl in req.places:
+        km = hav_km(req.origin_lat, req.origin_lon, pl.lat, pl.lon)
+        road = km * 1.3  # straight-line underestimates road distance
+        out.append({
+            "label": pl.label,
+            "distance_km": round(km, 1),
+            "transit_minutes": max(5, round(road / 0.4)),  # ~24 km/h + walk/wait overhead
+            "drive_minutes": max(3, round(road / 0.7)),    # ~42 km/h
+        })
+    return {"results": out}
 
 
 @app.get("/geocode")

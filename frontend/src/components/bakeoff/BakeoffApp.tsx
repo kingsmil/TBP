@@ -163,12 +163,15 @@ export default function BakeoffApp() {
   // Saved places (home/work/school) → fed into the commute score so blocks are
   // ranked by proximity to where YOU need to be.
   const savedLocs = useQuery({ queryKey: ["saved-locations", authState()], queryFn: loadLocations });
-  const places = useMemo<Place[]>(
+  // Geocoded saved places (label + coords) — for the score AND the per-property
+  // "how long to get there" panel.
+  const savedPlaces = useMemo(
     () => (savedLocs.data ?? [])
       .filter((l) => l.lat != null && l.lng != null)
-      .map((l) => ({ lat: l.lat as number, lon: l.lng as number })),
+      .map((l) => ({ label: l.label, lat: l.lat as number, lon: l.lng as number })),
     [savedLocs.data],
   );
+  const places = useMemo<Place[]>(() => savedPlaces.map((p) => ({ lat: p.lat, lon: p.lon })), [savedPlaces]);
   const { items: allItems, blocks, isLoading, isError } = useListings(modes, filters, dWeights, places);
 
   const items = useMemo(() => {
@@ -204,9 +207,10 @@ export default function BakeoffApp() {
       return next;
     });
 
-  // Saving a home also captures a display snapshot (so the favourites list works
-  // across reloads / mode switches); un-saving drops it.
+  // Favouriting requires an account — otherwise it's a "fake favourite" that only
+  // lives on this device. Prompt sign-in instead of silently faking it.
   const toggleSave = (id: string) => {
+    if (!authUser) { setShowAuth(true); return; }
     toggle(setSavedIds)(id);
     setSavedSnaps((prev) => {
       if (prev[id]) { const next = { ...prev }; delete next[id]; return next; }
@@ -240,7 +244,7 @@ export default function BakeoffApp() {
     compareIds, toggleCompare: toggle(setCompareIds),
     hoveredId, setHoveredId,
     filterOpen, setFilterOpen, isDesktop,
-    authEmail: authUser?.email ?? null, onAccount,
+    authEmail: authUser?.email ?? null, onAccount, savedPlaces,
     sort, setSort,
     weights, setWeights, colorByScore, setColorByScore,
     onSaved: () => setShowSaved(true),

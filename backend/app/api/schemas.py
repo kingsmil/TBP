@@ -28,6 +28,19 @@ class CommuteRequest(BaseModel):
         return [d.to_domain() for d in self.destinations]
 
 
+class CommutePlaceIn(BaseModel):
+    label: str | None = None
+    lat: float
+    lon: float
+
+
+class CommuteToPlacesRequest(BaseModel):
+    """One origin (a property) → travel time to each of the user's saved places."""
+    origin_lat: float
+    origin_lon: float
+    places: list[CommutePlaceIn] = []
+
+
 class DirectTransitDestinationIn(BaseModel):
     name: str
     lat: float

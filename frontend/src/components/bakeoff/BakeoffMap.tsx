@@ -304,6 +304,18 @@ interface Props {
   fitKey?: string;
   colorByScore?: boolean;
   theme?: "light" | "dark";
+  searchTarget?: [number, number] | null;
+}
+
+/** Flies to a geocoded search result and drops a temporary marker there. */
+function SearchFly({ target }: { target: [number, number] | null | undefined }) {
+  const map = useMap();
+  useEffect(() => { if (target) map.flyTo(target, Math.max(map.getZoom(), 16), { duration: 0.6 }); }, [target, map]);
+  if (!target) return null;
+  return (
+    <CircleMarker center={target} radius={10} interactive={false}
+      pathOptions={{ color: "#9333ea", weight: 3, fillColor: "#9333ea", fillOpacity: 0.25 }} />
+  );
 }
 
 function Clusters({ items, selectedId, onSelect, colorByScore }: Omit<Props, "fitKey" | "theme">) {
@@ -402,7 +414,7 @@ function AmenityToggle({ active, onToggle }: { active: string[]; onToggle: (k: s
   );
 }
 
-export default function BakeoffMap({ items, selectedId, onSelect, colorByScore, theme = "light" }: Props) {
+export default function BakeoffMap({ items, selectedId, onSelect, colorByScore, theme = "light", searchTarget }: Props) {
   const dark = theme === "dark";
   const mapTiles = dark ? NIGHT_TILES : GREY_TILES;
   const worldTiles = dark ? WORLD_TILES_DARK : WORLD_TILES;
@@ -433,6 +445,7 @@ export default function BakeoffMap({ items, selectedId, onSelect, colorByScore, 
         <ResizeHandler />
         <LockView />
         <FocusView item={selected} />
+        <SearchFly target={searchTarget} />
         <Clusters items={items} selectedId={selectedId} onSelect={onSelect} colorByScore={colorByScore} />
         {selected && selected.lat != null && selected.lon != null && <TransitLayer item={selected} />}
         {activeAmenities.length > 0 && (

@@ -6,13 +6,15 @@ import ModeSwitch from "./ModeSwitch";
 import FilterSheet from "./FilterSheet";
 import BakeoffMap from "./BakeoffMap";
 import DetailPanel from "./DetailPanel";
+import LocationSearch from "./LocationSearch";
 import PrioritiesControl from "./PrioritiesPanel";
-import { type ShellProps, SearchBar, ResultsCount, CardList, SortSelect } from "./shell";
+import { type ShellProps, ResultsCount, CardList, SortSelect } from "./shell";
 
 /** Floating Glass — full-screen map canvas; frosted panels float on top. */
 export default function LayoutFloatingGlass(p: ShellProps) {
   const [railOpen, setRailOpen] = useState(true);
   const [showAgent, setShowAgent] = useState(false);
+  const [searchTarget, setSearchTarget] = useState<[number, number] | null>(null);
   const selected = p.items.find((i) => i.id === p.selectedId) ?? null;
 
   return (
@@ -43,15 +45,14 @@ export default function LayoutFloatingGlass(p: ShellProps) {
 
       {/* Map area (fills the rest) */}
       <div className="relative min-w-0 flex-1">
-        <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.modes.join(",")} colorByScore={p.colorByScore} theme={p.theme} />
+        <BakeoffMap items={p.items} selectedId={p.selectedId} onSelect={p.setSelectedId} fitKey={p.modes.join(",")} colorByScore={p.colorByScore} theme={p.theme} searchTarget={searchTarget} />
 
         {/* Top floating controls */}
         <div className="bo-fade-up pointer-events-none absolute inset-x-0 top-0 z-[1000] p-3 sm:p-4">
           <div className="mx-auto flex max-w-3xl flex-col gap-2">
             <div className="pointer-events-auto flex items-center gap-2">
-              <div className="bo-glass flex flex-1 items-center gap-2 rounded-full px-2 py-1.5">
-                <SearchBar value={p.query} onChange={p.setQuery} placeholder="Search location or project…" />
-              </div>
+              <LocationSearch value={p.query} onChange={p.setQuery}
+                onPick={(lat, lon) => setSearchTarget([lat, lon])} />
               <button type="button" onClick={() => p.setFilterOpen(true)}
                 className="bo-glass flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold">
                 <SlidersHorizontal className="h-4 w-4" /> <span className="hidden sm:inline">Filters</span>

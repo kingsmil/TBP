@@ -437,8 +437,10 @@ export default function BakeoffMap({ items, selectedId, onSelect, colorByScore, 
         zoomSnap={0.5} zoomDelta={0.5}
         minZoom={11} maxBounds={MAX_BOUNDS} maxBoundsViscosity={1}
         className="h-full w-full" style={{ background: dark ? "#1a1d24" : "#e8edf0" }} preferCanvas>
-        <TileLayer key={`world-${theme}`} url={worldTiles} subdomains="abcd" noWrap className="bo-world-tiles" />
-        <TileLayer key={`map-${theme}`} url={mapTiles} noWrap />
+        <TileLayer key={`world-${theme}`} url={worldTiles} subdomains="abcd" noWrap className="bo-world-tiles"
+          attribution='&copy; <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>' />
+        <TileLayer key={`map-${theme}`} url={mapTiles} noWrap
+          attribution='<a href="https://www.onemap.gov.sg/" target="_blank" rel="noreferrer">OneMap</a> &copy; <a href="https://www.sla.gov.sg/" target="_blank" rel="noreferrer">SLA</a>' />
         <ResizeHandler />
         <LockView />
         <FocusView item={selected} />

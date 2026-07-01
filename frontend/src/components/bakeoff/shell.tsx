@@ -20,6 +20,10 @@ export interface ShellProps {
   isError: boolean;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
+  activeCaseId: string | null;
+  agentShortlistIds: number[];
+  onAgentRecommendations: (caseId: string, blockIds: number[]) => void;
+  onClearAgentRecommendations: () => void;
   savedIds: Set<string>;
   toggleSave: (id: string) => void;
   compareIds: Set<string>;
@@ -33,6 +37,8 @@ export interface ShellProps {
   isDesktop: boolean;
   authEmail: string | null;
   onAccount: () => void;
+  onSignInRequired: () => void;
+  onUpgradeRequired: () => void;
   savedPlaces: { label: string; lat: number; lon: number }[];
   sort: string;
   setSort: (s: string) => void;

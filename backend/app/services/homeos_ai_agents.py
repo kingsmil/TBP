@@ -36,6 +36,10 @@ _DEFAULT_GATEWAY_MODEL = "openai/gpt-5.4-nano"
 
 
 def get_model() -> Model:
+    from app.homeos.framework.registry import get_model as registry_get_model
+
+    return registry_get_model(os.getenv("LLM_MODEL", _DEFAULT_GATEWAY_MODEL))
+
     # Vercel AI Gateway auto-activates when the key is present.
     gateway_key = os.getenv("AI_GATEWAY_API_KEY", "")
     provider = os.getenv("LLM_PROVIDER", "vercel" if gateway_key else "test")

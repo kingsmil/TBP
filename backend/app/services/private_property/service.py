@@ -12,6 +12,12 @@ from app.services.private_property import ura_client, store
 
 PROPERTY_TYPES = ["CONDO", "APARTMENT", "EC", "LANDED", "STRATA_LANDED"]
 SALE_TYPES = ["NEW_SALE", "RESALE", "SUB_SALE"]
+PLANNING_REGIONS = ["CCR", "RCR", "OCR"]
+TENURE_TYPES = ["freehold", "leasehold"]
+FLOOR_RANGES = [
+    "01-05", "06-10", "11-15", "16-20", "21-25", "26-30", "31-35",
+    "36-40", "41-45", "46-50", "51-55", "56-60", "61-65", "66-70",
+]
 
 
 def _db_engine():
@@ -28,26 +34,61 @@ def _db_engine():
 
 def _filtered(
     project: str | None = None,
+    address: str | None = None,
     property_type: str | None = None,
     sale_type: str | None = None,
     district: str | None = None,
+    planning_region: str | None = None,
+    tenure: str | None = None,
+    floor_range: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    min_price: int | None = None,
+    max_price: int | None = None,
+    min_psf: int | None = None,
+    max_psf: int | None = None,
+    min_area_sqft: float | None = None,
+    max_area_sqft: float | None = None,
 ) -> list[dict]:
     rows = ura_client.all_transactions()
     if project:
         p = project.lower()
         rows = [r for r in rows if r["project_name"] and p in r["project_name"].lower()]
+    if address:
+        a = address.lower()
+        rows = [r for r in rows if r["address"] and a in r["address"].lower()]
     if property_type:
         rows = [r for r in rows if r["property_type"] == property_type.upper()]
     if sale_type:
         rows = [r for r in rows if r["sale_type"] == sale_type.upper()]
     if district:
         rows = [r for r in rows if (r["district"] or "").zfill(2) == district.zfill(2)]
+    if planning_region:
+        rows = [r for r in rows if (r["planning_region"] or "").upper() == planning_region.upper()]
+    if tenure:
+        t = tenure.lower()
+        if t in {"freehold", "fh"}:
+            rows = [r for r in rows if "freehold" in (r["tenure"] or "").lower()]
+        elif t in {"leasehold", "lh"}:
+            rows = [r for r in rows if r["tenure"] and "freehold" not in r["tenure"].lower()]
+    if floor_range:
+        rows = [r for r in rows if r["floor_range"] == floor_range]
     if date_from:
         rows = [r for r in rows if r["sale_date"] >= date_from]
     if date_to:
         rows = [r for r in rows if r["sale_date"] <= date_to]
+    if min_price is not None:
+        rows = [r for r in rows if r["price"] is not None and r["price"] >= min_price]
+    if max_price is not None:
+        rows = [r for r in rows if r["price"] is not None and r["price"] <= max_price]
+    if min_psf is not None:
+        rows = [r for r in rows if r["psf"] is not None and r["psf"] >= min_psf]
+    if max_psf is not None:
+        rows = [r for r in rows if r["psf"] is not None and r["psf"] <= max_psf]
+    if min_area_sqft is not None:
+        rows = [r for r in rows if r["area_sqft"] is not None and r["area_sqft"] >= min_area_sqft]
+    if max_area_sqft is not None:
+        rows = [r for r in rows if r["area_sqft"] is not None and r["area_sqft"] <= max_area_sqft]
     return rows
 
 
@@ -83,6 +124,9 @@ def transactions(limit: int = 200, **filters) -> dict:
         "filters": {
             "property_types": PROPERTY_TYPES,
             "sale_types": SALE_TYPES,
+            "planning_regions": PLANNING_REGIONS,
+            "tenures": TENURE_TYPES,
+            "floor_ranges": FLOOR_RANGES,
         },
     }
 

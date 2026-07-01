@@ -9,6 +9,12 @@ from __future__ import annotations
 
 PROPERTY_TYPES = ["CONDO", "APARTMENT", "EC", "LANDED", "STRATA_LANDED"]
 SALE_TYPES = ["NEW_SALE", "RESALE", "SUB_SALE"]
+PLANNING_REGIONS = ["CCR", "RCR", "OCR"]
+TENURE_TYPES = ["freehold", "leasehold"]
+FLOOR_RANGES = [
+    "01-05", "06-10", "11-15", "16-20", "21-25", "26-30", "31-35",
+    "36-40", "41-45", "46-50", "51-55", "56-60", "61-65", "66-70",
+]
 
 _COLS = ("id", "project_name", "property_type", "sale_type", "district",
          "planning_region", "address", "sale_date", "price", "area_sqm",
@@ -62,27 +68,74 @@ def persist(engine, rows: list[dict]) -> int:
     return len(payload)
 
 
-def _where(project, property_type, sale_type, district, date_from, date_to):
+def _where(
+    project,
+    address,
+    property_type,
+    sale_type,
+    district,
+    planning_region,
+    tenure,
+    floor_range,
+    date_from,
+    date_to,
+    min_price,
+    max_price,
+    min_psf,
+    max_psf,
+    min_area_sqft,
+    max_area_sqft,
+):
     clauses, params = [], {}
     if project:
         clauses.append("project_name ILIKE :proj"); params["proj"] = f"%{project}%"
+    if address:
+        clauses.append("address ILIKE :addr"); params["addr"] = f"%{address}%"
     if property_type:
         clauses.append("property_type = :pt"); params["pt"] = property_type.upper()
     if sale_type:
         clauses.append("sale_type = :st"); params["st"] = sale_type.upper()
     if district:
         clauses.append("LPAD(district, 2, '0') = :dist"); params["dist"] = district.zfill(2)
+    if planning_region:
+        clauses.append("planning_region = :region"); params["region"] = planning_region.upper()
+    if tenure:
+        t = tenure.lower()
+        if t in {"freehold", "fh"}:
+            clauses.append("LOWER(COALESCE(tenure, '')) LIKE '%freehold%'")
+        elif t in {"leasehold", "lh"}:
+            clauses.append("tenure IS NOT NULL AND LOWER(tenure) NOT LIKE '%freehold%'")
+    if floor_range:
+        clauses.append("floor_range = :floor_range"); params["floor_range"] = floor_range
     if date_from:
         clauses.append("sale_date >= :df"); params["df"] = date_from
     if date_to:
         clauses.append("sale_date <= :dt"); params["dt"] = date_to
+    if min_price is not None:
+        clauses.append("price >= :min_price"); params["min_price"] = min_price
+    if max_price is not None:
+        clauses.append("price <= :max_price"); params["max_price"] = max_price
+    if min_psf is not None:
+        clauses.append("psf >= :min_psf"); params["min_psf"] = min_psf
+    if max_psf is not None:
+        clauses.append("psf <= :max_psf"); params["max_psf"] = max_psf
+    if min_area_sqft is not None:
+        clauses.append("area_sqft >= :min_area_sqft"); params["min_area_sqft"] = min_area_sqft
+    if max_area_sqft is not None:
+        clauses.append("area_sqft <= :max_area_sqft"); params["max_area_sqft"] = max_area_sqft
     return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
 
 
-def transactions(engine, limit=200, project=None, property_type=None, sale_type=None,
-                 district=None, date_from=None, date_to=None) -> dict:
+def transactions(engine, limit=200, project=None, address=None, property_type=None, sale_type=None,
+                 district=None, planning_region=None, tenure=None, floor_range=None,
+                 date_from=None, date_to=None, min_price=None, max_price=None,
+                 min_psf=None, max_psf=None, min_area_sqft=None, max_area_sqft=None) -> dict:
     from sqlalchemy import text
-    where, params = _where(project, property_type, sale_type, district, date_from, date_to)
+    where, params = _where(
+        project, address, property_type, sale_type, district, planning_region,
+        tenure, floor_range, date_from, date_to, min_price, max_price,
+        min_psf, max_psf, min_area_sqft, max_area_sqft,
+    )
     with engine.connect() as conn:
         summary = conn.execute(text(f"""
             SELECT COUNT(*) AS count,
@@ -118,7 +171,13 @@ def transactions(engine, limit=200, project=None, property_type=None, sale_type=
         "trend": [{"month": t["month"], "median_psf": round(float(t["median_psf"])),
                    "count": t["count"]} for t in trend],
         "results": [_row(r) for r in rows],
-        "filters": {"property_types": PROPERTY_TYPES, "sale_types": SALE_TYPES},
+        "filters": {
+            "property_types": PROPERTY_TYPES,
+            "sale_types": SALE_TYPES,
+            "planning_regions": PLANNING_REGIONS,
+            "tenures": TENURE_TYPES,
+            "floor_ranges": FLOOR_RANGES,
+        },
     }
 
 

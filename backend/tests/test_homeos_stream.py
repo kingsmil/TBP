@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from app.data.seed import build_seeded_repo
-from app.homeos.pipeline import chat_in_case, investigate_stream, refine_stream
+from app.homeos.pipeline import chat_in_case, investigate_stream, refine_stream, _deep_analysis_stream
 from app.homeos import case_store as homeos_case_store
 
 _env_patch = patch.dict(os.environ, {
@@ -57,6 +57,23 @@ class TestHomeOSStream(unittest.TestCase):
         self.assertGreaterEqual(len(summaries), 1)
         self.assertIn("narrative", summaries[0])
 
+    def test_non_property_prompt_asks_for_requirements_before_search(self):
+        async def run():
+            events = []
+            async for event in investigate_stream(self.repo, "random nonsense banana phone 123", limit=1):
+                events.append(event)
+            return events
+
+        events = asyncio.run(run())
+
+        self.assertEqual(events[-1]["event"], "clarifying_question")
+        self.assertEqual(events[-1]["field"], "profile_text")
+        self.assertEqual(
+            [e for e in events if e.get("agent") == "search"],
+            [],
+            "non-property prompt must not enter search",
+        )
+
     def test_stream_ends_with_case_done(self):
         events = self._collect_stream("Family 4 room 800k schools.", limit=1)
         last = events[-1]
@@ -78,6 +95,41 @@ class TestHomeOSStream(unittest.TestCase):
         self.assertGreaterEqual(len(market_starts), 1)
         for e in market_starts:
             self.assertIsNotNone(e["block_id"])
+
+    def test_live_block_agent_failure_falls_back_to_deterministic_evidence(self):
+        block = next(iter(self.repo.blocks()))
+        candidate = {
+            "block_id": block.block_id,
+            "block_number": block.block_number,
+            "street_name": block.street_name,
+            "town": block.town.value if hasattr(block.town, "value") else block.town,
+        }
+        case = homeos_case_store.create_case("4 room under 800k")
+
+        async def fail_model(*args, **kwargs):
+            raise RuntimeError("model unavailable")
+
+        async def run():
+            events = []
+            with patch.dict(os.environ, {"HOMEOS_AGENT_MODE": "passthrough"}), \
+                 patch("app.homeos.pipeline._run_block_agent", side_effect=fail_model):
+                async for event in _deep_analysis_stream(
+                    self.repo,
+                    case["case_id"],
+                    [candidate],
+                    {"flat_type": "4 ROOM", "max_price": 800000},
+                ):
+                    events.append(event)
+            return events
+
+        events = asyncio.run(run())
+        done = next(e for e in events if e["event"] == "case_done")
+        self.assertEqual(len(done["shortlist"]), 1)
+        fallback_data = [
+            e for e in events
+            if e["event"] == "agent_data" and e.get("data", {}).get("model_fallback")
+        ]
+        self.assertGreaterEqual(len(fallback_data), 1)
 
     def test_chat_in_case_streams_response(self):
         events = self._collect_stream("Family 4 room 800k schools.", limit=1)

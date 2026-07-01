@@ -1,9 +1,10 @@
--- Active HDB resale listings fetched from the HDB Flat Portal public API.
+-- Active HDB sale/rental listings fetched from public listing sources.
 -- One block has 0..N active listings (one per flat/unit on the market).
 -- Agent contact columns are nullable: the public API only exposes them for
 -- the rare agent-managed listing (contact is otherwise login-gated).
 CREATE TABLE IF NOT EXISTS hdb_active_listings (
-    listing_id BIGINT PRIMARY KEY,
+    listing_type TEXT NOT NULL DEFAULT 'resale',
+    listing_id BIGINT NOT NULL,
     block_id INT NOT NULL REFERENCES hdb_blocks(block_id) ON DELETE CASCADE,
     block_number TEXT NOT NULL,
     street_name TEXT NOT NULL,
@@ -24,7 +25,8 @@ CREATE TABLE IF NOT EXISTS hdb_active_listings (
     agency_name TEXT,
     managed_by_agent BOOLEAN NOT NULL DEFAULT FALSE,
     last_updated TEXT NOT NULL DEFAULT '',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (listing_type, listing_id)
 );
 
 -- Quick lookup of all active listings when viewing a block.

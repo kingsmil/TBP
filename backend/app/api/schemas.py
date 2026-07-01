@@ -173,6 +173,7 @@ class DreamHomeRequest(BaseModel):
 class OutreachRequest(BaseModel):
     """Body for POST /listings/{listing_id}/outreach-message."""
     case_id: str | None = None
+    listing_type: str = "resale"
     contact_name: str | None = None
     availability: list[str] = Field(default_factory=list)
     note: str | None = None

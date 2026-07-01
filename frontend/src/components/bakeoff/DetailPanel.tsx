@@ -21,6 +21,7 @@ interface Props {
   saved: boolean;
   comparing: boolean;
   savedPlaces: { label: string; lat: number; lon: number }[];
+  caseId?: string;
   onClose: () => void;
   onSave: () => void;
   onCompare: () => void;
@@ -55,7 +56,7 @@ function SubScore({ icon: Icon, label, score }: { icon: typeof Train; label: str
   );
 }
 
-export default function DetailPanel({ item, saved, comparing, savedPlaces, onClose, onSave, onCompare }: Props) {
+export default function DetailPanel({ item, saved, comparing, savedPlaces, caseId, onClose, onSave, onCompare }: Props) {
   const [imgOk, setImgOk] = useState(true);
   const [imgLoaded, setImgLoaded] = useState(false);
   // Reset image state when the property changes so it never sticks on the old one.
@@ -197,7 +198,7 @@ export default function DetailPanel({ item, saved, comparing, savedPlaces, onClo
         {/* Active listings (resale) — full list w/ photos, agent + outreach */}
         {b && (
           <div className="overflow-hidden rounded-xl border border-border bg-card/60 [&>div]:border-b-0 [&>div]:p-3">
-            <ActiveListingsSection blockId={b.block_id} />
+            <ActiveListingsSection blockId={b.block_id} caseId={caseId} />
           </div>
         )}
 

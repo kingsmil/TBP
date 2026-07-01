@@ -16,10 +16,18 @@ export interface SavedSearch {
 export function describeSearch(modes: Mode[], f: SearchFilters): string {
   const parts: string[] = [modes.map((m) => MODE_META[m].label).join(" + ")];
   if (f.flat_type) parts.push(f.flat_type);
+  if (f.project) parts.push(f.project);
   if (f.property_type) parts.push(f.property_type);
+  if (f.sale_type) parts.push(f.sale_type.replace("_", " ").toLowerCase());
+  if (f.planning_region) parts.push(f.planning_region);
+  if (f.district) parts.push(`D${f.district.padStart(2, "0")}`);
+  if (f.tenure) parts.push(f.tenure);
+  if (f.floor_range) parts.push(f.floor_range);
   if (f.town) parts.push(f.town);
   if (f.max_price) parts.push(`≤ $${Math.round(f.max_price / 1000)}k`);
   if (f.max_psf) parts.push(`≤ $${f.max_psf} psf`);
+  if (f.min_area_sqft) parts.push(`from ${f.min_area_sqft} sqft`);
+  if (f.date_from) parts.push(`from ${f.date_from.slice(0, 7)}`);
   if (f.max_mrt_distance_m) parts.push(`${Math.round(f.max_mrt_distance_m / 80)} min MRT`);
   if (f.min_schools_within_1km) parts.push("near schools");
   return parts.join(" · ");

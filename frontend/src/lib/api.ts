@@ -110,11 +110,21 @@ export function getBlockScores(): Promise<{ scores: Record<string, number> }> {
 export function getPrivateTransactions(f: PrivateTransactionFilters = {}): Promise<PrivateTransactionsResponse> {
   const p = new URLSearchParams();
   if (f.project) p.set("project", f.project);
+  if (f.address) p.set("address", f.address);
   if (f.property_type) p.set("property_type", f.property_type);
   if (f.sale_type) p.set("sale_type", f.sale_type);
   if (f.district) p.set("district", f.district);
+  if (f.planning_region) p.set("planning_region", f.planning_region);
+  if (f.tenure) p.set("tenure", f.tenure);
+  if (f.floor_range) p.set("floor_range", f.floor_range);
   if (f.date_from) p.set("date_from", f.date_from);
   if (f.date_to) p.set("date_to", f.date_to);
+  if (f.min_price != null) p.set("min_price", String(f.min_price));
+  if (f.max_price != null) p.set("max_price", String(f.max_price));
+  if (f.min_psf != null) p.set("min_psf", String(f.min_psf));
+  if (f.max_psf != null) p.set("max_psf", String(f.max_psf));
+  if (f.min_area_sqft != null) p.set("min_area_sqft", String(f.min_area_sqft));
+  if (f.max_area_sqft != null) p.set("max_area_sqft", String(f.max_area_sqft));
   if (f.limit) p.set("limit", String(f.limit));
   const qs = p.toString();
   return getJSON<PrivateTransactionsResponse>(`/private/transactions${qs ? `?${qs}` : ""}`);
@@ -434,8 +444,13 @@ export function scheduleHomeOSViewing(
   return postJSON<HomeOSScheduleViewingResponse>("/homeos/schedule-viewing", body);
 }
 
-export function getBlockListings(blockId: number): Promise<BlockListingsResponse> {
-  return getJSON<BlockListingsResponse>(`/blocks/${blockId}/listings`);
+export function getBlockListings(
+  blockId: number,
+  listingType: "resale" | "rent" | "all" = "resale",
+): Promise<BlockListingsResponse> {
+  return getJSON<BlockListingsResponse>(
+    `/blocks/${blockId}/listings?listing_type=${encodeURIComponent(listingType)}`,
+  );
 }
 
 export function getBlockAgents(address: string): Promise<BlockAgentsResponse> {
@@ -448,6 +463,7 @@ export function prepareOutreachMessage(
   listingId: number,
   body: {
     case_id?: string;
+    listing_type?: "resale" | "rent";
     contact_name?: string;
     availability?: string[];
     note?: string;
@@ -535,11 +551,12 @@ export async function* refineStream(
 export async function* chatInCase(
   caseId: string,
   message: string,
+  model?: string,
 ): AsyncGenerator<string> {
   const res = await fetch(`${BASE}/homeos/cases/${caseId}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, model }),
   });
   if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
 
@@ -576,11 +593,17 @@ export interface ModelInfo {
   id: string;
   name: string;
   provider: string;
+  local?: boolean;
 }
 
 export interface ModelsResponse {
   models: ModelInfo[];
   default: string;
+  local_runtime?: {
+    ollama_base_url: string;
+    openai_compatible_base_url: string;
+    notes: string;
+  };
 }
 
 export function getModels(): Promise<ModelsResponse> {

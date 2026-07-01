@@ -108,6 +108,39 @@ class ServiceFilters(unittest.TestCase):
         data = service.transactions(date_from="2024-05-01", date_to="2024-12-31")
         self.assertTrue(all("2024-05-01" <= r["sale_date"] <= "2024-12-31" for r in data["results"]))
 
+    def test_filter_by_location_tenure_and_floor(self):
+        data = service.transactions(
+            district="15",
+            planning_region="RCR",
+            tenure="freehold",
+            floor_range="06-10",
+        )
+        self.assertGreaterEqual(data["summary"]["count"], 1)
+        self.assertTrue(all((r["district"] or "").zfill(2) == "15" for r in data["results"]))
+        self.assertTrue(all(r["planning_region"] == "RCR" for r in data["results"]))
+        self.assertTrue(all("Freehold" in (r["tenure"] or "") for r in data["results"]))
+        self.assertTrue(all(r["floor_range"] == "06-10" for r in data["results"]))
+
+    def test_filter_by_numeric_ranges_and_address(self):
+        data = service.transactions(
+            address="jalan",
+            min_price=1_400_000,
+            max_price=1_700_000,
+            min_psf=1_750,
+            max_area_sqft=950,
+        )
+        self.assertGreaterEqual(data["summary"]["count"], 1)
+        self.assertTrue(all("JALAN" in (r["address"] or "").upper() for r in data["results"]))
+        self.assertTrue(all(1_400_000 <= r["price"] <= 1_700_000 for r in data["results"]))
+        self.assertTrue(all(r["psf"] is not None and r["psf"] >= 1_750 for r in data["results"]))
+        self.assertTrue(all(r["area_sqft"] is not None and r["area_sqft"] <= 950 for r in data["results"]))
+
+    def test_filter_metadata_includes_private_facets(self):
+        data = service.transactions(limit=1)
+        self.assertIn("planning_regions", data["filters"])
+        self.assertIn("tenures", data["filters"])
+        self.assertIn("floor_ranges", data["filters"])
+
     def test_empty_state_for_unknown_project(self):
         data = service.transactions(project="zzz-nonexistent")
         self.assertEqual(data["summary"]["count"], 0)

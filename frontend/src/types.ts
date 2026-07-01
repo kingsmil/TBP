@@ -5,10 +5,21 @@ export interface SearchFilters {
   planning_area_id?: number;
   flat_type?: string;
   property_type?: string; // private only (CONDO/APARTMENT/EC/LANDED/STRATA_LANDED)
+  sale_type?: string; // private only (NEW_SALE/RESALE/SUB_SALE)
+  district?: string; // private only (01-28)
+  planning_region?: string; // private only (CCR/RCR/OCR)
+  tenure?: string; // private only (freehold/leasehold)
+  floor_range?: string; // private only (e.g. 06-10)
+  project?: string; // private only
+  address?: string; // private only
+  date_from?: string; // private transaction date, YYYY-MM-DD
+  date_to?: string; // private transaction date, YYYY-MM-DD
   min_price?: number;
   max_price?: number;
   min_psf?: number;
   max_psf?: number;
+  min_area_sqft?: number; // private only
+  max_area_sqft?: number; // private only
   max_mrt_distance_m?: number;
   min_schools_within_1km?: number;
   bbox?: [number, number, number, number]; // minx, miny, maxx, maxy
@@ -409,6 +420,8 @@ export interface BtoResaleCompare {
 
 export type PrivatePropertyType = "CONDO" | "APARTMENT" | "EC" | "LANDED" | "STRATA_LANDED";
 export type PrivateSaleType = "NEW_SALE" | "RESALE" | "SUB_SALE";
+export type PrivatePlanningRegion = "CCR" | "RCR" | "OCR";
+export type PrivateTenureType = "freehold" | "leasehold";
 
 export interface PrivateTransaction {
   id: string;
@@ -443,7 +456,13 @@ export interface PrivateTransactionsResponse {
   latest: PrivateTransaction | null;
   trend: { month: string; median_psf: number; count: number }[];
   results: PrivateTransaction[];
-  filters: { property_types: PrivatePropertyType[]; sale_types: PrivateSaleType[] };
+  filters: {
+    property_types: PrivatePropertyType[];
+    sale_types: PrivateSaleType[];
+    planning_regions: PrivatePlanningRegion[];
+    tenures: PrivateTenureType[];
+    floor_ranges: string[];
+  };
 }
 
 export interface PrivateProject {
@@ -457,11 +476,21 @@ export interface PrivateProject {
 
 export interface PrivateTransactionFilters {
   project?: string;
+  address?: string;
   property_type?: string;
   sale_type?: string;
   district?: string;
+  planning_region?: string;
+  tenure?: string;
+  floor_range?: string;
   date_from?: string;
   date_to?: string;
+  min_price?: number;
+  max_price?: number;
+  min_psf?: number;
+  max_psf?: number;
+  min_area_sqft?: number;
+  max_area_sqft?: number;
   limit?: number;
 }
 
@@ -567,10 +596,16 @@ export interface AmenityPoi {
 export interface HomeOSPreferences {
   flat_type: string | null;
   max_price: number | null;
+  town?: string | null;
+  preferred_towns?: string[];
+  min_schools_within_1km?: number | null;
   commute_priority: "low" | "medium" | "high";
   school_priority: "low" | "medium" | "high";
   risk_tolerance: "low" | "medium";
   appreciation_priority: "medium" | "high";
+  work_locations?: string[];
+  partner_work_locations?: string[];
+  bus_reliance?: "low" | "high";
 }
 
 export interface HomeOSAvatar {
@@ -675,7 +710,7 @@ export interface HomeOSScheduleViewingResponse {
 
 // --- HomeOS Cases and Pipeline ---
 export interface AgentEvent {
-  event: "agent_start" | "agent_data" | "agent_summary" | "agent_done" | "case_done" | "case_error" | "clarifying_question";
+  event: "agent_start" | "agent_data" | "agent_summary" | "agent_done" | "tool_calls" | "case_done" | "case_error" | "clarifying_question";
   agent?: string;
   block_id?: number | null;
   narrative?: string;
@@ -685,6 +720,7 @@ export interface AgentEvent {
   message?: string;
   question?: string;
   field?: string;
+  tool_calls?: TraceToolCall[];
 }
 
 export interface HomeOSCaseSummary {
@@ -713,7 +749,10 @@ export interface HomeOSCase {
 
 
 // --- Active listings (HDB Flat Portal) ---
+export type ListingType = "resale" | "rent";
+
 export interface ActiveListing {
+  listing_type: ListingType;
   listing_id: number;
   block_id: number;
   block_number: string;

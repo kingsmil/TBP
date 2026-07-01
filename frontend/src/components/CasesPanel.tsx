@@ -24,14 +24,17 @@ function buildChatHistory(
   // Use pipeline (committed history) + streaming (in-flight), but don't double-count:
   // streamingEvents are cleared and moved into pipeline when the stream completes.
   const allEvents = (pipeline.length > 0 ? pipeline : streamingEvents).filter(
-    (event) => event.event === "clarifying_question" || event.event === "case_done",
+    (event) =>
+      event.event === "clarifying_question" ||
+      event.event === "case_done" ||
+      (event.event === "agent_summary" && event.agent === "search"),
   );
 
   // Walk conversation messages in order, inserting each user answer right after its question.
   let convIdx = 0;
 
   for (const e of allEvents) {
-    if (e.event === "agent_summary" && e.agent === "profile" && e.narrative) {
+    if (e.event === "agent_summary" && e.agent === "search" && e.data) {
       const data = e.data as Record<string, unknown>;
       const count = data["candidates_found"] as number;
       const query = data["search_query"] as Record<string, unknown> | undefined;
@@ -168,7 +171,36 @@ const CHIP_OPTIONS: Record<string, { label: string; value: string }[]> = {
     { label: "5-room", value: "5 room" },
     { label: "Executive", value: "executive" },
   ],
-  ready_to_proceed: [{ label: "Proceed", value: "proceed" }],
+  max_price: [
+    { label: "$600k", value: "$600k" },
+    { label: "$800k", value: "$800k" },
+    { label: "$1M", value: "$1M" },
+  ],
+  town: [
+    { label: "Tampines", value: "Tampines" },
+    { label: "Bishan", value: "Bishan" },
+    { label: "Queenstown", value: "Queenstown" },
+    { label: "Toa Payoh", value: "Toa Payoh" },
+  ],
+  work_locations: [
+    { label: "CBD", value: "work in CBD" },
+    { label: "Raffles Place", value: "work at Raffles Place" },
+    { label: "Jurong East", value: "work at Jurong East" },
+  ],
+  open_ended: [
+    { label: "Proceed as-is", value: "proceed" },
+    { label: "Need cheaper", value: "max budget $700k" },
+    { label: "Near MRT", value: "near MRT" },
+  ],
+  ready_to_proceed: [
+    { label: "Proceed with analysis", value: "proceed" },
+  ],
+  no_results: [
+    { label: "Any town", value: "any town" },
+    { label: "Any flat type", value: "any flat" },
+    { label: "Remove budget", value: "no budget" },
+    { label: "Try $900k", value: "max budget $900k" },
+  ],
 };
 
 const DEFAULT_PROFILE =
@@ -306,6 +338,14 @@ export default function CasesPanel({
           title="New case"
           onClick={() => {
             setShowDropdown(false);
+            if (!isAuthenticated) {
+              onSignInRequired();
+              return;
+            }
+            if (!isSubscribed) {
+              onUpgradeRequired();
+              return;
+            }
             onNewCase(DEFAULT_PROFILE);
           }}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background hover:bg-muted text-muted-foreground"

@@ -6,7 +6,7 @@ matches each to one of our blocks (one Block -> 0..N ActiveListings):
   1. POST map/getCoordinatesByFilters   -> all resale listing ids
   2. POST listing/resale/detailsJdbc    -> flat detail per id
   3. tiered match to a block: postal exact, then normalized block+street
-  4. repo.add_active_listings(matched)  -> idempotent upsert by listing_id
+  4. repo.add_active_listings(matched)  -> idempotent upsert by listing type + id
 
 Agent contact fields (name/phone/email/agency) are exposed by the portal for
 agent-managed listings and stored as-is — it is public information served by
@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 
 _BASE = "https://api.homes.hdb.gov.sg/flatback/public/v1"
 _PORTAL = "https://homes.hdb.gov.sg"
+SUPPORTED_LISTING_TYPES = {"resale", "rent"}
 
 # All-Singapore resale filter — mirrors the portal map's default query.
 _MARKER_FILTERS = {
@@ -88,11 +89,14 @@ class BlockMatcher:
 # Detail parsing
 # ---------------------------------------------------------------------------
 
-def parse_detail(raw: dict[str, Any], listing_id: int) -> dict[str, Any]:
+def parse_detail(
+    raw: dict[str, Any], listing_id: int, listing_type: str = "resale",
+) -> dict[str, Any]:
     """Map a detailsJdbc payload to ActiveListing kwargs (minus block_id)."""
     desc_entries = raw.get("description") or [{}]
     first = desc_entries[0] if desc_entries else {}
     return {
+        "listing_type": listing_type,
         "listing_id": int(listing_id),
         "block_number": str(raw.get("block") or "").strip().upper(),
         "street_name": str(raw.get("street") or "").strip().upper(),
@@ -152,8 +156,17 @@ def _make_client():
     return client
 
 
-def fetch_markers(client=None) -> list[str]:
-    """All current resale listing ids from the portal map endpoint."""
+def fetch_markers(client=None, listing_type: str = "resale") -> list[str]:
+    """All current listing ids from the portal map endpoint.
+
+    The public HDB Flat Portal map currently exposes resale markers. Rental
+    listings are still represented by the repository/API model, but the portal
+    does not expose a rental marker type through this endpoint.
+    """
+    if listing_type not in SUPPORTED_LISTING_TYPES:
+        raise ValueError(f"unsupported listing_type: {listing_type}")
+    if listing_type == "rent":
+        return []
     client = client or _make_client()
     resp = client.post(f"{_BASE}/map/getCoordinatesByFilters", json=_MARKER_FILTERS)
     resp.raise_for_status()
@@ -168,7 +181,11 @@ def fetch_markers(client=None) -> list[str]:
     return ids
 
 
-def fetch_detail(listing_id: str, client=None) -> dict[str, Any]:
+def fetch_detail(listing_id: str, client=None, listing_type: str = "resale") -> dict[str, Any]:
+    if listing_type not in SUPPORTED_LISTING_TYPES:
+        raise ValueError(f"unsupported listing_type: {listing_type}")
+    if listing_type == "rent":
+        raise NotImplementedError("HDB rental listing detail endpoint is not available")
     client = client or _make_client()
     resp = client.post(f"{_BASE}/listing/resale/detailsJdbc",
                        json={"listingId": str(listing_id)})
@@ -199,8 +216,11 @@ def ingest_listings(
     fetch_detail: Callable[[str], dict[str, Any]],
     limit: int | None = None,
     delay_s: float = 0.0,
+    listing_type: str = "resale",
 ) -> ListingIngestReport:
     """Fetch markers -> details, match to blocks, upsert into the repository."""
+    if listing_type not in SUPPORTED_LISTING_TYPES:
+        raise ValueError(f"unsupported listing_type: {listing_type}")
     report = ListingIngestReport()
     matcher = BlockMatcher(repo.blocks())
     ids = fetch_markers()
@@ -215,7 +235,7 @@ def ingest_listings(
             log.warning("detail fetch failed for %s: %s", lid, exc)
             continue
         report.listings_fetched += 1
-        fields = parse_detail(raw, int(lid))
+        fields = parse_detail(raw, int(lid), listing_type=listing_type)
         block_id, tier = matcher.match(
             fields["postal_code"], fields["block_number"], fields["street_name"])
         if block_id is None:
@@ -240,6 +260,8 @@ def main() -> None:  # pragma: no cover - CLI/network entry point
                         help="max listings to fetch (default: all)")
     parser.add_argument("--delay", type=float, default=0.1,
                         help="seconds between detail calls (politeness)")
+    parser.add_argument("--listing-type", choices=sorted(SUPPORTED_LISTING_TYPES),
+                        default="resale")
     args = parser.parse_args()
 
     from app.api.deps import get_repository
@@ -247,10 +269,11 @@ def main() -> None:  # pragma: no cover - CLI/network entry point
     client = _make_client()
     report = ingest_listings(
         repo,
-        fetch_markers=lambda: fetch_markers(client),
-        fetch_detail=lambda lid: fetch_detail(lid, client),
+        fetch_markers=lambda: fetch_markers(client, listing_type=args.listing_type),
+        fetch_detail=lambda lid: fetch_detail(lid, client, listing_type=args.listing_type),
         limit=args.limit,
         delay_s=args.delay,
+        listing_type=args.listing_type,
     )
     log.info(
         "listings: fetched=%d matched_tier1=%d matched_tier2=%d unmatched=%d errors=%d",

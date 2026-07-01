@@ -17,7 +17,7 @@ export default function ActiveListingsSection({ blockId, caseId }: Props) {
 
   useEffect(() => {
     setListings(null);
-    getBlockListings(blockId)
+    getBlockListings(blockId, "resale")
       .then((res) => setListings(res.listings))
       .catch(() => setListings([]));
   }, [blockId]);
@@ -27,14 +27,14 @@ export default function ActiveListingsSection({ blockId, caseId }: Props) {
   return (
     <div className="p-4 border-b border-border">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-        On the market now
+        Active resale listings
       </p>
       <p className="text-xs text-muted-foreground mb-3">
         {listings.length} unit{listings.length === 1 ? "" : "s"} listed in this block
       </p>
       <div className="space-y-3">
         {listings.map((l) => (
-          <ListingCard key={l.listing_id} listing={l} caseId={caseId} />
+          <ListingCard key={`${l.listing_type}-${l.listing_id}`} listing={l} caseId={caseId} />
         ))}
       </div>
     </div>
@@ -50,7 +50,10 @@ function ListingCard({ listing, caseId }: { listing: ActiveListing; caseId?: str
   async function handlePrepare() {
     setPreparing(true);
     try {
-      const res = await prepareOutreachMessage(listing.listing_id, { case_id: caseId });
+      const res = await prepareOutreachMessage(listing.listing_id, {
+        case_id: caseId,
+        listing_type: listing.listing_type,
+      });
       setOutreach(res);
     } catch {
       setOutreach(null);
@@ -77,11 +80,18 @@ function ListingCard({ listing, caseId }: { listing: ActiveListing; caseId?: str
           onError={() => setPhotoOk(false)}
         />
       )}
-      <p className="text-sm font-bold text-foreground">{formatSGD(listing.price)}</p>
+      <p className="text-sm font-bold text-foreground">
+        {formatSGD(listing.price)}
+        {listing.listing_type === "rent" && (
+          <span className="ml-1 text-xs font-semibold text-muted-foreground">/ month</span>
+        )}
+      </p>
       <p className="text-xs text-muted-foreground">
         {listing.flat_type} · {listing.floor_area_sqm} sqm · {listing.storey_range}
       </p>
-      <p className="text-xs text-muted-foreground">Lease left: {listing.remaining_lease}</p>
+      {listing.remaining_lease && (
+        <p className="text-xs text-muted-foreground">Lease left: {listing.remaining_lease}</p>
+      )}
       {listing.description && (
         <p className="text-xs text-muted-foreground line-clamp-2">{listing.description}</p>
       )}
@@ -90,7 +100,7 @@ function ListingCard({ listing, caseId }: { listing: ActiveListing; caseId?: str
           {[listing.agent_name, listing.agency_name].filter(Boolean).join(" · ")}
         </p>
       )}
-      {!outreach && (
+      {listing.listing_type === "resale" && !outreach && (
         <button
           type="button"
           className="mt-1 w-full rounded-md border border-input px-2 py-1.5 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50"
@@ -100,7 +110,7 @@ function ListingCard({ listing, caseId }: { listing: ActiveListing; caseId?: str
           {preparing ? "Preparing…" : "Prepare message"}
         </button>
       )}
-      {outreach && (
+      {listing.listing_type === "resale" && outreach && (
         <div className="mt-1 space-y-2 rounded border border-emerald-100 bg-emerald-50 p-2">
           <p className="text-xs leading-relaxed text-emerald-900 whitespace-pre-wrap">
             {outreach.message}

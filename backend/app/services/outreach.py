@@ -36,12 +36,15 @@ def sanitize_phone(raw: str | None) -> str | None:
 def prepare_outreach_message(
     repo: Repository,
     listing_id: int,
+    listing_type: str = "resale",
     case_id: str | None = None,
     contact_name: str | None = None,
     availability: list[str] | None = None,
     note: str | None = None,
 ) -> dict[str, Any]:
-    listing = repo.active_listing(listing_id)
+    if listing_type not in {"resale", "rent"}:
+        raise ValueError("listing not found")
+    listing = repo.active_listing(listing_id, listing_type)
     if listing is None:
         raise ValueError("listing not found")
 

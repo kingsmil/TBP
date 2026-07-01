@@ -38,26 +38,92 @@ def _has_any(text: str, words: tuple[str, ...]) -> bool:
 def _extract_flat_type(text: str) -> str | None:
     norm = _normalise(text)
     compact = norm.replace(" ", "")
+    rm_match = re.search(r"\b([2-5])\s*-?\s*(?:rm|room)\b", text, re.IGNORECASE)
+    if rm_match:
+        return f"{rm_match.group(1)} ROOM"
+    bedder_match = re.search(r"\b([2-5])\s*-?\s*(?:bedder|bed)\b", text, re.IGNORECASE)
+    if bedder_match and _has_any(text, ("hdb", "flat", "resale")):
+        return f"{bedder_match.group(1)} ROOM"
+    room_hint = re.search(
+        r"\b(?:add|change|switch|make|want|need|looking\s+for|prefer|to|into)\s+(?:a\s+)?([2-5])\b",
+        text,
+        re.IGNORECASE,
+    )
+    if room_hint and any(w in text.lower() for w in ("add", "change", "switch", "make", "instead")):
+        return f"{room_hint.group(1)} ROOM"
     for flat_type in FLAT_TYPES:
         if flat_type in norm:
             return flat_type
+    if room_hint:
+        return f"{room_hint.group(1)} ROOM"
     if "2ROOM" in compact:
+        return "2 ROOM"
+    if "2RM" in compact:
         return "2 ROOM"
     if "3ROOM" in compact:
         return "3 ROOM"
+    if "3RM" in compact:
+        return "3 ROOM"
     if "4ROOM" in compact:
         return "4 ROOM"
+    if "4RM" in compact:
+        return "4 ROOM"
     if "5ROOM" in compact:
+        return "5 ROOM"
+    if "5RM" in compact:
         return "5 ROOM"
     if "EXEC" in compact:
         return "EXECUTIVE"
     return None
 
 
+def _extract_town(text: str) -> str | None:
+    towns = _extract_towns(text)
+    return towns[0] if towns else None
+
+
+def _extract_towns(text: str) -> list[str]:
+    from app.homeos.tools.search import _fuzzy_match_town
+
+    cleaned = re.sub(r"[^A-Za-z0-9 -]+", " ", text.upper().replace("/", " "))
+    words = cleaned.split()
+    ambiguous_singletons = {
+        "EAST", "WEST", "NORTH", "SOUTH", "NORTHEAST", "NORTHWEST",
+        "SOUTHEAST", "SOUTHWEST",
+    }
+    negative_markers = {"NO", "NOT", "AVOID", "EXCLUDE", "EXCLUDING", "WITHOUT"}
+    matches: list[tuple[int, int, str]] = []
+    for i in range(len(words)):
+        if any(marker in words[max(0, i - 2):i] for marker in negative_markers):
+            continue
+        for length in (3, 2, 1):
+            if i + length > len(words):
+                continue
+            phrase = " ".join(words[i:i + length])
+            if length == 1 and phrase in ambiguous_singletons:
+                continue
+            town = _fuzzy_match_town(phrase)
+            if town:
+                matches.append((i, length, town.value))
+                break
+    towns: list[str] = []
+    consumed: set[int] = set()
+    for i, length, town in sorted(matches, key=lambda x: (x[0], -x[1])):
+        span = set(range(i, i + length))
+        if consumed & span:
+            continue
+        consumed |= span
+        if town not in towns:
+            towns.append(town)
+    return towns
+
+
 def _extract_budget(text: str) -> float | None:
     lowered = text.lower().replace(",", "")
     patterns = [
         r"(?:under|below|up to|max|maximum|budget)\s*\$?\s*(\d+(?:\.\d+)?)\s*(m|mil|million|k)?",
+        r"(?:around|about|stretch to|can stretch to)\s*\$?\s*(\d+(?:\.\d+)?)\s*(?:-?\s*ish)?\s*(m|mil|million|k)?",
+        r"\$?\s*(\d+(?:\.\d+)?)\s*(?:-?\s*ish)\b",
         r"\$?\s*(\d+(?:\.\d+)?)\s*(m|mil|million|k)\b",
     ]
     for pattern in patterns:
@@ -73,28 +139,91 @@ def _extract_budget(text: str) -> float | None:
         if value < 10_000:
             return value * 1_000
         return value
+    word_numbers = {
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+        "six": 6, "seven": 7, "eight": 8, "nine": 9,
+    }
+    word_match = re.search(
+        r"(?:budget|under|below|up to|max|maximum|around|about)?\s*"
+        r"(one|two|three|four|five|six|seven|eight|nine)\s+hundred\s+k\b",
+        lowered,
+    )
+    if word_match:
+        return float(word_numbers[word_match.group(1)] * 100_000)
     return None
+
+
+def _is_estate_related_text(text: str) -> bool:
+    lowered = text.lower()
+    estate_terms = (
+        "hdb", "bto", "resale", "private", "condo", "apartment", "flat",
+        "room", "executive", "budget", "price", "psf", "mrt", "school",
+        "commute", "bus", "town", "estate", "block", "lease", "viewing",
+        "agent", "listing", "home", "house", "property", "serangoon",
+        "tampines", "bishan", "queenstown", "toa payoh", "punggol",
+        "sengkang", "bedok", "yishun", "woodlands", "jurong",
+    )
+    return any(term in lowered for term in estate_terms) or _extract_flat_type(text) is not None or _extract_town(text) is not None
 
 
 def _extract_work_locations(text: str) -> list[str]:
     locations: list[str] = []
-    pattern = re.compile(
-        r"\b(?:work|works|working|office)\s+(?:at|in|near)\s+"
-        r"([A-Za-z][A-Za-z0-9 .'-]*?)(?=\s+(?:and|with|but|because|while|plus)\b|[.,;]|$)",
-        re.IGNORECASE,
+    patterns = (
+        re.compile(
+            r"\b(?:i|me|we)\s+(?:work|works|working|office)\s+(?:(?:at|in|near)\s+)?"
+            r"([A-Za-z][A-Za-z0-9 .'-]*?)(?=\s+(?:and|with|but|because|while|plus|wife|husband|partner|spouse|he|she)\b|[.,;]|$)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:work|works|working|office)\s+(?:at|in|near)\s+"
+            r"([A-Za-z][A-Za-z0-9 .'-]*?)(?=\s+(?:and|with|but|because|while|plus|wife|husband|partner|spouse|he|she)\b|[.,;]|$)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:i|me|we)\s+(?:at|in|near)\s+"
+            r"([A-Za-z][A-Za-z0-9 .'-]*?)(?=\s+(?:and|with|but|because|while|plus|wife|husband|partner|spouse|he|she)\b|[.,;]|$)",
+            re.IGNORECASE,
+        ),
     )
-    for match in pattern.finditer(text):
-        loc = " ".join(match.group(1).split()).strip(" .,-")
-        if loc and loc.casefold() not in {x.casefold() for x in locations}:
-            locations.append(loc)
+    for pattern in patterns:
+        for match in pattern.finditer(text):
+            loc = " ".join(match.group(1).split()).strip(" .,-")
+            if loc and loc.casefold() not in {x.casefold() for x in locations}:
+                locations.append(loc)
     return locations
+
+
+def _remove_work_location_clauses(text: str) -> str:
+    patterns = (
+        r"\b(?:(?:i|me|we|partner|wife|husband|spouse|he|she)\s+)"
+        r"(?:(?:work|works|working|office)\s+(?:(?:at|in|near)\s+)?|(?:at|in|near)\s+)"
+        r"[A-Za-z][A-Za-z0-9 .'-]*?(?=\s+(?:and|with|but|because|while|plus|wife|husband|partner|spouse|he|she)\b|[.,;]|$)",
+        r"\b(?:work|works|working|office)\s+(?:at|in|near)\s+"
+        r"[A-Za-z][A-Za-z0-9 .'-]*?(?=\s+(?:and|with|but|because|while|plus|wife|husband|partner|spouse|he|she)\b|[.,;]|$)",
+    )
+    cleaned = text
+    for pattern in patterns:
+        cleaned = re.sub(pattern, " ", cleaned, flags=re.IGNORECASE)
+    return cleaned
+
+
+def _school_need_negated(text: str) -> bool:
+    return _has_any(
+        text,
+        (
+            "no kids", "no children", "without kids", "without children",
+            "no need school", "no need schools", "no schools", "school not important",
+            "schools not important", "don't need school", "don't need schools",
+            "dont need school", "dont need schools", "not near school", "not near schools",
+        ),
+    )
 
 
 def _extract_partner_work_locations(text: str) -> list[str]:
     """Extract workplace locations for the partner/spouse in couple mode."""
     locations: list[str] = []
     pattern = re.compile(
-        r"\b(?:partner|wife|husband|spouse|he|she)\s+(?:works?|works?\s+(?:at|in|near)|office)\s+(?:at|in|near)?\s*"
+        r"\b(?:partner|wife|husband|spouse|he|she)\s+(?:(?:works?|office)\s+(?:(?:at|in|near)\s+)?|(?:at|in|near)\s+)"
         r"([A-Za-z][A-Za-z0-9 .'-]*?)(?=\s+(?:and|with|but|because|while|plus)\b|[.,;]|$)",
         re.IGNORECASE,
     )
@@ -107,8 +236,11 @@ def _extract_partner_work_locations(text: str) -> list[str]:
 
 def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
     is_couple = _has_any(profile_text, ("partner", "wife", "husband", "spouse", "couple", "together", "both of us", "the two of us"))
-    buyer_type = "family" if _has_any(profile_text, ("family", "kids", "children", "child", "primary school", "schools")) else ("couple" if is_couple else "single")
-    if _has_any(profile_text, ("must be close to mrt", "near mrt", "close to mrt", "commute", "mrt access", "within 600")):
+    school_negated = _school_need_negated(profile_text)
+    buyer_type = "family" if (not school_negated and _has_any(profile_text, ("family", "kids", "children", "child", "primary school", "schools"))) else ("couple" if is_couple else "single")
+    if _has_any(profile_text, ("must be close to mrt", "near mrt", "close to mrt", "mrt access", "within 600", "close to train", "near train", "train access")) or (
+        "mrt" in profile_text.lower() and "close" in profile_text.lower()
+    ):
         commute_priority = "high"
     elif _has_any(profile_text, ("medium commute", "1.2km", "1200", "moderate commute", "within 1.2", "within 1km of mrt",
                                   "works in", "work in", "office in", "workplace", "cbd", "raffles place", "tanjong pagar",
@@ -116,7 +248,7 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
         commute_priority = "medium"
     else:
         commute_priority = "low"
-    school_priority = "high" if _has_any(profile_text, ("primary school", "schools", "kids", "children", "family")) else "low"
+    school_priority = "high" if (not school_negated and _has_any(profile_text, ("primary school", "schools", "kids", "children", "family"))) else "low"
     risk_tolerance = "medium" if _has_any(profile_text, ("some risk", "appreciation risk", "growth", "invest")) else "low"
     appreciation_priority = "high" if _has_any(profile_text, ("growth", "appreciation", "investment", "undervalued")) else "medium"
     work_locations = _extract_work_locations(profile_text)
@@ -124,7 +256,8 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
     bus_reliance = "high" if _has_any(
         profile_text,
         ("no car", "without a car", "don't drive", "doesn't drive", "depend on bus", "depends on bus",
-         "depend on buses", "depends on buses", "rely on bus", "rely on buses", "bus dependent"),
+         "dont drive", "doesnt drive", "do not drive", "not driving", "depend on buses", "depends on buses",
+         "rely on bus", "rely on buses", "bus dependent", "near bus", "bus access"),
     ) else "low"
     if buyer_type == "family":
         label = "Family HomeOS Agent"
@@ -145,6 +278,8 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
         "preferences": {
             "flat_type": _extract_flat_type(profile_text),
             "max_price": _extract_budget(profile_text),
+            "town": _extract_town(_remove_work_location_clauses(profile_text)),
+            "preferred_towns": _extract_towns(_remove_work_location_clauses(profile_text)),
             "commute_priority": commute_priority,
             "school_priority": school_priority,
             "risk_tolerance": risk_tolerance,
@@ -157,6 +292,42 @@ def parse_homeos_profile(profile_text: str) -> dict[str, Any]:
 
 
 # ── Registry-backed agent runner ──────────────────────────────────────────────
+
+def _apply_rule_profile_fallback(avatar_dict: dict[str, Any], profile_text: str) -> dict[str, Any]:
+    """Merge deterministic estate parsing into a profile-agent result."""
+    fallback = parse_homeos_profile(profile_text)
+    fallback_prefs = fallback.get("preferences", {})
+    prefs = {**fallback_prefs, **(avatar_dict.get("preferences") or {})}
+
+    for field in (
+        "flat_type", "max_price", "town", "preferred_towns", "min_schools_within_1km",
+        "work_locations", "partner_work_locations",
+    ):
+        value = fallback_prefs.get(field)
+        if value not in (None, "", []):
+            prefs[field] = value
+
+    for field, default in (
+        ("commute_priority", "low"),
+        ("school_priority", "low"),
+        ("risk_tolerance", "low"),
+        ("appreciation_priority", "medium"),
+        ("bus_reliance", "low"),
+    ):
+        value = fallback_prefs.get(field)
+        if value != default:
+            prefs[field] = value
+
+    merged = dict(avatar_dict)
+    merged["preferences"] = prefs
+    if not merged.get("summary"):
+        merged["summary"] = fallback.get("summary", "")
+    if merged.get("label") in (None, "", "HomeOS Agent"):
+        merged["label"] = fallback.get("label", "HomeOS Agent")
+    if merged.get("buyer_type") in (None, "", "single") and fallback.get("buyer_type") != "single":
+        merged["buyer_type"] = fallback["buyer_type"]
+    return merged
+
 
 async def _run_profile_agent(prompt: str, model_override: str | None = None):
     """Run the profile agent via the tool repository. Returns (HomeOSAvatar, {}, result)."""
@@ -327,6 +498,21 @@ async def _compute_lifestyle_evidence(repo: Repository, block_id: int, prefs: di
     return output.model_dump(), _extract_tool_calls(result)
 
 
+async def _compute_mock_evidence(agent_name: str, repo: Repository, block_id: int, prefs: dict) -> dict:
+    if agent_name == "market":
+        evidence, _ = await _compute_market_evidence(repo, block_id, prefs, True, None)
+    elif agent_name == "location":
+        evidence, _ = await _compute_location_evidence(repo, block_id, prefs, True, None)
+    elif agent_name == "risk":
+        evidence, _ = await _compute_risk_evidence(repo, block_id, prefs, True, None)
+    elif agent_name == "lifestyle":
+        evidence, _ = await _compute_lifestyle_evidence(repo, block_id, prefs, True)
+    else:
+        evidence = {"narrative": ""}
+    evidence["model_fallback"] = True
+    return evidence
+
+
 # Sentinel pushed onto the per-block event queue when one subagent finishes.
 _AGENT_DONE = object()
 
@@ -382,7 +568,23 @@ async def _deep_analysis_stream(
             try:
                 results[agent_name] = await _stream_agent(agent_name, queue, block_id, mock, compute)
             except Exception as exc:  # one failing agent shouldn't wedge the block
-                errors.append(exc)
+                logger.warning(
+                    "[case:%s] %s model failed for block %d; using deterministic fallback: %s",
+                    case_id[:8], agent_name, block_id, exc,
+                )
+                try:
+                    evidence = await _compute_mock_evidence(agent_name, repo, block_id, prefs)
+                    results[agent_name] = evidence
+                    await queue.put({"event": "agent_data", "agent": agent_name, "block_id": block_id, "data": evidence})
+                    await queue.put({
+                        "event": "agent_summary",
+                        "agent": agent_name,
+                        "block_id": block_id,
+                        "narrative": evidence.get("narrative", ""),
+                    })
+                    await queue.put({"event": "agent_done", "agent": agent_name, "block_id": block_id})
+                except Exception as fallback_exc:
+                    errors.append(fallback_exc)
             finally:
                 await queue.put(_AGENT_DONE)
 
@@ -443,8 +645,14 @@ async def _deep_analysis_stream(
 
 # ── Search phase helpers ───────────────────────────────────────────────────────
 
-def _prefs_to_search_query(prefs: dict, candidate_limit: int = 100):
+def _prefs_to_search_query(
+    prefs: dict,
+    candidate_limit: int = 100,
+    town_override: str | None = None,
+    relax: set[str] | None = None,
+):
     from app.core.models import SearchQuery
+    relax = relax or set()
     school = prefs.get("school_priority", "low")
     min_schools = prefs.get("min_schools_within_1km")
     if min_schools is None:
@@ -452,10 +660,14 @@ def _prefs_to_search_query(prefs: dict, candidate_limit: int = 100):
             min_schools = 2
         elif school == "medium":
             min_schools = 1
+    if "schools" in relax or "proximity" in relax:
+        min_schools = None
     # Only hard-filter by MRT when the buyer explicitly stated a preference.
     # "low" is the implicit default — zero filter applied when commute was never mentioned.
     commute = prefs.get("commute_priority", "low")
-    if commute == "high":
+    if "mrt" in relax or "proximity" in relax:
+        max_mrt_distance_m = None
+    elif commute == "high":
         max_mrt_distance_m = 600.0
     elif commute == "medium":
         max_mrt_distance_m = 1200.0
@@ -464,12 +676,12 @@ def _prefs_to_search_query(prefs: dict, candidate_limit: int = 100):
 
     # Filter by bus stop distance when buyer is bus-dependent
     bus_reliance = prefs.get("bus_reliance", "low")
-    max_bus_distance_m = 400.0 if bus_reliance == "high" else None
+    max_bus_distance_m = None if ("bus" in relax or "proximity" in relax) else (400.0 if bus_reliance == "high" else None)
 
     return SearchQuery(
-        flat_type=prefs.get("flat_type"),
-        max_price=prefs.get("max_price"),
-        town=prefs.get("town"),
+        flat_type=None if "flat_type" in relax else prefs.get("flat_type"),
+        max_price=None if "max_price" in relax else prefs.get("max_price"),
+        town=None if "town" in relax else (town_override if town_override is not None else prefs.get("town")),
         max_mrt_distance_m=max_mrt_distance_m,
         max_bus_distance_m=max_bus_distance_m,
         min_schools_within_1km=min_schools,
@@ -543,6 +755,13 @@ def _ready_to_proceed_question(count: int) -> str:
     return (
         f"Ready to analyse {count} {blocks}? "
         "Tap Proceed to start, or keep refining."
+    )
+
+
+def _no_candidates_question() -> str:
+    return (
+        "I found 0 matching blocks with those filters. "
+        "Would you like to loosen the budget, choose any town, or change the flat type?"
     )
 
 
@@ -663,14 +882,32 @@ def _direct_answer_overrides(user_message: str, pipeline: list[dict]) -> dict:
     lower_q = last_q.lower()
     lower_a = user_message.lower().strip()
     updates: dict = {}
+
+    explicit_flat_type = _extract_flat_type(user_message)
+    if explicit_flat_type:
+        updates["flat_type"] = explicit_flat_type
+
+    explicit_budget = _extract_budget(user_message)
+    if explicit_budget:
+        updates["max_price"] = explicit_budget
+
+    explicit_towns = _extract_towns(user_message)
+    if explicit_towns:
+        updates["town"] = explicit_towns[0]
+        updates["preferred_towns"] = explicit_towns
+
+    if any(phrase in lower_a for phrase in ("any town", "all towns", "no town", "remove town", "drop town")):
+        updates["town"] = None
+        updates["preferred_towns"] = []
+    if any(phrase in lower_a for phrase in ("any flat", "any room", "remove flat", "drop flat", "remove room")):
+        updates["flat_type"] = None
+    if any(phrase in lower_a for phrase in ("no budget", "remove budget", "drop budget", "any budget")):
+        updates["max_price"] = None
+
     if "flat type" in lower_q or "room" in lower_q:
-        ft = _extract_flat_type(user_message)
-        if ft:
-            updates["flat_type"] = ft
+        pass
     elif "budget" in lower_q or "maximum" in lower_q:
-        budget = _extract_budget(user_message)
-        if budget:
-            updates["max_price"] = budget
+        pass
     elif "mrt" in lower_q or "commute" in lower_q:
         if any(w in lower_a for w in ("high", "600", "very", "yes", "close", "important", "definitely", "must")):
             updates["commute_priority"] = "high"
@@ -686,27 +923,7 @@ def _direct_answer_overrides(user_message: str, pipeline: list[dict]) -> dict:
         elif any(w in lower_a for w in ("low", "no", "not", "don't", "doesn't")):
             updates["school_priority"] = "low"
     elif "town" in lower_q or "estate" in lower_q:
-        # Extract town name from natural language using fuzzy matching
-        from app.core.models import HDBTown
-        from app.homeos.tools.search import _fuzzy_match_town
-
-        # Try to find any HDB town mentioned in the message
-        words = user_message.upper().split()
-        town_enum = None
-
-        # Check each word and phrase for a town match
-        for i in range(len(words)):
-            for length in range(1, min(4, len(words) - i + 1)):  # Try 1-3 word phrases
-                phrase = " ".join(words[i:i+length])
-                matched = _fuzzy_match_town(phrase)
-                if matched:
-                    town_enum = matched
-                    break
-            if town_enum:
-                break
-
-        if town_enum:
-            updates["town"] = town_enum.value
+        pass
     elif "work" in lower_q or "workplace" in lower_q or "commute" in lower_q:
         # Extract work locations from the answer
         work_locs = _extract_work_locations(user_message)
@@ -721,16 +938,88 @@ def _direct_answer_overrides(user_message: str, pipeline: list[dict]) -> dict:
     return updates
 
 
+def _normalise_town_list(prefs: dict) -> list[str | None]:
+    towns: list[str] = []
+    for raw in prefs.get("preferred_towns") or []:
+        value = raw.value if hasattr(raw, "value") else str(raw)
+        if value and value not in towns:
+            towns.append(value)
+    town = prefs.get("town")
+    if town:
+        value = town.value if hasattr(town, "value") else str(town)
+        if value not in towns:
+            towns.insert(0, value)
+    return towns or [None]
+
+
+def _query_dict(search_q, towns: list[str | None], relax: set[str] | None = None) -> dict:
+    import dataclasses
+
+    result = {
+        k: v for k, v in dataclasses.asdict(search_q).items()
+        if v is not None and k != "limit"
+    }
+    concrete_towns = [t for t in towns if t]
+    if len(concrete_towns) > 1 and "town" not in (relax or set()):
+        result.pop("town", None)
+        result["preferred_towns"] = concrete_towns
+    return result
+
+
+async def _run_search_variant(
+    repo: Repository,
+    prefs: dict,
+    candidate_limit: int,
+    relax: set[str] | None = None,
+) -> tuple[list[dict], dict]:
+    from app.services.search import search_blocks
+
+    relax = relax or set()
+    towns = [None] if "town" in relax else _normalise_town_list(prefs)
+    merged: dict[int, dict] = {}
+    first_query = None
+    for town in towns:
+        search_q = _prefs_to_search_query(
+            prefs,
+            candidate_limit=candidate_limit,
+            town_override=town,
+            relax=relax,
+        )
+        if first_query is None:
+            first_query = search_q
+        for candidate in await asyncio.to_thread(search_blocks, repo, search_q):
+            merged.setdefault(candidate["block_id"], candidate)
+
+    candidates = list(merged.values())
+    candidates.sort(key=lambda r: (r.get("median_psf") is None, r.get("median_psf") or 0.0, r["block_id"]))
+    return candidates[:candidate_limit], _query_dict(first_query, towns, relax)
+
+
 async def _search_phase(
     repo: Repository,
     case_id: str,
     prefs: dict,
 ) -> tuple[list[dict], list[dict], dict]:
-    from app.services.search import search_blocks
-    import dataclasses
-    search_q = _prefs_to_search_query(prefs, candidate_limit=500)
-    query_dict = {k: v for k, v in dataclasses.asdict(search_q).items() if v is not None and k != "limit"}
-    candidates = await asyncio.to_thread(search_blocks, repo, search_q)
+    candidates, query_dict = await _run_search_variant(repo, prefs, candidate_limit=500)
+    strict_query = dict(query_dict)
+    if not candidates:
+        relaxation_plan: list[tuple[str, set[str], str]] = [
+            ("relaxed_proximity", {"proximity"}, "Relaxed school, MRT, and bus distance filters."),
+            ("relaxed_budget", {"proximity", "max_price"}, "Relaxed proximity and budget filters."),
+            ("relaxed_town", {"proximity", "town"}, "Relaxed proximity and preferred town filters."),
+            ("relaxed_budget_and_town", {"proximity", "max_price", "town"}, "Relaxed proximity, budget, and town filters."),
+            ("relaxed_flat_type", {"proximity", "max_price", "town", "flat_type"}, "Relaxed all hard filters except the result limit."),
+        ]
+        for relaxation_id, relax, message in relaxation_plan:
+            candidates, relaxed_query = await _run_search_variant(repo, prefs, candidate_limit=500, relax=relax)
+            if candidates:
+                query_dict = {
+                    **relaxed_query,
+                    "strict_query": strict_query,
+                    "relaxation_applied": relaxation_id,
+                    "relaxation_message": message,
+                }
+                break
     logger.info(
         "[case:%s] search returned %d candidates  query=%s",
         case_id[:8], len(candidates), query_dict,
@@ -772,10 +1061,15 @@ async def investigate_stream(
             avatar = mock_profile_avatar(profile_text, parse_homeos_profile(profile_text))
             tool_calls = []
         else:
-            avatar, _, result = await _run_profile_agent(profile_text, model_override)
-            tool_calls = _extract_tool_calls(result)
+            try:
+                avatar, _, result = await _run_profile_agent(profile_text, model_override)
+                tool_calls = _extract_tool_calls(result)
+            except Exception as exc:
+                logger.warning("[case:%s] profile model failed; using deterministic fallback: %s", case_id[:8], exc)
+                avatar = mock_profile_avatar(profile_text, parse_homeos_profile(profile_text))
+                tool_calls = []
 
-        avatar_dict = avatar.model_dump()
+        avatar_dict = _apply_rule_profile_fallback(avatar.model_dump(), profile_text)
         homeos_case_store.set_avatar(case_id, avatar_dict)
         prefs = avatar_dict.get("preferences", {})
         logger.info(
@@ -798,6 +1092,21 @@ async def investigate_stream(
         homeos_case_store.append_event(case_id, {"event": "agent_done", "agent": "profile", "block_id": None})
 
         # ── Phase 2: Search ─────────────────────────────────────────────────
+        if not _is_estate_related_text(profile_text):
+            homeos_case_store.set_status(case_id, "refining")
+            q_evt = {
+                "event": "clarifying_question",
+                "case_id": case_id,
+                "question": (
+                    "Tell me what kind of Singapore property you're looking for, "
+                    "including flat type, budget, town, commute, or school needs."
+                ),
+                "field": "profile_text",
+            }
+            yield q_evt
+            homeos_case_store.append_event(case_id, q_evt)
+            return
+
         yield {"event": "agent_start", "agent": "search", "block_id": None}
         homeos_case_store.append_event(case_id, {"event": "agent_start", "agent": "search", "block_id": None})
 
@@ -864,6 +1173,14 @@ async def investigate_stream(
             homeos_case_store.append_event(case_id, proceed_evt)
 
         # Small result set: confirm before analysing (user taps Proceed chip).
+        if len(all_candidates) == 0:
+            homeos_case_store.set_status(case_id, "refining")
+            q_evt = {"event": "clarifying_question", "case_id": case_id,
+                     "question": _no_candidates_question(), "field": "no_results"}
+            yield q_evt
+            homeos_case_store.append_event(case_id, q_evt)
+            return
+
         if len(all_candidates) <= _ANALYSIS_THRESHOLD:
             homeos_case_store.set_status(case_id, "refining")
             q_evt = {"event": "clarifying_question", "case_id": case_id,
@@ -916,9 +1233,13 @@ async def refine_stream(
             if is_mock_mode():
                 avatar = mock_profile_avatar(refinement_prompt, parse_homeos_profile(refinement_prompt))
             else:
-                avatar, _, _ = await _run_profile_agent(refinement_prompt, model_override)
+                try:
+                    avatar, _, _ = await _run_profile_agent(refinement_prompt, model_override)
+                except Exception as exc:
+                    logger.warning("[case:%s] refinement model failed; using deterministic fallback: %s", case_id[:8], exc)
+                    avatar = mock_profile_avatar(refinement_prompt, parse_homeos_profile(refinement_prompt))
 
-            avatar_dict = avatar.model_dump()
+            avatar_dict = _apply_rule_profile_fallback(avatar.model_dump(), refinement_prompt)
             prefs_from_ai = {k: v for k, v in avatar_dict.get("preferences", {}).items() if v is not None}
 
             base_prefs = {k: v for k, v in case.get("search_prefs", {}).items() if v is not None}
@@ -997,6 +1318,14 @@ async def refine_stream(
 
         # Small result set: confirm before analysing (user taps Proceed chip),
         # unless they already asked to proceed.
+        if not force_proceed and len(all_candidates) == 0:
+            homeos_case_store.set_status(case_id, "refining")
+            q_evt = {"event": "clarifying_question", "case_id": case_id,
+                     "question": _no_candidates_question(), "field": "no_results"}
+            yield q_evt
+            homeos_case_store.append_event(case_id, q_evt)
+            return
+
         if not force_proceed and len(all_candidates) <= _ANALYSIS_THRESHOLD:
             homeos_case_store.set_status(case_id, "refining")
             q_evt = {"event": "clarifying_question", "case_id": case_id,
@@ -1017,7 +1346,11 @@ async def refine_stream(
         homeos_case_store.append_event(case_id, error_evt)
 
 
-async def chat_in_case(case_id: str, message: str) -> AsyncGenerator[str, None]:
+async def chat_in_case(
+    case_id: str,
+    message: str,
+    model_override: str | None = None,
+) -> AsyncGenerator[str, None]:
     from pydantic_ai import Agent
     from app.homeos.framework.registry import get_model
 
@@ -1027,6 +1360,16 @@ async def chat_in_case(case_id: str, message: str) -> AsyncGenerator[str, None]:
         return
 
     homeos_case_store.append_message(case_id, "user", message)
+
+    if not _is_estate_related_text(message):
+        answer = (
+            "I can only help with Singapore property decisions here: HDB, BTO, "
+            "resale/private homes, locations, budgets, commute, schools, risks, "
+            "listings, and viewing questions."
+        )
+        homeos_case_store.append_message(case_id, "assistant", answer)
+        yield answer
+        return
 
     if is_mock_mode():
         answer = mock_chat_answer(case, message)
@@ -1055,7 +1398,7 @@ async def chat_in_case(case_id: str, message: str) -> AsyncGenerator[str, None]:
         f"Question: {message}"
     )
 
-    chat_agent: Agent[None, str] = Agent(get_model(), output_type=str, system_prompt=system)
+    chat_agent: Agent[None, str] = Agent(get_model(model_override), output_type=str, system_prompt=system)
     result = await chat_agent.run(user_prompt)
     answer = result.output or "I need more information to answer that question."
 

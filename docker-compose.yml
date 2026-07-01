@@ -4,6 +4,7 @@ services:
   db:
     image: postgis/postgis:16-3.4
     container_name: hdbmatch_postgis
+    restart: unless-stopped
     environment:
       POSTGRES_USER: hdbmatch
       POSTGRES_PASSWORD: hdbmatch
@@ -21,6 +22,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: hdbmatch_redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     healthcheck:
@@ -33,15 +35,23 @@ services:
     build:
       context: ./backend
     container_name: hdbmatch_backend
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://hdbmatch:hdbmatch@db:5432/hdbmatch
       REDIS_URL: redis://redis:6379/0
       API_HOST: 0.0.0.0
       API_PORT: 8000
       ONEMAP_TOKEN: ${ONEMAP_TOKEN:-}
+      AUTH_REQUIRED: ${AUTH_REQUIRED:-false}
     ports:
       - "8000:8000"
     command: ["sh", "-c", "python -m app.db.migrate && uvicorn app.api.main:app --host 0.0.0.0 --port 8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       db:
         condition: service_healthy
@@ -52,8 +62,11 @@ services:
     build:
       context: ./frontend
     container_name: hdbmatch_frontend
+    restart: unless-stopped
     environment:
       VITE_API_BASE: http://localhost:8000
+      VITE_AI_MODE_ENABLED: ${VITE_AI_MODE_ENABLED:-true}
+      VITE_AUTH_REQUIRED: ${VITE_AUTH_REQUIRED:-false}
     ports:
       - "5173:5173"
     depends_on:

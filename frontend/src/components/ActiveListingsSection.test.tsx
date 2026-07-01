@@ -4,6 +4,7 @@ import ActiveListingsSection from "./ActiveListingsSection";
 import type { ActiveListing } from "../types";
 
 const baseListing: ActiveListing = {
+  listing_type: "resale",
   listing_id: 40661,
   block_id: 1,
   block_number: "126A",
@@ -25,7 +26,8 @@ const getBlockListings = vi.fn();
 const prepareOutreachMessage = vi.fn();
 
 vi.mock("../lib/api", () => ({
-  getBlockListings: (blockId: number) => getBlockListings(blockId),
+  getBlockListings: (blockId: number, listingType: string) =>
+    getBlockListings(blockId, listingType),
   prepareOutreachMessage: (id: number, body: unknown) => prepareOutreachMessage(id, body),
 }));
 
@@ -43,6 +45,7 @@ describe("ActiveListingsSection", () => {
     await waitFor(() =>
       expect(screen.getByText(/2 units listed in this block/i)).toBeInTheDocument(),
     );
+    expect(getBlockListings).toHaveBeenCalledWith(1, "resale");
     expect(screen.getAllByText(/4-Room/)).toHaveLength(2);
     expect(screen.getAllByText(/85 years 8 months/)).toHaveLength(2);
   });
@@ -81,6 +84,10 @@ describe("ActiveListingsSection", () => {
       expect(screen.getByRole("button", { name: /prepare message/i })).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByRole("button", { name: /prepare message/i }));
+    expect(prepareOutreachMessage).toHaveBeenCalledWith(40661, {
+      case_id: undefined,
+      listing_type: "resale",
+    });
     await waitFor(() =>
       expect(screen.getByText(/I saw your 4-Room listing/i)).toBeInTheDocument(),
     );

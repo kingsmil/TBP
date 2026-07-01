@@ -35,7 +35,7 @@ class InMemoryRepository(Repository):
         self._txns: list[Transaction] = []
         self._txns_by_block: dict[int, list[Transaction]] = defaultdict(list)
         self._proximity: dict[int, BlockProximity] = {}
-        self._active: dict[int, ActiveListing] = {}
+        self._active: dict[tuple[str, int], ActiveListing] = {}
         self._bus_routes: list[dict] = []
 
     # --- bulk loading ---
@@ -174,10 +174,20 @@ class InMemoryRepository(Repository):
     # --- active listings (HDB Flat Portal) ---
     def add_active_listings(self, items: Iterable[ActiveListing]) -> None:
         for it in items:
-            self._active[it.listing_id] = it
+            self._active[(it.listing_type, it.listing_id)] = it
 
-    def active_listings_for_block(self, block_id: int) -> Sequence[ActiveListing]:
-        return [a for a in self._active.values() if a.block_id == block_id]
+    def active_listings_for_block(
+        self, block_id: int, listing_type: str | None = None,
+    ) -> Sequence[ActiveListing]:
+        return [
+            a for a in self._active.values()
+            if a.block_id == block_id and (listing_type is None or a.listing_type == listing_type)
+        ]
 
-    def active_listing(self, listing_id: int) -> ActiveListing | None:
-        return self._active.get(listing_id)
+    def active_listing(
+        self, listing_id: int, listing_type: str | None = None,
+    ) -> ActiveListing | None:
+        if listing_type is not None:
+            return self._active.get((listing_type, listing_id))
+        matches = [a for (kind, lid), a in self._active.items() if lid == listing_id]
+        return matches[0] if len(matches) == 1 else None

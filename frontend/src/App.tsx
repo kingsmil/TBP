@@ -28,7 +28,6 @@ import EstateComparison from "./components/EstateComparison";
 import FilterPanel from "./components/FilterPanel";
 import HomeOSDetailPanel from "./components/HomeOSDetailPanel";
 import MapView, { type MapViewState } from "./components/MapView";
-import ModelSelector from "./components/ModelSelector";
 import { MAP_SEARCH_LIMIT } from "./lib/mapConfig";
 import NewsPanel from "./components/NewsPanel";
 import PipelinePanel from "./components/PipelinePanel";
@@ -56,7 +55,7 @@ import {
 } from "./lib/api";
 import { clearAuth, getStoredUser, type AuthUser } from "./lib/auth";
 import { formatPsf, formatSGD } from "./lib/format";
-import { getStoredModel, setStoredModel, DEFAULT_MODEL } from "./lib/modelPreference";
+import { DEFAULT_MODEL } from "./lib/modelPreference";
 import { AI_MODE_ENABLED } from "./lib/featureFlags";
 import type {
   AgentEvent,
@@ -107,7 +106,8 @@ export default function App() {
   // Top-level product choice: resale / bto / private / unsure (the chooser).
   const [product, setProductState] = useState<"resale" | "bto" | "private" | "unsure">(() => {
     const saved = window.localStorage.getItem("hdb-product");
-    return saved === "resale" || saved === "bto" || saved === "private" ? saved : "unsure";
+    if (saved === "resale" || saved === "bto" || saved === "private") return saved;
+    return AI_MODE_ENABLED && getStoredUser()?.is_subscribed ? "resale" : "unsure";
   });
   const setProduct = useCallback((p: "resale" | "bto" | "private" | "unsure") => {
     setProductState(p);
@@ -221,14 +221,8 @@ export default function App() {
   const [rightTab, setRightTab] = useState<"display" | "news">("display");
   const [isStreaming, setIsStreaming] = useState(false);
   const [framedCaseId, setFramedCaseId] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>(() => getStoredModel() ?? DEFAULT_MODEL);
 
   const selectedBlockId = mode === "ai" ? aiSelectedBlockId : exploreSelectedBlockId;
-
-  const handleModelChange = useCallback((model: string) => {
-    setSelectedModel(model);
-    setStoredModel(model);
-  }, []);
 
   const search = useQuery({
     queryKey: ["search", filters],
@@ -364,13 +358,13 @@ export default function App() {
     setActiveCaseId(tempId);
 
     await _processStream(
-      investigateStream(profileText, 5, selectedModel || undefined),
+      investigateStream(profileText, 5, DEFAULT_MODEL),
       tempId,
       profileText,
       createdAt,
       tempId,
     );
-  }, [_processStream, selectedModel]);
+  }, [_processStream]);
 
   const handleRefine = useCallback(async (message: string) => {
     if (!activeCaseId || activeCaseId.startsWith("pending-")) return;
@@ -389,13 +383,13 @@ export default function App() {
     } : prev);
 
     await _processStream(
-      refineStream(activeCaseId, message, selectedModel || undefined),
+      refineStream(activeCaseId, message, DEFAULT_MODEL),
       activeCaseId,
       currentCase.profile_text,
       currentCase.created_at,
       activeCaseId,
     );
-  }, [activeCaseId, activeCaseFull, _processStream, selectedModel]);
+  }, [activeCaseId, activeCaseFull, _processStream]);
 
   const handleSelectCase = useCallback((caseId: string) => {
     setActiveCaseId(caseId);
@@ -434,7 +428,7 @@ export default function App() {
       if (!activeCaseId || activeCaseId.startsWith("pending-")) return;
       setChatChunks("");
       let full = "";
-      for await (const chunk of chatInCase(activeCaseId, message)) {
+      for await (const chunk of chatInCase(activeCaseId, message, DEFAULT_MODEL)) {
         full += chunk;
         setChatChunks(full);
       }
@@ -837,9 +831,6 @@ export default function App() {
             )}
           </div>
         </header>
-        <div className="border-b border-border px-4 py-2">
-          <ModelSelector value={selectedModel} onChange={handleModelChange} />
-        </div>
         <div className="flex-1 overflow-hidden">
           <CasesPanel
             cases={cases}

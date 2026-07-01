@@ -63,7 +63,7 @@ export function blendScore(subs: Record<string, number | null> | undefined, weig
 }
 
 export const MODE_META: Record<Mode, { label: string; blurb: string; color: string }> = {
-  resale: { label: "HDB Resale", blurb: "Existing flats on the open market", color: "#2563eb" },
+  resale: { label: "HDB Resale", blurb: "Block medians with active listings where available", color: "#2563eb" },
   bto: { label: "BTO", blurb: "New flats — launches & resale eligibility", color: "#16a34a" },
-  private: { label: "Private", blurb: "Condos, apartments, EC & landed", color: "#9333ea" },
+  private: { label: "Private Transactions", blurb: "URA caveats, not active listings", color: "#9333ea" },
 };

@@ -5,7 +5,9 @@ import {
 } from "../../lib/api";
 import { MAP_SEARCH_LIMIT } from "../../lib/mapConfig";
 import { scoreFromCounts } from "../../lib/lifestyle";
-import type { SearchFilters, BlockSummary, PrivateTransaction, BtoResaleSupplyRow } from "../../types";
+import type {
+  SearchFilters, BlockSummary, PrivateTransaction, PrivateTransactionFilters, BtoResaleSupplyRow,
+} from "../../types";
 import type { CardItem, Mode, Weights } from "./types";
 import { blendScore } from "./types";
 
@@ -65,7 +67,7 @@ function fromResale(b: BlockSummary, scores: Record<string, number>, places: Pla
     subtitle: b.town,
     badge: undefined,
     price: b.median_price,
-    priceLabel: "median",
+    priceLabel: "block median",
     psf: b.median_psf,
     metrics: [
       { label: "Walk", value: walk(b.nearest_mrt_distance_m) },
@@ -89,7 +91,7 @@ function fromPrivate(t: PrivateTransaction): CardItem {
     subtitle: `District ${t.district ?? "—"} · ${t.planning_region ?? ""}`.trim(),
     badge: t.property_type,
     price: t.price,
-    priceLabel: t.sale_type.replace("_", " ").toLowerCase(),
+    priceLabel: `${t.sale_type.replace("_", " ").toLowerCase()} transaction`,
     psf: t.psf,
     metrics: [
       { label: "Area", value: t.area_sqft ? `${t.area_sqft} sqft` : "—" },
@@ -100,6 +102,27 @@ function fromPrivate(t: PrivateTransaction): CardItem {
     sortDate: Date.parse(t.sale_date) || undefined,
     lat: t.lat ?? undefined,
     lon: t.lon ?? undefined,
+  };
+}
+
+function privateQueryFilters(f: SearchFilters): PrivateTransactionFilters {
+  return {
+    project: f.project,
+    address: f.address,
+    property_type: f.property_type,
+    sale_type: f.sale_type,
+    district: f.district,
+    planning_region: f.planning_region,
+    tenure: f.tenure,
+    floor_range: f.floor_range,
+    date_from: f.date_from,
+    date_to: f.date_to,
+    min_price: f.min_price,
+    max_price: f.max_price,
+    min_psf: f.min_psf,
+    max_psf: f.max_psf,
+    min_area_sqft: f.min_area_sqft,
+    max_area_sqft: f.max_area_sqft,
   };
 }
 
@@ -133,6 +156,8 @@ function passesPrivate(it: CardItem, f: SearchFilters): boolean {
   if (f.min_price != null && (it.price ?? -Infinity) < f.min_price) return false;
   if (f.max_psf != null && (it.psf ?? Infinity) > f.max_psf) return false;
   if (f.min_psf != null && (it.psf ?? -Infinity) < f.min_psf) return false;
+  if (f.max_area_sqft != null && (it.area ?? Infinity) > f.max_area_sqft) return false;
+  if (f.min_area_sqft != null && (it.area ?? -Infinity) < f.min_area_sqft) return false;
   return true;
 }
 function passesBto(it: CardItem, f: SearchFilters): boolean {
@@ -152,6 +177,7 @@ export function useListings(modes: Mode[], filters: SearchFilters, weights: Weig
   const wkey = JSON.stringify(weights);
   const pkey = JSON.stringify(places);
   const fkey = JSON.stringify(filters);
+  const privateFilters = useMemo(() => privateQueryFilters(filters), [fkey]);
 
   const resale = useQuery({
     queryKey: ["bo-resale", filters],
@@ -159,8 +185,8 @@ export function useListings(modes: Mode[], filters: SearchFilters, weights: Weig
     enabled: want("resale"),
   });
   const priv = useQuery({
-    queryKey: ["bo-private"],
-    queryFn: () => getPrivateTransactions({ limit: 2000 }),
+    queryKey: ["bo-private", privateFilters],
+    queryFn: () => getPrivateTransactions({ ...privateFilters, limit: 2000 }),
     enabled: want("private"),
   });
   const bto = useQuery({

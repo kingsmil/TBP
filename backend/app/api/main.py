@@ -7,6 +7,7 @@ the reference endpoint works in both modes.
 from __future__ import annotations
 
 import logging
+import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -126,20 +127,35 @@ def health():
 @app.get("/models")
 def list_models():
     """List available AI models for HomeOS agents."""
+    default_model = os.getenv("LLM_MODEL", "qwen3:8b")
+    if os.getenv("LLM_PROVIDER", "ollama") == "ollama" and not default_model.startswith("ollama/"):
+        default_model = f"ollama/{default_model}"
+    local_models = [
+        {"id": "ollama/qwen3:8b", "name": "Qwen3 8B", "provider": "Local Ollama", "local": True},
+        {"id": "ollama/llama3.1:8b", "name": "Llama 3.1 8B", "provider": "Local Ollama", "local": True},
+        {"id": "ollama/mistral-nemo", "name": "Mistral Nemo 12B", "provider": "Local Ollama", "local": True},
+        {"id": "local/hdb-agent", "name": "OpenAI-compatible local server", "provider": "Local", "local": True},
+    ]
+    cloud_models = [
+        {"id": "openai/gpt-5.4-mini", "name": "GPT-5.4 Mini", "provider": "OpenAI"},
+        {"id": "openai/gpt-5.4-nano", "name": "GPT-5.4 Nano", "provider": "OpenAI"},
+        {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini", "provider": "OpenAI"},
+        {"id": "openai/gpt-4-turbo", "name": "GPT-4 Turbo", "provider": "OpenAI"},
+        {"id": "anthropic/claude-sonnet-4.5", "name": "Claude 4.5 Sonnet", "provider": "Anthropic"},
+        {"id": "anthropic/claude-3.5-haiku", "name": "Claude 3.5 Haiku", "provider": "Anthropic"},
+        {"id": "anthropic/claude-opus-4", "name": "Claude 4 Opus", "provider": "Anthropic"},
+        {"id": "meta-llama/llama-3.2-90b", "name": "Llama 3.2 90B", "provider": "Meta"},
+        {"id": "meta-llama/llama-3.1-70b", "name": "Llama 3.1 70B", "provider": "Meta"},
+        {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro", "provider": "Google"},
+    ]
     return {
-        "models": [
-            {"id": "openai/gpt-5.4-mini", "name": "GPT-5.4 Mini", "provider": "OpenAI"},
-            {"id": "openai/gpt-5.4-nano", "name": "GPT-5.4 Nano", "provider": "OpenAI"},
-            {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini", "provider": "OpenAI"},
-            {"id": "openai/gpt-4-turbo", "name": "GPT-4 Turbo", "provider": "OpenAI"},
-            {"id": "anthropic/claude-sonnet-4.5", "name": "Claude 4.5 Sonnet", "provider": "Anthropic"},
-            {"id": "anthropic/claude-3.5-haiku", "name": "Claude 3.5 Haiku", "provider": "Anthropic"},
-            {"id": "anthropic/claude-opus-4", "name": "Claude 4 Opus", "provider": "Anthropic"},
-            {"id": "meta-llama/llama-3.2-90b", "name": "Llama 3.2 90B", "provider": "Meta"},
-            {"id": "meta-llama/llama-3.1-70b", "name": "Llama 3.1 70B", "provider": "Meta"},
-            {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro", "provider": "Google"},
-        ],
-        "default": "openai/gpt-5.4-nano"
+        "models": [*local_models, *cloud_models],
+        "default": default_model,
+        "local_runtime": {
+            "ollama_base_url": "http://localhost:11434/v1",
+            "openai_compatible_base_url": "http://localhost:8001/v1",
+            "notes": "Use ollama/<model> for Ollama or local/<model> for llama.cpp/other OpenAI-compatible local servers.",
+        },
     }
 
 
@@ -224,11 +240,18 @@ def block_agents(address: str = Query(..., min_length=3),
 
 
 @app.get("/blocks/{block_id}/listings")
-def block_listings(block_id: int, repo: Repository = Depends(get_repository)):
-    """Active HDB Flat Portal listings for a block, cheapest first."""
+def block_listings(
+    block_id: int,
+    listing_type: str = Query("resale"),
+    repo: Repository = Depends(get_repository),
+):
+    """Active resale/rental listings for a block, cheapest first."""
     if repo.block(block_id) is None:
         raise HTTPException(status_code=404, detail="block not found")
-    listings = sorted(repo.active_listings_for_block(block_id), key=lambda a: a.price)
+    if listing_type not in {"resale", "rent", "all"}:
+        raise HTTPException(status_code=422, detail="listing_type must be resale, rent, or all")
+    kind = None if listing_type == "all" else listing_type
+    listings = sorted(repo.active_listings_for_block(block_id, kind), key=lambda a: a.price)
     out = []
     for a in listings:
         d = {k: v for k, v in a.__dict__.items() if v is not None}
@@ -246,7 +269,8 @@ def listing_outreach_message(
     """AI-prepared WhatsApp message for the chosen listing's seller/agent."""
     try:
         return outreach_svc.prepare_outreach_message(
-            repo, listing_id, case_id=body.case_id, contact_name=body.contact_name,
+            repo, listing_id, listing_type=body.listing_type,
+            case_id=body.case_id, contact_name=body.contact_name,
             availability=body.availability, note=body.note)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -388,7 +412,7 @@ async def homeos_chat(case_id: str, req: HomeOSChatRequest,
         raise HTTPException(status_code=404, detail="case not found")
 
     async def chat_gen():
-        async for chunk in chat_in_case(case_id, req.message):
+        async for chunk in chat_in_case(case_id, req.message, req.model):
             yield f"data: {json.dumps({'chunk': chunk})}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -749,18 +773,31 @@ def property_image(block_id: int | None = None, lat: float | None = None,
 @app.get("/private/transactions")
 def private_transactions(
     project: str | None = None,
+    address: str | None = None,
     property_type: str | None = None,
     sale_type: str | None = None,
     district: str | None = None,
+    planning_region: str | None = None,
+    tenure: str | None = None,
+    floor_range: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    min_price: int | None = Query(None, ge=0),
+    max_price: int | None = Query(None, ge=0),
+    min_psf: int | None = Query(None, ge=0),
+    max_psf: int | None = Query(None, ge=0),
+    min_area_sqft: float | None = Query(None, ge=0),
+    max_area_sqft: float | None = Query(None, ge=0),
     limit: int = Query(200, ge=1, le=5000),
 ):
     """Private (non-HDB) residential transactions from URA, filtered + summarised.
     Falls back to bundled fixtures when URA credentials are absent (mock=true)."""
     return private_svc.transactions(
-        limit=limit, project=project, property_type=property_type,
-        sale_type=sale_type, district=district, date_from=date_from, date_to=date_to)
+        limit=limit, project=project, address=address, property_type=property_type,
+        sale_type=sale_type, district=district, planning_region=planning_region,
+        tenure=tenure, floor_range=floor_range, date_from=date_from, date_to=date_to,
+        min_price=min_price, max_price=max_price, min_psf=min_psf, max_psf=max_psf,
+        min_area_sqft=min_area_sqft, max_area_sqft=max_area_sqft)
 
 
 @app.get("/private/projects")

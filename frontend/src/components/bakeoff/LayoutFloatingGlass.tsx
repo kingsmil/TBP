@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
+import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, Sparkles, X } from "lucide-react";
 import AgentPanel from "./AgentPanel";
 import AppMenu from "./AppMenu";
 import ModeSwitch from "./ModeSwitch";
@@ -69,11 +69,27 @@ export default function LayoutFloatingGlass(p: ShellProps) {
             <div className="pointer-events-auto flex justify-center gap-2">
               <ModeSwitch active={p.modes} onToggle={p.toggleMode} combine={p.combine} onCombine={p.setCombine} size="sm" />
               <button type="button" onClick={() => setShowAgent(true)}
-                title="AI Agent (coming soon)"
+                title="Open HomeOS Agent"
                 className="bo-glass flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-primary">
                 <Sparkles className="h-3.5 w-3.5" /> Agent
               </button>
             </div>
+            {p.agentShortlistIds.length > 0 && (
+              <div className="pointer-events-auto flex justify-center">
+                <div className="bo-glass flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  {p.agentShortlistIds.length} agent match{p.agentShortlistIds.length === 1 ? "" : "es"}
+                  <button
+                    type="button"
+                    onClick={p.onClearAgentRecommendations}
+                    className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="Clear agent matches"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -85,11 +101,18 @@ export default function LayoutFloatingGlass(p: ShellProps) {
       {selected && (
         <DetailPanel item={selected} saved={p.savedIds.has(selected.id)} comparing={p.compareIds.has(selected.id)}
           savedPlaces={p.savedPlaces}
+          caseId={p.activeCaseId ?? undefined}
           onClose={() => p.setSelectedId(null)} onSave={() => p.toggleSave(selected.id)} onCompare={() => p.toggleCompare(selected.id)} />
       )}
 
       <FilterSheet filters={p.filters} onChange={p.setFilters} modes={p.modes} asSheet open={p.filterOpen} onClose={() => p.setFilterOpen(false)} />
-      {showAgent && <AgentPanel onClose={() => setShowAgent(false)} />}
+      <AgentPanel
+        open={showAgent}
+        onClose={() => setShowAgent(false)}
+        onRecommendations={p.onAgentRecommendations}
+        onSignInRequired={p.onSignInRequired}
+        onUpgradeRequired={p.onUpgradeRequired}
+      />
     </div>
   );
 }

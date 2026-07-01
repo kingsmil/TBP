@@ -17,8 +17,7 @@ interface Props {
   onPick: (lat: number, lon: number, label: string) => void;
 }
 
-/** Search bar that both filters the list (by name) and geocodes via OneMap, so
- *  you can jump to a postal code / address / MRT / area on the map. */
+/** Geocodes via OneMap so users can jump to a postal code / address / MRT / area. */
 export default function LocationSearch({ value, onChange, onPick }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -49,7 +48,7 @@ export default function LocationSearch({ value, onChange, onPick }: Props) {
         <SearchBar
           value={value}
           onChange={(v) => { onChange(v); setOpen(true); }}
-          placeholder="Search postal code, address, MRT or area…"
+          placeholder="Jump to postal code, address, MRT or area..."
         />
         {value.length > 0 && (
           <button type="button" onClick={() => onChange("")} title="Clear search"

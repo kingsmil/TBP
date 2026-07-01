@@ -1,0 +1,13 @@
+# Copy this file to a private location after creating a named Cloudflare Tunnel:
+#   Windows: %USERPROFILE%\.cloudflared\config.yml
+#   Linux:   ~/.cloudflared/config.yml
+#
+# Replace the values below with the tunnel id and hostname from Cloudflare.
+
+tunnel: YOUR_TUNNEL_ID
+credentials-file: C:\Users\YOUR_USER\.cloudflared\YOUR_TUNNEL_ID.json
+
+ingress:
+  - hostname: app.example.com
+    service: http://localhost:8080
+  - service: http_status:404

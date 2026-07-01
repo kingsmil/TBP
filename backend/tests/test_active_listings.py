@@ -53,6 +53,19 @@ class ActiveListingRepoTest(unittest.TestCase):
         self.assertEqual(len(repo.active_listings_for_block(10)), 1)
         self.assertEqual(repo.active_listing(1).price, 2.0)
 
+    def test_resale_and_rent_can_share_listing_id(self):
+        from app.repositories.memory import InMemoryRepository
+        repo = InMemoryRepository()
+        repo.add_active_listings([
+            make_listing(listing_id=1, block_id=10, price=900000.0),
+            make_listing(listing_type="rent", listing_id=1, block_id=10, price=3600.0),
+        ])
+        self.assertEqual(len(repo.active_listings_for_block(10)), 2)
+        self.assertEqual(len(repo.active_listings_for_block(10, "resale")), 1)
+        self.assertEqual(len(repo.active_listings_for_block(10, "rent")), 1)
+        self.assertEqual(repo.active_listing(1, "rent").price, 3600.0)
+        self.assertIsNone(repo.active_listing(1))
+
 
 def make_block(block_id=1, number="126A", street="KIM TIAN RD", postal="161126"):
     from app.core.geo import Point
@@ -103,6 +116,7 @@ class ParseDetailTest(unittest.TestCase):
         d = parse_detail(_load_fixture(), 40661)
         self.assertEqual(d["postal_code"], "161126")
         self.assertEqual(d["price"], 1330000)
+        self.assertEqual(d["listing_type"], "resale")
         self.assertEqual(d["block_number"], "126A")
         self.assertEqual(d["street_name"], "KIM TIAN RD")
         self.assertEqual(d["flat_type"], "4-Room")
@@ -132,6 +146,7 @@ class IngestTest(unittest.TestCase):
         self.assertEqual(len(stored), 1)
         self.assertEqual(stored[0].listing_id, 40661)
         self.assertEqual(stored[0].price, 1330000.0)
+        self.assertEqual(stored[0].listing_type, "resale")
 
     def test_unmatched_listing_is_skipped_and_counted(self):
         from app.data.hdb_listings import ingest_listings
@@ -175,6 +190,10 @@ class BlockListingsApiTest(unittest.TestCase):
         repo.add_active_listings([
             make_listing(listing_id=2, block_id=1, price=1330000.0),
             make_listing(listing_id=1, block_id=1, price=900000.0),
+            make_listing(
+                listing_type="rent", listing_id=1, block_id=1, price=3600.0,
+                remaining_lease="",
+            ),
         ])
         cls._override = repo
         app.dependency_overrides[deps.get_repository] = lambda: repo
@@ -191,6 +210,7 @@ class BlockListingsApiTest(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         body = res.json()
         self.assertEqual(body["count"], 2)
+        self.assertTrue(all(l["listing_type"] == "resale" for l in body["listings"]))
         prices = [l["price"] for l in body["listings"]]
         self.assertEqual(prices, sorted(prices))
         self.assertAlmostEqual(
@@ -204,6 +224,23 @@ class BlockListingsApiTest(unittest.TestCase):
 
     def test_unknown_block_404(self):
         self.assertEqual(self.client.get("/blocks/999/listings").status_code, 404)
+
+    def test_rent_query_returns_rental_listings(self):
+        res = self.client.get("/blocks/1/listings?listing_type=rent")
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(body["listings"][0]["listing_type"], "rent")
+        self.assertEqual(body["listings"][0]["price"], 3600.0)
+
+    def test_all_query_returns_resale_and_rent(self):
+        res = self.client.get("/blocks/1/listings?listing_type=all")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["count"], 3)
+
+    def test_bad_listing_type_422(self):
+        res = self.client.get("/blocks/1/listings?listing_type=lease")
+        self.assertEqual(res.status_code, 422)
 
     def test_block_without_listings_empty_list(self):
         self._override.add_blocks([make_block(block_id=2, postal="161127")])

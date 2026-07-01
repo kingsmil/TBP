@@ -89,6 +89,24 @@ against Pydantic AI's `TestModel` with **no key and no network**, so the full
 agent pipeline is unit-tested deterministically. Swapping to Anthropic or
 OpenRouter is a single environment variable.
 
+Local runs can also use Hugging Face-derived weights through an
+OpenAI-compatible local server. The built-in model selector understands:
+
+```bash
+# Ollama
+ollama pull qwen3:8b
+OLLAMA_BASE_URL=http://localhost:11434/v1
+# then pick ollama/qwen3:8b in the UI
+
+# Any local OpenAI-compatible server, e.g. llama.cpp
+LOCAL_OPENAI_BASE_URL=http://localhost:8001/v1
+# then pick local/hdb-agent in the UI, or set LLM_PROVIDER=local
+```
+
+Recommended local starting points are Qwen3 8B, Llama 3.1 8B, and Mistral
+Nemo 12B. They keep local latency reasonable while still following the agent's
+structured-output prompts.
+
 ---
 
 ## Geospatial foundation

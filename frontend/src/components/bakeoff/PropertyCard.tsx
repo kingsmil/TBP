@@ -50,7 +50,12 @@ export default function PropertyCard(p: Props) {
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: MODE_META[item.mode].color }} />
             <span className="truncate">{item.title}</span>
           </h3>
-          <div className="shrink-0 text-sm font-bold tabular-nums">{sgd(item.price)}</div>
+          <div className="shrink-0 text-right">
+            <div className="text-sm font-bold tabular-nums">{sgd(item.price)}</div>
+            {item.priceLabel && (
+              <div className="text-[10px] font-medium text-muted-foreground">{item.priceLabel}</div>
+            )}
+          </div>
         </div>
         <p className="truncate text-xs text-muted-foreground">
           {item.subtitle}{item.badge ? ` · ${item.badge}` : ""}

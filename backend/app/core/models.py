@@ -116,9 +116,10 @@ class Transaction:
 
 @dataclass(frozen=True)
 class ActiveListing:
-    """A currently-listed resale flat from the HDB Flat Portal, matched to a Block.
+    """A currently listed flat matched to a Block.
 
     One Block has 0..N active listings (one per flat/unit on the market).
+    listing_type is "resale" for sale listings and "rent" for rental listings.
     Agent contact fields are usually None: the portal's public API only exposes
     them for the rare agent-managed listing (contact is login-gated otherwise).
     """
@@ -143,6 +144,7 @@ class ActiveListing:
     agency_name: str | None
     managed_by_agent: bool
     last_updated: str
+    listing_type: str = "resale"
 
     @property
     def floor_area_sqft(self) -> float:

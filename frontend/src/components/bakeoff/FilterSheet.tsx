@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { X, SlidersHorizontal } from "lucide-react";
 import type { SearchFilters } from "../../types";
 import type { Mode } from "./types";
+import PrivateProjectAutocomplete from "../PrivateProjectAutocomplete";
 
 const FLAT_TYPES = ["2 ROOM", "3 ROOM", "4 ROOM", "5 ROOM", "EXECUTIVE"];
 const MRT_PRESETS = [
@@ -10,6 +11,15 @@ const MRT_PRESETS = [
 const PRIVATE_TYPES: [string, string][] = [
   ["CONDO", "Condo"], ["APARTMENT", "Apartment"], ["EC", "EC"],
   ["LANDED", "Landed"], ["STRATA_LANDED", "Strata landed"],
+];
+const PRIVATE_SALE_TYPES: [string, string][] = [
+  ["NEW_SALE", "New sale"], ["RESALE", "Resale"], ["SUB_SALE", "Sub-sale"],
+];
+const PRIVATE_REGIONS: [string, string][] = [["CCR", "CCR"], ["RCR", "RCR"], ["OCR", "OCR"]];
+const PRIVATE_TENURES: [string, string][] = [["freehold", "Freehold"], ["leasehold", "Leasehold"]];
+const PRIVATE_FLOORS = [
+  "01-05", "06-10", "11-15", "16-20", "21-25", "26-30", "31-35",
+  "36-40", "41-45", "46-50", "51-55", "56-60", "61-65", "66-70",
 ];
 
 interface Props {
@@ -45,6 +55,88 @@ function PriceField({ filters, set }: { filters: SearchFilters; set: (p: Partial
           className="h-10 flex-1 bg-transparent text-sm outline-none" />
       </div>
     </div>
+  );
+}
+
+function TextField({
+  label, value, placeholder, onChange,
+}: {
+  label: string;
+  value?: string;
+  placeholder?: string;
+  onChange: (v: string | undefined) => void;
+}) {
+  return (
+    <label className="block">
+      <div className="mb-2 text-sm font-semibold">{label}</div>
+      <input type="text" placeholder={placeholder}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || undefined)}
+        className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm outline-none" />
+    </label>
+  );
+}
+
+function NumberField({
+  label, value, placeholder, prefix, suffix, onChange,
+}: {
+  label: string;
+  value?: number;
+  placeholder?: string;
+  prefix?: string;
+  suffix?: string;
+  onChange: (v: number | undefined) => void;
+}) {
+  return (
+    <label className="block">
+      <div className="mb-2 text-sm font-semibold">{label}</div>
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3">
+        {prefix && <span className="text-sm text-muted-foreground">{prefix}</span>}
+        <input type="number" inputMode="numeric" placeholder={placeholder ?? "Any"}
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
+          className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" />
+        {suffix && <span className="text-xs text-muted-foreground">{suffix}</span>}
+      </div>
+    </label>
+  );
+}
+
+function DateField({
+  label, value, onChange,
+}: {
+  label: string;
+  value?: string;
+  onChange: (v: string | undefined) => void;
+}) {
+  return (
+    <label className="block">
+      <div className="mb-2 text-sm font-semibold">{label}</div>
+      <input type="date"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || undefined)}
+        className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm outline-none" />
+    </label>
+  );
+}
+
+function SelectField({
+  label, value, options, onChange,
+}: {
+  label: string;
+  value?: string;
+  options: string[];
+  onChange: (v: string | undefined) => void;
+}) {
+  return (
+    <label className="block">
+      <div className="mb-2 text-sm font-semibold">{label}</div>
+      <select value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}
+        className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm outline-none">
+        <option value="">Any</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -111,14 +203,54 @@ export default function FilterSheet({ filters, onChange, modes, asSheet, open, o
       {modes.includes("private") && (
         <div className="space-y-5">
           {header("Private")}
+          <div className="grid grid-cols-1 gap-3">
+            <PrivateProjectAutocomplete value={filters.project} onChange={(v) => set({ project: v })} />
+            <TextField label="Street or address" value={filters.address} placeholder="e.g. Thiam Siew Avenue" onChange={(v) => set({ address: v })} />
+          </div>
           <div>
             <div className="mb-2 text-sm font-semibold">Property type</div>
             <div className="flex flex-wrap gap-2">
               {PRIVATE_TYPES.map(([v, label]) => <Chip key={v} on={filters.property_type === v} onClick={() => set({ property_type: filters.property_type === v ? undefined : v })}>{label}</Chip>)}
             </div>
           </div>
-          <PriceField filters={filters} set={set} />
-          <PsfField filters={filters} set={set} />
+          <div>
+            <div className="mb-2 text-sm font-semibold">Sale type</div>
+            <div className="flex flex-wrap gap-2">
+              {PRIVATE_SALE_TYPES.map(([v, label]) => <Chip key={v} on={filters.sale_type === v} onClick={() => set({ sale_type: filters.sale_type === v ? undefined : v })}>{label}</Chip>)}
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 text-sm font-semibold">Region</div>
+            <div className="flex flex-wrap gap-2">
+              {PRIVATE_REGIONS.map(([v, label]) => <Chip key={v} on={filters.planning_region === v} onClick={() => set({ planning_region: filters.planning_region === v ? undefined : v })}>{label}</Chip>)}
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 text-sm font-semibold">Tenure</div>
+            <div className="flex flex-wrap gap-2">
+              {PRIVATE_TENURES.map(([v, label]) => <Chip key={v} on={filters.tenure === v} onClick={() => set({ tenure: filters.tenure === v ? undefined : v })}>{label}</Chip>)}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <TextField label="District" value={filters.district} placeholder="09" onChange={(v) => set({ district: v })} />
+            <SelectField label="Floor range" value={filters.floor_range} options={PRIVATE_FLOORS} onChange={(v) => set({ floor_range: v })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <NumberField label="Min price" value={filters.min_price} prefix="$" onChange={(v) => set({ min_price: v })} />
+            <NumberField label="Max price" value={filters.max_price} prefix="$" onChange={(v) => set({ max_price: v })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <NumberField label="Min PSF" value={filters.min_psf} prefix="$" suffix="psf" onChange={(v) => set({ min_psf: v })} />
+            <NumberField label="Max PSF" value={filters.max_psf} prefix="$" suffix="psf" onChange={(v) => set({ max_psf: v })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <NumberField label="Min area" value={filters.min_area_sqft} suffix="sqft" onChange={(v) => set({ min_area_sqft: v })} />
+            <NumberField label="Max area" value={filters.max_area_sqft} suffix="sqft" onChange={(v) => set({ max_area_sqft: v })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <DateField label="Sold from" value={filters.date_from} onChange={(v) => set({ date_from: v })} />
+            <DateField label="Sold to" value={filters.date_to} onChange={(v) => set({ date_to: v })} />
+          </div>
         </div>
       )}
 

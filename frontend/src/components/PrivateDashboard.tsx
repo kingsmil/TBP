@@ -3,9 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import {
   CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { ArrowLeft, Landmark, Moon, Sun, Search, Info, TrendingUp } from "lucide-react";
+import { ArrowLeft, Landmark, Moon, Sun, Info, TrendingUp } from "lucide-react";
 import { getPrivateTransactions } from "../lib/api";
 import type { PrivateTransaction, PrivatePropertyType, PrivateSaleType } from "../types";
+import PrivateProjectAutocomplete from "./PrivateProjectAutocomplete";
 
 const TYPE_LABEL: Record<PrivatePropertyType, string> = {
   CONDO: "Condo", APARTMENT: "Apartment", EC: "Exec Condo", LANDED: "Landed", STRATA_LANDED: "Strata landed",
@@ -93,17 +94,16 @@ export default function PrivateDashboard({ onBack, theme, onToggleTheme }: Props
           <div className="flex flex-wrap items-end gap-2">
             <form
               onSubmit={(e) => { e.preventDefault(); setProject(search.trim()); }}
-              className="flex items-end gap-1">
-              <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-medium text-muted-foreground">Project</span>
-                <div className="flex">
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="e.g. The Continuum"
-                    className="h-8 w-48 rounded-l-md border border-input bg-background px-2 text-xs" />
-                  <button type="submit" className="flex h-8 items-center rounded-r-md border border-l-0 border-input bg-muted px-2 hover:bg-muted/70">
-                    <Search className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </label>
+              className="w-64">
+              <PrivateProjectAutocomplete
+                compact
+                value={search}
+                onChange={(v) => {
+                  const next = v ?? "";
+                  setSearch(next);
+                  setProject(next.trim());
+                }}
+              />
             </form>
             <label className="flex flex-col gap-1">
               <span className="text-[10px] font-medium text-muted-foreground">Property type</span>

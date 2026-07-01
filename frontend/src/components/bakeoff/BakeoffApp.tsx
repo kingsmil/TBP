@@ -9,6 +9,7 @@ import { getMyPreferences, putMyPreferences } from "../../lib/api";
 import { loadLocations, authState } from "../../lib/userState";
 import AuthModal from "../AuthModal";
 import SavedPlacesPanel from "../SavedPlacesPanel";
+import UpgradeModal from "../UpgradeModal";
 import BtoDashboard from "../BtoDashboard";
 import RecommendWizard from "../RecommendWizard";
 import BtoResaleCompare from "../BtoResaleCompare";
@@ -119,6 +120,7 @@ export default function BakeoffApp() {
   // ── Auth + account-synced shortlist ───────────────────────────────────────
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => getStoredUser());
   const [showAuth, setShowAuth] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const synced = useRef(false);
 
   // On login: merge the account's saved/compare (stored in preferences metadata)
@@ -168,6 +170,8 @@ export default function BakeoffApp() {
   const [showHelp, setShowHelp] = useState(false);
   const [showAfford, setShowAfford] = useState(false);
   const [showBtoCompare, setShowBtoCompare] = useState(false);
+  const [activeAgentCaseId, setActiveAgentCaseId] = useState<string | null>(null);
+  const [agentShortlistIds, setAgentShortlistIds] = useState<number[]>([]);
 
   // Theme (light/dark) — applies the same way the classic app does.
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -218,7 +222,7 @@ export default function BakeoffApp() {
   const [searchCenter, setSearchCenter] = useState<[number, number] | null>(null);
   useEffect(() => { setSearchCenter(null); }, [query]); // typing starts a fresh search
 
-  const items = useMemo(() => {
+  const sortedItems = useMemo(() => {
     if (searchCenter) {
       const [clat, clon] = searchCenter;
       return allItems
@@ -230,6 +234,32 @@ export default function BakeoffApp() {
     const cmp = SORT_CMP[sort] ?? SORT_CMP.match;
     return [...allItems].sort(cmp);
   }, [allItems, sort, searchCenter]);
+  const agentShortlistSet = useMemo(() => new Set(agentShortlistIds), [agentShortlistIds]);
+  const items = useMemo(() => {
+    if (agentShortlistSet.size === 0) return sortedItems;
+    return sortedItems.filter((it) => it.block && agentShortlistSet.has(it.block.block_id));
+  }, [agentShortlistSet, sortedItems]);
+
+  const handleAgentRecommendations = (caseId: string, blockIds: number[]) => {
+    setActiveAgentCaseId(caseId);
+    setAgentShortlistIds(blockIds);
+    setModes(["resale"]);
+    setCombineState(false);
+    setSearchCenter(null);
+    setSort("match");
+    if (blockIds[0] != null) setSelectedId(`r-${blockIds[0]}`);
+  };
+
+  const clearAgentRecommendations = () => {
+    setAgentShortlistIds([]);
+    setActiveAgentCaseId(null);
+  };
+
+  useEffect(() => {
+    if (agentShortlistSet.size === 0) return;
+    if (selectedId && items.some((it) => it.id === selectedId)) return;
+    setSelectedId(items[0]?.id ?? null);
+  }, [agentShortlistSet, items, selectedId]);
 
   // Keep the sort valid for the active mode(s) — reset to the first allowed one
   // when the current sort isn't offered (e.g. "match" while viewing BTO).
@@ -319,12 +349,19 @@ export default function BakeoffApp() {
     modes, toggleMode, combine, setCombine, filters, setFilters, query, setQuery,
     items, blocks, isLoading, isError,
     selectedId, setSelectedId,
+    activeCaseId: activeAgentCaseId,
+    agentShortlistIds,
+    onAgentRecommendations: handleAgentRecommendations,
+    onClearAgentRecommendations: clearAgentRecommendations,
     savedIds, toggleSave,
     compareIds, toggleCompare: toggle(setCompareIds),
     hoveredId, setHoveredId,
     searchCenter, onPickLocation: (lat: number, lon: number) => setSearchCenter([lat, lon]),
     filterOpen, setFilterOpen, isDesktop,
-    authEmail: authUser?.email ?? null, onAccount, savedPlaces,
+    authEmail: authUser?.email ?? null, onAccount,
+    onSignInRequired: () => setShowAuth(true),
+    onUpgradeRequired: () => setShowUpgrade(true),
+    savedPlaces,
     sort, setSort,
     weights, setWeights, colorByScore, setColorByScore,
     onSaved: () => setShowSaved(true),
@@ -362,6 +399,16 @@ export default function BakeoffApp() {
         <AuthModal
           onSuccess={(u) => { setAuthUser(u); setShowAuth(false); }}
           onClose={() => setShowAuth(false)}
+        />
+      )}
+      {showUpgrade && (
+        <UpgradeModal
+          isLoggedIn={!!authUser}
+          onClose={() => setShowUpgrade(false)}
+          onLoginRequired={() => {
+            setShowUpgrade(false);
+            setShowAuth(true);
+          }}
         />
       )}
       {showSaved && (
